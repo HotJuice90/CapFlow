@@ -56,7 +56,7 @@ export default function HomeScreen() {
   const [sortIdx, setSortIdx] = useState(0);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
-  const summary = useMemo(() => portfolioSummary(views, data.params.keyRate), [views, data.params.keyRate]);
+  const summary = useMemo(() => portfolioSummary(data), [data]);
   const grouped = useMemo(() => groupByInstrumentType(data), [data]);
   const spark = useMemo(() => incomeSparkline(data, 30), [data]);
   const upcoming = useMemo(() => calendarEvents(data).slice(0, 3), [data]);

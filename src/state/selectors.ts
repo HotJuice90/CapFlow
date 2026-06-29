@@ -11,6 +11,12 @@ const CURRENCY_COLOR: Record<string, string> = {
   CNY: '#E5478B',
 };
 
+/** Пересчёт суммы из валюты актива в основную валюту приложения (по последним курсам). */
+function convert(amount: number, from: CurrencyCode, data: AppData): number {
+  const inRub = amount * (data.rates[from] ?? 1);
+  return inRub / (data.rates[data.settings.defaultCurrency] ?? 1);
+}
+
 /** Активы в статусе active, развёрнутые в AssetView с расчётами. */
 export function buildAssetViews(data: AppData, now: Date = new Date()): AssetView[] {
   const orgById = new Map(data.organizations.map((o) => [o.id, o]));
@@ -38,20 +44,20 @@ export interface PortfolioSummary {
   premiumToKeyRate: number;
 }
 
-export function portfolioSummary(
-  views: AssetView[],
-  keyRate: number,
-): PortfolioSummary {
+export function portfolioSummary(data: AppData, now: Date = new Date()): PortfolioSummary {
+  const views = buildAssetViews(data, now);
   let workingCapital = 0;
   let incomePerDay = 0;
   let incomePerMonth = 0;
   let weightedRate = 0;
 
   for (const v of views) {
-    workingCapital += v.asset.amount;
-    incomePerDay += v.derived.incomePerDay;
-    incomePerMonth += v.derived.incomePerMonth;
-    weightedRate += v.asset.rate * v.asset.amount;
+    const c = v.asset.currency;
+    const cap = convert(v.asset.amount, c, data);
+    workingCapital += cap;
+    incomePerDay += convert(v.derived.incomePerDay, c, data);
+    incomePerMonth += convert(v.derived.incomePerMonth, c, data);
+    weightedRate += v.asset.rate * cap;
   }
 
   const avgRate = workingCapital > 0 ? weightedRate / workingCapital : 0;
@@ -61,8 +67,8 @@ export function portfolioSummary(
     incomePerDay,
     incomePerMonth,
     avgRate,
-    keyRate,
-    premiumToKeyRate: avgRate - keyRate,
+    keyRate: data.params.keyRate,
+    premiumToKeyRate: avgRate - data.params.keyRate,
   };
 }
 
@@ -89,7 +95,8 @@ export function groupByInstrumentType(
   const map = new Map<string, TypeGroup>();
   let total = 0;
   for (const v of views) {
-    total += v.asset.amount;
+    const c = v.asset.currency;
+    total += convert(v.asset.amount, c, data);
     const typeId = v.instrument.typeId;
     const g =
       map.get(typeId) ??
@@ -102,8 +109,8 @@ export function groupByInstrumentType(
         share: 0,
         count: 0,
       };
-    g.capital += v.asset.amount;
-    g.incomePerMonth += v.derived.incomePerMonth;
+    g.capital += convert(v.asset.amount, c, data);
+    g.incomePerMonth += convert(v.derived.incomePerMonth, c, data);
     g.count += 1;
     map.set(typeId, g);
   }
@@ -128,6 +135,7 @@ export interface DistGroup {
 }
 
 function distribution(
+  data: AppData,
   views: AssetView[],
   keyFn: (v: AssetView) => string,
   labelFn: (v: AssetView) => string,
@@ -136,7 +144,9 @@ function distribution(
   const map = new Map<string, DistGroup & { weightedRate: number }>();
   let total = 0;
   for (const v of views) {
-    total += v.asset.amount;
+    const c = v.asset.currency;
+    const cap = convert(v.asset.amount, c, data);
+    total += cap;
     const key = keyFn(v);
     const g =
       map.get(key) ??
@@ -152,10 +162,10 @@ function distribution(
         count: 0,
         weightedRate: 0,
       };
-    g.capital += v.asset.amount;
-    g.incomePerDay += v.derived.incomePerDay;
-    g.incomePerMonth += v.derived.incomePerMonth;
-    g.weightedRate += v.asset.rate * v.asset.amount;
+    g.capital += cap;
+    g.incomePerDay += convert(v.derived.incomePerDay, c, data);
+    g.incomePerMonth += convert(v.derived.incomePerMonth, c, data);
+    g.weightedRate += v.asset.rate * cap;
     g.count += 1;
     map.set(key, g);
   }
@@ -172,6 +182,7 @@ function distribution(
 export function distributionByType(data: AppData, now: Date = new Date()) {
   const views = buildAssetViews(data, now);
   return distribution(
+    data,
     views,
     (v) => v.instrument.typeId,
     (v) => typeLabel(v.instrument.typeId),
@@ -182,6 +193,7 @@ export function distributionByType(data: AppData, now: Date = new Date()) {
 export function distributionByOrg(data: AppData, now: Date = new Date()) {
   const views = buildAssetViews(data, now);
   return distribution(
+    data,
     views,
     (v) => v.organization.id,
     (v) => v.organization.name,
@@ -192,6 +204,7 @@ export function distributionByOrg(data: AppData, now: Date = new Date()) {
 export function distributionByCurrency(data: AppData, now: Date = new Date()) {
   const views = buildAssetViews(data, now);
   return distribution(
+    data,
     views,
     (v) => v.asset.currency,
     (v) => v.asset.currency,
@@ -229,24 +242,27 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   const orgIncome = new Map<string, { name: string; income: number }>();
 
   for (const v of views) {
-    totalCapital += v.asset.amount;
-    incomePerDay += v.derived.incomePerDay;
-    incomePerMonth += v.derived.incomePerMonth;
-    accrued += v.derived.accrued;
-    weightedRate += v.asset.rate * v.asset.amount;
-    const annual = (v.asset.amount * v.asset.rate) / 100;
+    const c = v.asset.currency;
+    const cap = convert(v.asset.amount, c, data);
+    const incDay = convert(v.derived.incomePerDay, c, data);
+    totalCapital += cap;
+    incomePerDay += incDay;
+    incomePerMonth += convert(v.derived.incomePerMonth, c, data);
+    accrued += convert(v.derived.accrued, c, data);
+    weightedRate += v.asset.rate * cap;
+    const annual = convert((v.asset.amount * v.asset.rate) / 100, c, data);
     incomePerYear += annual;
     annualPerAsset.push(annual);
 
-    if (!topInstrument || v.derived.incomePerDay > topInstrument.incomePerDay) {
+    if (!topInstrument || incDay > topInstrument.incomePerDay) {
       topInstrument = {
         name: v.asset.title ? `${v.instrument.name} · ${v.asset.title}` : v.instrument.name,
         org: v.organization.name,
-        incomePerDay: v.derived.incomePerDay,
+        incomePerDay: incDay,
       };
     }
     const oi = orgIncome.get(v.organization.id) ?? { name: v.organization.name, income: 0 };
-    oi.income += v.derived.incomePerDay;
+    oi.income += incDay;
     orgIncome.set(v.organization.id, oi);
   }
 
@@ -329,7 +345,8 @@ export interface CalendarEvent {
   title?: string;
   typeId: string;
   color: string; // цвет организации
-  amount: number; // освободится (итоговая сумма = тело + чистыми)
+  amount: number; // освободится в валюте актива (итоговая = тело + чистыми)
+  amountBase: number; // то же в основной валюте приложения (для итогов)
   daysRemaining: number;
   currency: CurrencyCode;
 }
@@ -348,6 +365,7 @@ export function calendarEvents(data: AppData, now: Date = new Date()): CalendarE
       typeId: v.instrument.typeId,
       color: v.organization.color,
       amount: v.derived.finalAmount ?? v.asset.amount,
+      amountBase: convert(v.derived.finalAmount ?? v.asset.amount, v.asset.currency, data),
       daysRemaining: v.derived.daysRemaining ?? 0,
       currency: v.asset.currency,
     });
@@ -367,7 +385,7 @@ export function capitalSeries(data: AppData, days = 30): number[] {
       if (a.status !== 'active') continue;
       if (parseLocal(a.openDate) > day) continue;
       if (a.endDate && parseLocal(a.endDate) < day) continue;
-      cap += a.amount;
+      cap += convert(a.amount, a.currency, data);
     }
     out.push(cap);
   }
@@ -380,7 +398,7 @@ function incomePerDayOn(data: AppData, day: Date): number {
     if (a.status !== 'active') continue;
     if (parseLocal(a.openDate) > day) continue;
     if (a.endDate && parseLocal(a.endDate) < day) continue;
-    sum += (a.amount * a.rate) / 100 / daysInYear(day);
+    sum += convert((a.amount * a.rate) / 100 / daysInYear(day), a.currency, data);
   }
   return sum;
 }
@@ -418,7 +436,7 @@ export function incomeSparkline(data: AppData, days = 30): number[] {
       if (a.status !== 'active') continue;
       if (parseLocal(a.openDate) > day) continue;
       if (a.endDate && parseLocal(a.endDate) < day) continue;
-      dayIncome += (a.amount * a.rate) / 100 / daysInYear(day);
+      dayIncome += convert((a.amount * a.rate) / 100 / daysInYear(day), a.currency, data);
     }
     cumulative += dayIncome;
     series.push(cumulative);

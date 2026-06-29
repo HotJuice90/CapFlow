@@ -42,9 +42,9 @@ export default function CalendarScreen() {
   const monthPrefix = `${view.year}-${pad2(view.month + 1)}`;
   const monthEvents = useMemo(() => events.filter((e) => e.date.startsWith(monthPrefix)), [events, monthPrefix]);
   const markers = useMemo(() => new Set(monthEvents.map((e) => e.date)), [monthEvents]);
-  const monthSum = monthEvents.reduce((s, e) => s + e.amount, 0);
+  const monthSum = monthEvents.reduce((s, e) => s + e.amountBase, 0);
   const dayEvents = useMemo(() => events.filter((e) => e.date === selected), [events, selected]);
-  const daySum = dayEvents.reduce((s, e) => s + e.amount, 0);
+  const daySum = dayEvents.reduce((s, e) => s + e.amountBase, 0);
 
   const prevMonth = () =>
     setView((v) => (v.month === 0 ? { year: v.year - 1, month: 11 } : { year: v.year, month: v.month - 1 }));
