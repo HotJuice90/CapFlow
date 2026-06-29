@@ -15,7 +15,10 @@ import type {
 import { repository } from '@/storage/repository';
 import { type AppData, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
+import { fetchCbrRates } from '@/rates/cbr';
 import { uid } from '@/utils/id';
+
+const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
 
 interface DataContextValue {
   data: AppData;
@@ -38,6 +41,7 @@ interface DataContextValue {
   reseedDemo: () => Promise<void>;
   updateParams: (patch: Partial<AppData['params']>) => Promise<void>;
   updateRates: (patch: Partial<AppData['rates']>) => Promise<void>;
+  refreshRates: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -72,6 +76,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
     setData(loaded);
     setLoading(false);
+
+    // авто-обновление курсов ЦБ раз в сутки (не блокирует UI)
+    const age = loaded.ratesUpdatedAt
+      ? Date.now() - new Date(loaded.ratesUpdatedAt).getTime()
+      : Infinity;
+    if (age > RATES_TTL_MS) {
+      void (async () => {
+        try {
+          const fetched = await fetchCbrRates();
+          const updated: AppData = {
+            ...loaded,
+            rates: { ...loaded.rates, ...fetched },
+            ratesUpdatedAt: new Date().toISOString(),
+          };
+          setData(updated);
+          await repository.save(updated);
+        } catch {
+          // офлайн / ЦБ недоступен — оставляем последние известные курсы
+        }
+      })();
+    }
   }, []);
 
   useEffect(() => {
@@ -201,6 +226,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [data, persist],
   );
 
+  const refreshRates = useCallback(async () => {
+    const fetched = await fetchCbrRates();
+    await persist({
+      ...data,
+      rates: { ...data.rates, ...fetched },
+      ratesUpdatedAt: new Date().toISOString(),
+    });
+  }, [data, persist]);
+
   const hasDemo = useMemo(() => data.assets.some((a) => a.isDemo), [data.assets]);
 
   const value = useMemo(
@@ -222,6 +256,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       reseedDemo,
       updateParams,
       updateRates,
+      refreshRates,
     }),
     [
       data,
@@ -241,6 +276,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       reseedDemo,
       updateParams,
       updateRates,
+      refreshRates,
     ],
   );
 

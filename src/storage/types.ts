@@ -23,8 +23,10 @@ export interface AppData {
   snapshots: Snapshot[];
   params: CalcParams;
   settings: AppSettings;
-  /** курсы: сколько ₽ за 1 единицу валюты (RUB = 1). Источник позже — API ЦБ. */
+  /** курсы: сколько ₽ за 1 единицу валюты (RUB = 1). Источник — API ЦБ РФ. */
   rates: Record<CurrencyCode, number>;
+  /** когда курсы обновлялись последний раз (ISO), null — ещё ни разу */
+  ratesUpdatedAt: string | null;
   /** демо уже посеяно (чтобы не сеять повторно после удаления) */
   seededDemo: boolean;
 }
@@ -62,6 +64,7 @@ export function emptyAppData(): AppData {
     params: { ...DEFAULT_PARAMS },
     settings: { ...DEFAULT_SETTINGS },
     rates: { ...DEFAULT_RATES },
+    ratesUpdatedAt: null,
     seededDemo: false,
   };
 }

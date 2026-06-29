@@ -37,3 +37,26 @@ export function pluralDays(n: number): string {
   if (last >= 2 && last <= 4) return 'дня';
   return 'дней';
 }
+
+function plural(n: number, forms: [string, string, string]): string {
+  const abs = Math.abs(n) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return forms[2];
+  if (last === 1) return forms[0];
+  if (last >= 2 && last <= 4) return forms[1];
+  return forms[2];
+}
+
+/** «обновлено» относительно времени: «только что», «5 минут назад», «2 часа назад», «вчера». */
+export function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return 'никогда';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'только что';
+  if (min < 60) return `${min} ${plural(min, ['минуту', 'минуты', 'минут'])} назад`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours} ${plural(hours, ['час', 'часа', 'часов'])} назад`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'вчера';
+  return `${days} ${plural(days, ['день', 'дня', 'дней'])} назад`;
+}

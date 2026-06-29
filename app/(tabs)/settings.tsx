@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
+import { RatesSection } from '@/components/RatesSection';
 import { UpdateSection } from '@/components/UpdateSection';
 import { useData } from '@/state/DataContext';
 import { tokens } from '@/theme';
@@ -89,6 +90,9 @@ export default function SettingsScreen() {
             </Pressable>
           )}
         </Card>
+
+        {/* Курсы валют */}
+        <RatesSection />
 
         {/* Приложение / обновления */}
         <UpdateSection />
