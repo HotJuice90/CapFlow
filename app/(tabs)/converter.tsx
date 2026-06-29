@@ -187,7 +187,8 @@ export default function ConverterScreen() {
               const first = series[0] ?? 0;
               const last = series[series.length - 1] ?? 0;
               const pct = first > 0 ? ((last - first) / first) * 100 : 0;
-              const up = last >= first;
+              // курс валюты растёт = рубль дешевеет (bad для рубля), инвертируем
+              const rubbleUp = last < first;
               return (
                 <View key={c} style={[styles.histRow, i > 0 && styles.histGap]}>
                   <Text style={styles.flagSmall}>{FLAG[c]}</Text>
@@ -197,13 +198,13 @@ export default function ConverterScreen() {
                   </View>
                   <View style={styles.histChart}>
                     {series.length >= 2 ? (
-                      <Sparkline data={series} width={110} height={36} color={up ? tokens.semantic.positive : tokens.semantic.negative} />
+                      <Sparkline data={series} width={110} height={36} color={rubbleUp ? tokens.semantic.positive : tokens.semantic.negative} />
                     ) : (
                       <Text style={styles.histNone}>—</Text>
                     )}
                   </View>
-                  <Text style={[styles.histPct, { color: up ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {up ? '+' : '−'}{Math.abs(pct).toFixed(1).replace('.', ',')}%
+                  <Text style={[styles.histPct, { color: rubbleUp ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {rubbleUp ? '+' : '−'}{Math.abs(pct).toFixed(1).replace('.', ',')}%
                   </Text>
                 </View>
               );
