@@ -2,7 +2,7 @@
   "expo": {
     "name": "CapFlow",
     "slug": "capflow",
-    "version": "0.2.2",
+    "version": "0.3.0",
     "scheme": "capflow",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -25,7 +25,8 @@
           "imageWidth": 180
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -14,6 +14,7 @@ import {
   distributionByType,
   distributionByOrg,
   capitalSeries,
+  monthComparison,
 } from '@/state/selectors';
 import { tokens } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
@@ -29,6 +30,7 @@ export default function AnalyticsScreen() {
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const capSeries = useMemo(() => capitalSeries(data, 30), [data]);
+  const comp = useMemo(() => monthComparison(data), [data]);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -106,6 +108,14 @@ export default function AnalyticsScreen() {
                 </View>
               </View>
             ) : null}
+
+            {/* Сравнение за месяц */}
+            <Text style={styles.section}>Сравнение за месяц</Text>
+            <Card>
+              <CompRow label="Капитал" now={comp.capitalNow} prev={comp.capitalPrev} cur={cur} />
+              <Sep />
+              <CompRow label="Доход в день" now={comp.incomeNow} prev={comp.incomePrev} cur={cur} hideKopecks />
+            </Card>
 
             {/* По инструментам — донат */}
             <Text style={styles.section}>По инструментам</Text>
@@ -223,6 +233,35 @@ function Sep() {
   return <View style={styles.sep} />;
 }
 
+function CompRow({
+  label,
+  now,
+  prev,
+  cur,
+  hideKopecks,
+}: {
+  label: string;
+  now: number;
+  prev: number;
+  cur: import('@/domain/types').CurrencyCode;
+  hideKopecks?: boolean;
+}) {
+  const delta = now - prev;
+  const pct = prev > 0 ? (delta / prev) * 100 : 0;
+  const positive = delta >= 0;
+  return (
+    <View style={styles.compRow}>
+      <Text style={styles.compLabel}>{label}</Text>
+      <View style={styles.compRight}>
+        <Text style={styles.compNow}>{formatMoney(now, { currency: cur, kopecks: hideKopecks ? 'hide' : 'auto' })}</Text>
+        <Text style={[styles.compDelta, { color: positive ? tokens.semantic.positive : tokens.semantic.negative }]}>
+          {positive ? '+' : '−'}{formatMoney(Math.abs(delta), { currency: cur, kopecks: 'hide' })} ({formatPercentSigned(pct)})
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screenTitle: { fontSize: tokens.typography.display, fontWeight: '600', color: tokens.text.primary },
   screenSub: { fontSize: tokens.typography.label, color: tokens.text.secondary, marginTop: 2, marginBottom: tokens.spacing.lg },
@@ -274,6 +313,11 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
   rowAccent: { color: tokens.accent.base, fontWeight: '700' },
   sep: { height: 1, backgroundColor: tokens.surface.hairline },
+  compRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: tokens.spacing.sm },
+  compLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
+  compRight: { alignItems: 'flex-end' },
+  compNow: { fontSize: tokens.typography.body, fontWeight: '700', color: tokens.text.primary },
+  compDelta: { fontSize: tokens.typography.caption, fontWeight: '600', marginTop: 2 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },

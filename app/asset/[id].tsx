@@ -213,6 +213,16 @@ export default function AssetScreen() {
           <View style={{ paddingHorizontal: tokens.spacing.lg }}>
             <ActionRow icon="content-copy" label="Дублировать" onPress={onDuplicate} />
             <Divider />
+            {isTerm ? (
+              <>
+                <ActionRow
+                  icon="autorenew"
+                  label="Продлить"
+                  onPress={() => router.push(`/asset/form?id=${asset.id}`)}
+                />
+                <Divider />
+              </>
+            ) : null}
             <ActionRow icon="check-circle" label="Закрыть" onPress={onClose} />
             <Divider />
             <ActionRow icon="archive" label="Архивировать" onPress={onArchive} />

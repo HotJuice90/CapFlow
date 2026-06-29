@@ -11,11 +11,13 @@ import type {
   AssetStatus,
   FinancialInstrument,
   Organization,
+  Snapshot,
 } from '@/domain/types';
 import { repository } from '@/storage/repository';
 import { type AppData, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
 import { fetchCbrRates } from '@/rates/cbr';
+import { calculate, ENGINE_VERSION } from '@/calc';
 import { uid } from '@/utils/id';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
@@ -42,6 +44,8 @@ interface DataContextValue {
   updateParams: (patch: Partial<AppData['params']>) => Promise<void>;
   updateRates: (patch: Partial<AppData['rates']>) => Promise<void>;
   refreshRates: () => Promise<void>;
+  updateSettings: (patch: Partial<AppData['settings']>) => Promise<void>;
+  replaceAll: (incoming: AppData) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -130,9 +134,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const setAssetStatus = useCallback(
     async (id: string, status: AssetStatus) => {
+      const asset = data.assets.find((a) => a.id === id);
+      let snapshots = data.snapshots;
+      // фиксируем Snapshot при закрытии/архивации активного актива (решение #8)
+      if (asset && asset.status === 'active' && (status === 'closed' || status === 'archived')) {
+        const instr = data.instruments.find((i) => i.id === asset.instrumentId);
+        if (instr) {
+          const snap: Snapshot = {
+            id: uid('snap-'),
+            assetId: id,
+            createdAt: new Date().toISOString(),
+            reason: status,
+            excludeFromAnalytics: status === 'archived',
+            engineVersion: ENGINE_VERSION,
+            derived: calculate(asset, instr, data.params),
+            assetSnapshot: { ...asset, status },
+          };
+          snapshots = [...data.snapshots, snap];
+        }
+      }
       await persist({
         ...data,
         assets: data.assets.map((a) => (a.id === id ? { ...a, status } : a)),
+        snapshots,
       });
     },
     [data, persist],
@@ -235,6 +259,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
   }, [data, persist]);
 
+  const updateSettings = useCallback(
+    async (patch: Partial<AppData['settings']>) => {
+      await persist({ ...data, settings: { ...data.settings, ...patch } });
+    },
+    [data, persist],
+  );
+
+  const replaceAll = useCallback(
+    async (incoming: AppData) => {
+      const base = emptyAppData();
+      const merged: AppData = {
+        ...base,
+        ...incoming,
+        params: { ...base.params, ...incoming.params },
+        settings: { ...base.settings, ...incoming.settings },
+        rates: { ...base.rates, ...incoming.rates },
+        ratesUpdatedAt: incoming.ratesUpdatedAt ?? null,
+      };
+      await persist(merged);
+    },
+    [persist],
+  );
+
   const hasDemo = useMemo(() => data.assets.some((a) => a.isDemo), [data.assets]);
 
   const value = useMemo(
@@ -257,6 +304,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateParams,
       updateRates,
       refreshRates,
+      updateSettings,
+      replaceAll,
     }),
     [
       data,
@@ -277,6 +326,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateParams,
       updateRates,
       refreshRates,
+      updateSettings,
+      replaceAll,
     ],
   );
 

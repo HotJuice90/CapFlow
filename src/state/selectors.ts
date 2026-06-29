@@ -374,6 +374,37 @@ export function capitalSeries(data: AppData, days = 30): number[] {
   return out;
 }
 
+function incomePerDayOn(data: AppData, day: Date): number {
+  let sum = 0;
+  for (const a of data.assets) {
+    if (a.status !== 'active') continue;
+    if (parseLocal(a.openDate) > day) continue;
+    if (a.endDate && parseLocal(a.endDate) < day) continue;
+    sum += (a.amount * a.rate) / 100 / daysInYear(day);
+  }
+  return sum;
+}
+
+export interface PeriodComparison {
+  capitalNow: number;
+  capitalPrev: number;
+  incomeNow: number;
+  incomePrev: number;
+}
+
+/** Сравнение «сейчас vs ~30 дней назад» (реконструкция). */
+export function monthComparison(data: AppData, now: Date = new Date()): PeriodComparison {
+  const prev = new Date(now);
+  prev.setDate(prev.getDate() - 30);
+  const cap = capitalSeries(data, 31);
+  return {
+    capitalNow: cap[cap.length - 1] ?? 0,
+    capitalPrev: cap[0] ?? 0,
+    incomeNow: incomePerDayOn(data, now),
+    incomePrev: incomePerDayOn(data, prev),
+  };
+}
+
 /** Реконструкция: кумулятивный дневной доход портфеля за последние N дней (для sparkline). */
 export function incomeSparkline(data: AppData, days = 30): number[] {
   const today = new Date();
