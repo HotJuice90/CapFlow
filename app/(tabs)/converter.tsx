@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
+import { Sparkline } from '@/components/Sparkline';
 import { useData } from '@/state/DataContext';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
@@ -43,13 +44,14 @@ function trimNum(n: number): string {
 
 export default function ConverterScreen() {
   const insets = useSafeAreaInsets();
-  const { data, refreshRates } = useData();
+  const { data, refreshRates, backfillRateHistory } = useData();
 
   const [slots, setSlots] = useState<CurrencyCode[]>(['RUB', 'USD', 'EUR', 'CNY']);
   const [active, setActive] = useState(0);
   const [amount, setAmount] = useState('100000');
   const [picker, setPicker] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingHist, setLoadingHist] = useState(false);
 
   const rates = data.rates;
   const parsed = parseFloat(amount.replace(',', '.')) || 0;
@@ -82,6 +84,21 @@ export default function ConverterScreen() {
       setRefreshing(false);
     }
   };
+  const doBackfill = async () => {
+    setLoadingHist(true);
+    try {
+      await backfillRateHistory();
+    } catch {
+      // архив ЦБ недоступен
+    } finally {
+      setLoadingHist(false);
+    }
+  };
+
+  const histCurrencies = Array.from(new Set(slots.filter((c) => c !== 'RUB')));
+  const seriesFor = (c: CurrencyCode): number[] =>
+    data.ratesHistory.map((s) => s.rates[c]).filter((x): x is number => typeof x === 'number');
+  const hasHistory = histCurrencies.some((c) => seriesFor(c).length >= 2);
 
   return (
     <ScreenBackground>
@@ -161,6 +178,46 @@ export default function ConverterScreen() {
             <Text style={styles.refreshText}>{refreshing ? 'Обновляю…' : 'Обновить'}</Text>
           </Pressable>
         </View>
+
+        <Text style={[styles.label, { marginTop: tokens.spacing.lg }]}>История курса</Text>
+        <Card>
+          {hasHistory ? (
+            histCurrencies.map((c, i) => {
+              const series = seriesFor(c);
+              const first = series[0] ?? 0;
+              const last = series[series.length - 1] ?? 0;
+              const pct = first > 0 ? ((last - first) / first) * 100 : 0;
+              const up = last >= first;
+              return (
+                <View key={c} style={[styles.histRow, i > 0 && styles.histGap]}>
+                  <Text style={styles.flagSmall}>{FLAG[c]}</Text>
+                  <View style={{ width: 56 }}>
+                    <Text style={styles.histCode}>{c}</Text>
+                    <Text style={styles.histRate}>{formatMoney(data.rates[c] ?? 0, { currency: 'RUB', kopecks: 'auto' })}</Text>
+                  </View>
+                  <View style={styles.histChart}>
+                    {series.length >= 2 ? (
+                      <Sparkline data={series} width={110} height={36} color={up ? tokens.semantic.positive : tokens.semantic.negative} />
+                    ) : (
+                      <Text style={styles.histNone}>—</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.histPct, { color: up ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {up ? '+' : '−'}{Math.abs(pct).toFixed(1).replace('.', ',')}%
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.histEmpty}>
+              <Text style={styles.histEmptyText}>График появится по мере ежедневных обновлений. Можно сразу подгрузить историю за 30 дней с ЦБ.</Text>
+              <Pressable style={styles.histBtn} onPress={doBackfill} disabled={loadingHist}>
+                {loadingHist ? <ActivityIndicator size="small" color="#FFFFFF" /> : <MaterialIcons name="download" size={18} color="#FFFFFF" />}
+                <Text style={styles.histBtnText}>{loadingHist ? 'Загружаю…' : 'Загрузить историю'}</Text>
+              </Pressable>
+            </View>
+          )}
+        </Card>
       </ScrollView>
 
       {/* Пикер валюты */}
@@ -217,4 +274,15 @@ const styles = StyleSheet.create({
   optionRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md, borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   optionCode: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
   optionName: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 1 },
+  histRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
+  histGap: { marginTop: tokens.spacing.md, paddingTop: tokens.spacing.md, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
+  histCode: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
+  histRate: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 1 },
+  histChart: { flex: 1, alignItems: 'center' },
+  histNone: { fontSize: tokens.typography.caption, color: tokens.text.tertiary },
+  histPct: { fontSize: tokens.typography.caption, fontWeight: '700', width: 52, textAlign: 'right' },
+  histEmpty: { alignItems: 'center' },
+  histEmptyText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, textAlign: 'center', lineHeight: 18 },
+  histBtn: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, backgroundColor: tokens.accent.base, borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.md, marginTop: tokens.spacing.md },
+  histBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: tokens.typography.label },
 });

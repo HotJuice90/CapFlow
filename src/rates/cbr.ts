@@ -1,24 +1,20 @@
 import type { CurrencyCode } from '@/domain/types';
+import type { RateSnapshot } from '@/storage/types';
 
 /**
- * Курсы ЦБ РФ. Берём готовый JSON (cbr-xml-daily.ru) — отражает официальные
- * курсы ЦБ, обновляется раз в сутки. Возвращаем ₽ за 1 единицу валюты.
+ * Курсы ЦБ РФ через cbr-xml-daily.ru (официальные курсы ЦБ, раз в сутки).
+ * Возвращаем ₽ за 1 единицу валюты.
  */
 const CBR_URL = 'https://www.cbr-xml-daily.ru/daily_json.js';
+const WANTED: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'CNY'];
 
 interface CbrValute {
   Value: number;
   Nominal: number;
 }
 
-const WANTED: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'CNY'];
-
-export async function fetchCbrRates(): Promise<Partial<Record<CurrencyCode, number>>> {
-  const res = await fetch(CBR_URL);
-  if (!res.ok) throw new Error(`CBR ${res.status}`);
-  const json = (await res.json()) as { Valute?: Record<string, CbrValute> };
+function parseValute(json: { Valute?: Record<string, CbrValute> }): Partial<Record<CurrencyCode, number>> {
   const valute = json.Valute ?? {};
-
   const out: Partial<Record<CurrencyCode, number>> = { RUB: 1 };
   for (const code of WANTED) {
     const item = valute[code];
@@ -27,4 +23,43 @@ export async function fetchCbrRates(): Promise<Partial<Record<CurrencyCode, numb
     }
   }
   return out;
+}
+
+export async function fetchCbrRates(): Promise<Partial<Record<CurrencyCode, number>>> {
+  const res = await fetch(CBR_URL);
+  if (!res.ok) throw new Error(`CBR ${res.status}`);
+  return parseValute((await res.json()) as { Valute?: Record<string, CbrValute> });
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** История курса с архива ЦБ: ~16 точек за последние 30 дней (каждый 2-й день). */
+export async function fetchCbrHistory(): Promise<RateSnapshot[]> {
+  const today = new Date();
+  const targets: { date: string; url: string }[] = [];
+  for (let i = 0; i <= 30; i += 2) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const y = d.getFullYear();
+    const m = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    targets.push({
+      date: `${y}-${m}-${day}`,
+      url: `https://www.cbr-xml-daily.ru/archive/${y}/${m}/${day}/daily_json.js`,
+    });
+  }
+
+  const results = await Promise.allSettled(
+    targets.map(async (target): Promise<RateSnapshot> => {
+      const res = await fetch(target.url);
+      if (!res.ok) throw new Error(`CBR archive ${res.status}`);
+      return { date: target.date, rates: parseValute((await res.json()) as { Valute?: Record<string, CbrValute> }) };
+    }),
+  );
+
+  const out: RateSnapshot[] = [];
+  for (const r of results) if (r.status === 'fulfilled') out.push(r.value);
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }

@@ -18,6 +18,7 @@ function migrate(data: AppData): AppData {
   const next: AppData = { ...data };
   // мерж с дефолтами — добавляет валюты, появившиеся позже (напр. CNY)
   next.rates = { ...DEFAULT_RATES, ...data.rates };
+  if (!next.ratesHistory) next.ratesHistory = [];
   if (next.schemaVersion < SCHEMA_VERSION) next.schemaVersion = SCHEMA_VERSION;
   return next;
 }

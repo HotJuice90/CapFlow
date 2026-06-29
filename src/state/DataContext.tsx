@@ -14,13 +14,22 @@ import type {
   Snapshot,
 } from '@/domain/types';
 import { repository } from '@/storage/repository';
-import { type AppData, emptyAppData } from '@/storage/types';
+import { type AppData, type RateSnapshot, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
-import { fetchCbrRates } from '@/rates/cbr';
+import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
 import { calculate, ENGINE_VERSION } from '@/calc';
 import { uid } from '@/utils/id';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
+
+/** Добавляет срез курсов за сегодня в историю (дедуп по дню, последние 90). */
+function appendSnapshot(history: RateSnapshot[], rates: AppData['rates']): RateSnapshot[] {
+  const date = new Date().toISOString().slice(0, 10);
+  const filtered = history.filter((s) => s.date !== date);
+  return [...filtered, { date, rates: { ...rates } }]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-90);
+}
 
 interface DataContextValue {
   data: AppData;
@@ -44,6 +53,7 @@ interface DataContextValue {
   updateParams: (patch: Partial<AppData['params']>) => Promise<void>;
   updateRates: (patch: Partial<AppData['rates']>) => Promise<void>;
   refreshRates: () => Promise<void>;
+  backfillRateHistory: () => Promise<void>;
   updateSettings: (patch: Partial<AppData['settings']>) => Promise<void>;
   replaceAll: (incoming: AppData) => Promise<void>;
 }
@@ -89,10 +99,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       void (async () => {
         try {
           const fetched = await fetchCbrRates();
+          const rates = { ...loaded.rates, ...fetched };
           const updated: AppData = {
             ...loaded,
-            rates: { ...loaded.rates, ...fetched },
+            rates,
             ratesUpdatedAt: new Date().toISOString(),
+            ratesHistory: appendSnapshot(loaded.ratesHistory, rates),
           };
           setData(updated);
           await repository.save(updated);
@@ -252,11 +264,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRates = useCallback(async () => {
     const fetched = await fetchCbrRates();
+    const rates = { ...data.rates, ...fetched };
     await persist({
       ...data,
-      rates: { ...data.rates, ...fetched },
+      rates,
       ratesUpdatedAt: new Date().toISOString(),
+      ratesHistory: appendSnapshot(data.ratesHistory, rates),
     });
+  }, [data, persist]);
+
+  const backfillRateHistory = useCallback(async () => {
+    const hist = await fetchCbrHistory();
+    const byDate = new Map<string, RateSnapshot>();
+    for (const s of data.ratesHistory) byDate.set(s.date, s);
+    for (const s of hist) byDate.set(s.date, s);
+    const merged = [...byDate.values()]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-90);
+    await persist({ ...data, ratesHistory: merged });
   }, [data, persist]);
 
   const updateSettings = useCallback(
@@ -304,6 +329,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateParams,
       updateRates,
       refreshRates,
+      backfillRateHistory,
       updateSettings,
       replaceAll,
     }),
@@ -326,6 +352,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateParams,
       updateRates,
       refreshRates,
+      backfillRateHistory,
       updateSettings,
       replaceAll,
     ],

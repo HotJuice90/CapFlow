@@ -27,8 +27,15 @@ export interface AppData {
   rates: Record<CurrencyCode, number>;
   /** когда курсы обновлялись последний раз (ISO), null — ещё ни разу */
   ratesUpdatedAt: string | null;
+  /** история курсов по дням (для графика «курс за период») */
+  ratesHistory: RateSnapshot[];
   /** демо уже посеяно (чтобы не сеять повторно после удаления) */
   seededDemo: boolean;
+}
+
+export interface RateSnapshot {
+  date: string; // YYYY-MM-DD
+  rates: Partial<Record<CurrencyCode, number>>; // ₽ за 1 единицу
 }
 
 export const SCHEMA_VERSION = 1;
@@ -65,6 +72,7 @@ export function emptyAppData(): AppData {
     settings: { ...DEFAULT_SETTINGS },
     rates: { ...DEFAULT_RATES },
     ratesUpdatedAt: null,
+    ratesHistory: [],
     seededDemo: false,
   };
 }
