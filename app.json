@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "CapFlow",
+    "slug": "capflow",
+    "version": "0.2.0",
+    "scheme": "capflow",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.capflow.app"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.capflow.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#EEF4F1",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    }
+  }
+}
