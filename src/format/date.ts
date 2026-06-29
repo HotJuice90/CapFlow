@@ -9,6 +9,16 @@ const MONTHS_GENITIVE = [
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
 
+const MONTHS_NOMINATIVE = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+];
+
+/** «Июль 2026» (month — 0-based). */
+export function formatMonthYear(year: number, month: number): string {
+  return `${MONTHS_NOMINATIVE[month]} ${year}`;
+}
+
 /** Принимает ISO-строку 'YYYY-MM-DD' или Date. */
 function toDate(value: string | Date): Date {
   return typeof value === 'string' ? new Date(value) : value;

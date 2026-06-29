@@ -1,4 +1,4 @@
-import type { AssetView } from '@/domain/types';
+import type { AssetView, CurrencyCode } from '@/domain/types';
 import { calculate, calcPortfolioTax, daysInYear, parseLocal } from '@/calc';
 import type { AppData } from '@/storage/types';
 import { tokens } from '@/theme';
@@ -318,6 +318,41 @@ export function insights(data: AppData, now: Date = new Date()): Insight[] {
   }
 
   return out;
+}
+
+// ---------- Календарь ----------
+
+export interface CalendarEvent {
+  date: string; // YYYY-MM-DD
+  assetId: string;
+  instrumentName: string;
+  title?: string;
+  typeId: string;
+  color: string; // цвет организации
+  amount: number; // освободится (итоговая сумма = тело + чистыми)
+  daysRemaining: number;
+  currency: CurrencyCode;
+}
+
+/** События, влияющие на капитал. MVP: окончание срочных (вклады, ЦФА). */
+export function calendarEvents(data: AppData, now: Date = new Date()): CalendarEvent[] {
+  const views = buildAssetViews(data, now);
+  const out: CalendarEvent[] = [];
+  for (const v of views) {
+    if (v.instrument.behavior !== 'term' || !v.asset.endDate) continue;
+    out.push({
+      date: v.asset.endDate.slice(0, 10),
+      assetId: v.asset.id,
+      instrumentName: v.instrument.name,
+      title: v.asset.title,
+      typeId: v.instrument.typeId,
+      color: v.organization.color,
+      amount: v.derived.finalAmount ?? v.asset.amount,
+      daysRemaining: v.derived.daysRemaining ?? 0,
+      currency: v.asset.currency,
+    });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** Реконструкция капитала по дням за последние N дней (для графика в аналитике). */
