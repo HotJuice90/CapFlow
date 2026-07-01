@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { useData } from '@/state/DataContext';
@@ -55,13 +56,13 @@ export default function CalendarScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + tokens.spacing.lg,
+          paddingTop: 80,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + 90,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.screenTitle}>{t.tabs.calendar}</Text>
+        <ScreenTitle>{t.tabs.calendar}</ScreenTitle>
 
         {events.length === 0 ? (
           <Card style={styles.empty}>
@@ -159,7 +160,6 @@ function pluralEvents(n: number): string {
 }
 
 const styles = StyleSheet.create({
-  screenTitle: { fontSize: tokens.typography.display, fontWeight: '600', color: tokens.text.primary, marginBottom: tokens.spacing.lg },
   summary: { marginBottom: tokens.spacing.lg },
   summaryLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary, fontWeight: '500' },
   summaryValue: { fontSize: tokens.typography.metricLg, fontWeight: '800', color: tokens.text.primary, marginTop: tokens.spacing.xs },

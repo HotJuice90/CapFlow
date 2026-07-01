@@ -12,6 +12,7 @@ export interface AppSettings {
   defaultCurrency: CurrencyCode;
   kopecks: KopecksMode;
   theme: 'light'; // тёмную добавим позже (решение #10)
+  navBar: 'light' | 'dark'; // оформление плавающего навбара
 }
 
 /** Полный слепок данных приложения. Один JSON — удобно для экспорта/импорта (решение #11). */
@@ -45,7 +46,13 @@ export const DEFAULT_RATES: Record<CurrencyCode, number> = {
   USD: 92,
   EUR: 100,
   TRY: 2.7,
+  KZT: 0.20,
+  BYN: 28,
   CNY: 13,
+  INR: 1.05,
+  AED: 25,
+  BRL: 16.5,
+  ARS: 0.09,
 };
 
 export const DEFAULT_PARAMS: CalcParams = {
@@ -59,6 +66,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultCurrency: 'RUB',
   kopecks: 'auto',
   theme: 'light',
+  navBar: 'light',
 };
 
 export function emptyAppData(): AppData {

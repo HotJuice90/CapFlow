@@ -33,10 +33,10 @@ export interface DemoData {
 
 export function buildDemoData(now: Date = new Date()): DemoData {
   const organizations: Organization[] = [
-    { id: 'org-alfa', name: 'Альфа-Банк', type: 'Банк', color: '#EF3124', isDemo: true },
-    { id: 'org-tbank', name: 'Т-Банк', type: 'Банк', color: '#FFDD2D', isDemo: true },
-    { id: 'org-sber', name: 'Сбербанк', type: 'Банк', color: '#21A038', isDemo: true },
-    { id: 'org-vtb', name: 'ВТБ', type: 'Банк', color: '#0A2896', isDemo: true },
+    { id: 'org-alfa', name: 'Альфа-Банк', type: 'Банк', color: '#EF3124', logo: 'alfa', isDemo: true },
+    { id: 'org-tbank', name: 'Т-Банк', type: 'Банк', color: '#FFDD2D', logo: 'tbank', isDemo: true },
+    { id: 'org-sber', name: 'Сбербанк', type: 'Банк', color: '#21A038', logo: 'sber', isDemo: true },
+    { id: 'org-vtb', name: 'ВТБ', type: 'Банк', color: '#0A2896', logo: 'vtb', isDemo: true },
   ];
 
   const instruments: FinancialInstrument[] = [

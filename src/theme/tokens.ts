@@ -9,14 +9,15 @@
 
 // --- Палитра акцента (один на весь интерфейс — «лучший результат / актив») ---
 const accent = {
-  base: '#10B3A3', // фирменный бирюзовый CapFlow
-  soft: '#E6F7F4', // подложка-плашка акцента
-  deep: '#0A8A7E', // нажатые состояния
+  base: '#62709C', // фирменный приглушённый сине-серый CapFlow
+  soft: '#EDEFF6', // подложка-плашка акцента
+  deep: '#4F5C84', // нажатые состояния
+  light: '#A8B6E2', // светлый оттенок (кнопки/чипы/swap)
 };
 
 // --- Семантические цвета (цвет = смысл, не украшение) ---
 const semantic = {
-  positive: '#10B3A3',
+  positive: '#1FA971', // рост — зелёный (не бирюза)
   positiveBright: '#3DDC97', // яркий зелёный для крупных чисел на тёмном hero
   negative: '#E5484D',
   warning: '#F2A900',
@@ -25,7 +26,7 @@ const semantic = {
 
 // --- Тёмный hero (главный акцентный блок на главной) ---
 const hero = {
-  gradient: ['#0E2A2E', '#103A40', '#0A2540'] as const, // глубокий тёмно-бирюзовый → навигатор
+  gradient: ['#2C3654', '#3A466B', '#222A44'] as const, // глубокий slate-индиго под бренд #62709C
   start: { x: 0, y: 0 },
   end: { x: 1, y: 1 },
   glow: 'rgba(61,220,151,0.16)', // зелёное свечение под графиком
@@ -37,7 +38,7 @@ const hero = {
 // --- Цвет на каждый ТИП инструмента (используется одинаково везде) ---
 const category: Record<string, string> = {
   deposit: '#3E63DD', // Вклады — синий
-  savings: '#10B3A3', // Накопительные — бирюзовый
+  savings: '#1FA971', // Накопительные — зелёный
   dfa: '#9A6DD7', // ЦФА — фиолетовый
   cash: '#F2A900', // Наличные/валюта — янтарь (после MVP)
 };
@@ -59,13 +60,13 @@ const surface = {
   hairline: '#EAEFF1', // тончайший разделитель
 };
 
-// --- Фон экрана: диагональный пастельный градиент (мята → лаванда → голубой) ---
+// --- Фон экрана: диагональный градиент 168° (светло-серый → голубой → белый) ---
 const backgroundGradient = {
-  colors: ['#EAF6F0', '#EDEBF7', '#E7F0F8'] as const,
-  // направление ~168°, стопы смещены к краям (естественный свет, не полоса)
-  start: { x: 0.1, y: 0 },
-  end: { x: 0.9, y: 1 },
-  locations: [0.03, 0.4, 0.99] as const,
+  colors: ['#F2F4F9', '#E0EDF4', '#F5F7FF'] as const,
+  // linear-gradient(168deg, #F2F4F9 2.69%, #E0EDF4 56.51%, #F5F7FF 99.18%)
+  start: { x: 0.15, y: 0 },
+  end: { x: 0.85, y: 1 },
+  locations: [0.0269, 0.5651, 0.9918] as const,
 };
 
 // --- Тени: всегда тёплые зеленовато-серые, НИКОГДА чёрные (boxShadow в RN 0.85+) ---
@@ -93,7 +94,7 @@ const spacing = {
   lg: 16,
   xl: 24,
   xxl: 32,
-  screenH: 20, // горизонтальные поля экрана
+  screenH: 16, // горизонтальные поля экрана (канон по умолчанию)
 };
 
 // --- Типографика (одна семья, крупные числа — акцент) ---
@@ -117,6 +118,15 @@ const typography = {
   },
 } as const;
 
+// --- Шрифт Onest: семантические имена → семейства из @expo-google-fonts/onest ---
+export const font = {
+  regular: 'Onest_400Regular',
+  medium: 'Onest_500Medium',
+  semibold: 'Onest_600SemiBold',
+  bold: 'Onest_700Bold',
+  extrabold: 'Onest_800ExtraBold',
+};
+
 export const tokens = {
   accent,
   semantic,
@@ -129,6 +139,41 @@ export const tokens = {
   radius,
   spacing,
   typography,
+  font,
 };
 
 export type Tokens = typeof tokens;
+
+// --- Утилиты цвета (перенос из прошлого проекта) ---
+
+/** hex → rgba-строка с заданной прозрачностью. */
+export function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** Смешать цвет с белым. factor = доля белого (0.85 = светлый пастельный). */
+export function tintToWhite(hex: string, factor = 0.85): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const nr = Math.round(r + (255 - r) * factor);
+  const ng = Math.round(g + (255 - g) * factor);
+  const nb = Math.round(b + (255 - b) * factor);
+  return `rgb(${nr}, ${ng}, ${nb})`;
+}
+
+/** Светлый ли цвет (для инверсии контента на светлых фонах). */
+export function isLightColor(hex?: string, threshold = 0.82): boolean {
+  if (!hex) return false;
+  const c = hex.replace('#', '');
+  const x = c.length === 3 ? c.split('').map((ch) => ch + ch).join('') : c;
+  if (x.length < 6) return false;
+  const r = parseInt(x.slice(0, 2), 16), g = parseInt(x.slice(2, 4), 16), b = parseInt(x.slice(4, 6), 16);
+  if ([r, g, b].some(Number.isNaN)) return false;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > threshold;
+}

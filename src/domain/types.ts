@@ -3,7 +3,9 @@
  * Архитектура строится вокруг ПОВЕДЕНИЯ инструмента, а не его названия.
  */
 
-export type CurrencyCode = 'RUB' | 'USD' | 'EUR' | 'TRY' | 'CNY';
+export type CurrencyCode =
+  | 'RUB' | 'USD' | 'EUR' | 'TRY' | 'KZT' | 'BYN'
+  | 'CNY' | 'INR' | 'AED' | 'BRL' | 'ARS';
 
 /** Поведение инструмента (архитектурный уровень). MVP: term | perpetual. */
 export type InstrumentBehavior = 'term' | 'perpetual'; // Срочный | Бессрочный

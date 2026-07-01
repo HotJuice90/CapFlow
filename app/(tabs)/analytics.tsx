@@ -4,9 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
-import { Sparkline } from '@/components/Sparkline';
+import { CapitalRingHero } from '@/components/CapitalRingHero';
 import { Donut } from '@/components/Donut';
+import { BarTrend, type BarPoint } from '@/components/BarTrend';
 import { useData } from '@/state/DataContext';
 import {
   analyticsSummary,
@@ -18,7 +20,31 @@ import {
 } from '@/state/selectors';
 import { tokens } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
+import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
+
+const SHORT_TYPE_LABEL: Record<string, string> = {
+  deposit: 'Вклады',
+  savings: 'Счета',
+  dfa: 'ЦФА',
+};
+
+/** Дневной ряд → N корзин (последний день корзины — значение бара). */
+function bucketSeries(series: number[], buckets: number): BarPoint[] {
+  const n = series.length;
+  if (n === 0) return [];
+  const bucketSize = Math.ceil(n / buckets);
+  const today = new Date();
+  const out: BarPoint[] = [];
+  for (let b = 0; b < buckets; b++) {
+    const endIdx = Math.min(n - 1, (b + 1) * bucketSize - 1);
+    const daysAgo = n - 1 - endIdx;
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    out.push({ label: daysAgo === 0 ? 'Сейчас' : formatDateShort(d), value: series[endIdx] });
+  }
+  return out;
+}
 
 export default function AnalyticsScreen() {
   const { data } = useData();
@@ -31,6 +57,7 @@ export default function AnalyticsScreen() {
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const capSeries = useMemo(() => capitalSeries(data, 30), [data]);
   const comp = useMemo(() => monthComparison(data), [data]);
+  const trendBars = useMemo(() => bucketSeries(capSeries, 5), [capSeries]);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -39,6 +66,7 @@ export default function AnalyticsScreen() {
   const lastCap = capSeries[capSeries.length - 1] ?? 0;
   const deltaAbs = lastCap - first;
   const deltaPct = first > 0 ? (deltaAbs / first) * 100 : 0;
+  const topType = byType.groups[0];
 
   // НДФЛ
   const limit = data.params.taxFreeLimit;
@@ -50,13 +78,13 @@ export default function AnalyticsScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + tokens.spacing.lg,
+          paddingTop: 80,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + 90,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.screenTitle}>{t.tabs.analytics}</Text>
+        <ScreenTitle>{t.tabs.analytics}</ScreenTitle>
         <Text style={styles.screenSub}>Как работает ваш капитал</Text>
 
         {!hasAssets ? (
@@ -70,30 +98,20 @@ export default function AnalyticsScreen() {
           </Card>
         ) : (
           <>
-            {/* Якорь — общий капитал */}
-            <Card style={styles.anchor}>
-              <View style={styles.anchorTop}>
-                <Text style={styles.anchorLabel}>Общий капитал</Text>
-                <View style={styles.keyChip}>
-                  <MaterialIcons name="trending-up" size={13} color={tokens.text.secondary} />
-                  <Text style={styles.keyChipText}>Ставка ЦБ {formatPercent(summary.keyRate)}</Text>
-                </View>
-              </View>
-              <View style={styles.anchorMain}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.anchorValue}>{formatMoney(summary.totalCapital, { currency: cur })}</Text>
-                  <Text style={styles.anchorDelta}>
-                    +{formatMoney(deltaAbs, { currency: cur, kopecks: 'hide' })} ({formatPercentSigned(deltaPct)}) за месяц
-                  </Text>
-                </View>
-                <Sparkline data={capSeries} width={120} height={56} color={tokens.semantic.positive} />
-              </View>
-              <View style={styles.metricsRow}>
-                <Metric label="за сегодня" value={`+${formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}`} />
-                <Metric label="за месяц" value={`+${formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}`} />
-                <Metric label="за год" value={`+${formatMoney(summary.incomePerYear, { currency: cur, abbreviateMillions: true })}`} />
-              </View>
-            </Card>
+            <CapitalRingHero
+              label="Общий капитал"
+              bigValue={formatMoney(summary.totalCapital, { currency: cur, abbreviateMillions: true })}
+              deltaPct={deltaPct}
+              ringGroups={byType.groups.map((g) => ({ value: g.capital, color: g.color }))}
+              ringCenterLabel={topType ? `${Math.round(topType.share * 100)}%` : undefined}
+              ringCenterSub={topType ? SHORT_TYPE_LABEL[topType.key] ?? topType.label : undefined}
+              chips={[
+                { icon: 'calendar-today', label: 'За сегодня', value: `+${formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}` },
+                { icon: 'calendar-month', label: 'За месяц', value: `+${formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}` },
+                { icon: 'chart-timeline-variant', label: 'За год', value: `+${formatMoney(summary.incomePerYear, { currency: cur, abbreviateMillions: true })}` },
+              ]}
+              spark={capSeries}
+            />
 
             {/* Инсайт */}
             {ins[0] ? (
@@ -108,6 +126,22 @@ export default function AnalyticsScreen() {
                 </View>
               </View>
             ) : null}
+
+            {/* Тренд капитала */}
+            <Text style={styles.section}>Тренд капитала</Text>
+            <Card>
+              <View style={styles.trendTop}>
+                <Text style={styles.trendDelta}>
+                  {deltaAbs >= 0 ? '+' : '−'}{formatMoney(Math.abs(deltaAbs), { currency: cur, kopecks: 'hide', abbreviateMillions: true })}
+                </Text>
+                <View style={[styles.trendPill, { backgroundColor: deltaPct >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
+                  <Text style={[styles.trendPillText, { color: deltaPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {formatPercentSigned(deltaPct)} за 30 дней
+                  </Text>
+                </View>
+              </View>
+              <BarTrend points={trendBars} height={110} />
+            </Card>
 
             {/* Сравнение за месяц */}
             <Text style={styles.section}>Сравнение за месяц</Text>
@@ -208,15 +242,6 @@ export default function AnalyticsScreen() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-    </View>
-  );
-}
-
 function Row({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
     <View style={styles.row}>
@@ -263,20 +288,7 @@ function CompRow({
 }
 
 const styles = StyleSheet.create({
-  screenTitle: { fontSize: tokens.typography.display, fontWeight: '600', color: tokens.text.primary },
-  screenSub: { fontSize: tokens.typography.label, color: tokens.text.secondary, marginTop: 2, marginBottom: tokens.spacing.lg },
-  anchor: { marginBottom: tokens.spacing.lg },
-  anchorTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  anchorLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary, fontWeight: '500' },
-  keyChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  keyChipText: { fontSize: tokens.typography.micro, color: tokens.text.secondary, fontWeight: '600' },
-  anchorMain: { flexDirection: 'row', alignItems: 'center', marginTop: tokens.spacing.sm },
-  anchorValue: { fontSize: tokens.typography.metricLg, fontWeight: '800', color: tokens.text.primary },
-  anchorDelta: { fontSize: tokens.typography.caption, color: tokens.semantic.positive, fontWeight: '600', marginTop: 2 },
-  metricsRow: { flexDirection: 'row', marginTop: tokens.spacing.lg, paddingTop: tokens.spacing.md, borderTopWidth: 1, borderTopColor: tokens.surface.hairline, gap: tokens.spacing.sm },
-  metric: { flex: 1 },
-  metricLabel: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  metricValue: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.semantic.positive, marginTop: 2 },
+  screenSub: { fontSize: tokens.typography.label, color: tokens.text.secondary, marginTop: -8, marginBottom: tokens.spacing.lg },
   insight: { flexDirection: 'row', gap: tokens.spacing.md, alignItems: 'flex-start', backgroundColor: '#F1ECFB', borderRadius: tokens.radius.lg, padding: tokens.spacing.lg, marginBottom: tokens.spacing.lg },
   insightIcon: { width: 40, height: 40, borderRadius: tokens.radius.sm, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center' },
   insightTag: { alignSelf: 'flex-start', backgroundColor: '#7C4DD6', borderRadius: tokens.radius.xs, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4 },
@@ -284,6 +296,10 @@ const styles = StyleSheet.create({
   insightTitle: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
   insightText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 3, lineHeight: 18 },
   section: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
+  trendTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.lg },
+  trendDelta: { fontSize: tokens.typography.title, fontWeight: '800', color: tokens.text.primary },
+  trendPill: { borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  trendPillText: { fontSize: tokens.typography.caption, fontWeight: '700' },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.lg },
   legend: { flex: 1, gap: tokens.spacing.sm },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },

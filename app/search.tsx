@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
+import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
 import { tokens } from '@/theme';
 
@@ -78,7 +79,7 @@ export default function SearchScreen() {
                     <View key={a.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/asset/${a.id}`)}>
-                        <View style={[styles.dot, { backgroundColor: org?.color ?? tokens.accent.base }]} />
+                        <OrgLogo color={org?.color ?? tokens.accent.base} logo={org?.logo} size={32} />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.rowTitle} numberOfLines={1}>{instr?.name ?? 'Актив'}</Text>
                           <Text style={styles.rowSub} numberOfLines={1}>{a.title ?? org?.name ?? ''}</Text>
@@ -101,7 +102,7 @@ export default function SearchScreen() {
                     <View key={o.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/catalog/organization?id=${o.id}`)}>
-                        <View style={[styles.dot, { backgroundColor: o.color }]} />
+                        <OrgLogo color={o.color} logo={o.logo} size={32} />
                         <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>{o.name}</Text>
                         <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
                       </Pressable>

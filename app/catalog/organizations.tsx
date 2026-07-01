@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
+import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
 import { tokens } from '@/theme';
 
@@ -52,7 +53,7 @@ export default function OrganizationsScreen() {
                     style={styles.row}
                     onPress={() => router.push(`/catalog/organization?id=${o.id}`)}
                   >
-                    <View style={[styles.dot, { backgroundColor: o.color }]} />
+                    <OrgLogo color={o.color} logo={o.logo} size={36} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.name}>{o.name}</Text>
                       <Text style={styles.sub}>
@@ -81,6 +82,7 @@ const styles = StyleSheet.create({
   title: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary },
   row: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md },
   dot: { width: 36, height: 36, borderRadius: tokens.radius.sm },
+  logoBox: { alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: tokens.typography.body, fontWeight: '500', color: tokens.text.primary },
   sub: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 2 },
   divider: { height: 1, backgroundColor: tokens.surface.hairline },

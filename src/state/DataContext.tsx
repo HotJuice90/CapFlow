@@ -16,6 +16,7 @@ import type {
 import { repository } from '@/storage/repository';
 import { type AppData, type RateSnapshot, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
+import { findBankByName } from '@/domain/banks';
 import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
 import { calculate, ENGINE_VERSION } from '@/calc';
 import { uid } from '@/utils/id';
@@ -60,6 +61,24 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
+/**
+ * Сопоставляет лого банка организациям, у которых оно ещё не задано, по точному
+ * совпадению названия («Альфа-Банк» → alfa). Чинит и старые демо-данные, засеянные
+ * до появления лого банков, и организации, которые пользователь создал вручную
+ * с названием банка, не выбирая его через пикер.
+ */
+function linkBankLogos(orgs: Organization[]): { orgs: Organization[]; changed: boolean } {
+  let changed = false;
+  const next = orgs.map((o) => {
+    if (o.logo) return o;
+    const bank = findBankByName(o.name);
+    if (!bank) return o;
+    changed = true;
+    return { ...o, logo: bank.id };
+  });
+  return { orgs: next, changed };
+}
+
 function withDemo(base: AppData): AppData {
   const demo = buildDemoData();
   return {
@@ -86,6 +105,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // первый запуск — сеем демо-портфель (решение #15)
     if (!loaded.seededDemo) {
       loaded = withDemo(loaded);
+      await repository.save(loaded);
+    }
+    // догоняем лого банков для организаций, созданных до этой фичи
+    const { orgs: linkedOrgs, changed: logosChanged } = linkBankLogos(loaded.organizations);
+    if (logosChanged) {
+      loaded = { ...loaded, organizations: linkedOrgs };
       await repository.save(loaded);
     }
     setData(loaded);

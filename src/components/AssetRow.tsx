@@ -3,9 +3,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { AssetView } from '@/domain/types';
-import { tokens } from '@/theme';
+import { tokens, tintToWhite } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { pluralDays } from '@/format/date';
+import { BankLogo, hasBankLogo } from '@/components/BankLogo';
 import { t } from '@/i18n';
 
 const ICON_BY_TYPE = {
@@ -25,9 +26,15 @@ export function AssetRow({ view }: { view: AssetView }) {
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       onPress={() => router.push(`/asset/${asset.id}`)}
     >
-      <View style={[styles.iconBox, { backgroundColor: organization.color }]}>
-        <MaterialCommunityIcons name={iconName} size={22} color="#FFFFFF" />
-      </View>
+      {hasBankLogo(organization.logo) ? (
+        <View style={[styles.iconBox, { backgroundColor: tintToWhite(organization.color, 0.88) }]}>
+          <BankLogo bankId={organization.logo} size={30} />
+        </View>
+      ) : (
+        <View style={[styles.iconBox, { backgroundColor: organization.color }]}>
+          <MaterialCommunityIcons name={iconName} size={22} color="#FFFFFF" />
+        </View>
+      )}
 
       <View style={styles.middle}>
         <Text style={styles.name} numberOfLines={1}>

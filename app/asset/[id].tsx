@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { appAlert } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,21 +31,21 @@ export default function AssetScreen() {
   };
   const onClose = () => {
     if (!id) return;
-    Alert.alert('Закрыть актив?', 'Перейдёт в историю и перестанет участвовать в текущем капитале.', [
+    appAlert('Закрыть актив?', 'Перейдёт в историю и перестанет участвовать в текущем капитале.', [
       { text: 'Отмена', style: 'cancel' },
       { text: 'Закрыть', onPress: async () => { await setAssetStatus(id, 'closed'); router.back(); } },
     ]);
   };
   const onArchive = () => {
     if (!id) return;
-    Alert.alert('В архив?', 'Архивные записи не участвуют в расчётах.', [
+    appAlert('В архив?', 'Архивные записи не участвуют в расчётах.', [
       { text: 'Отмена', style: 'cancel' },
       { text: 'В архив', onPress: async () => { await setAssetStatus(id, 'archived'); router.back(); } },
     ]);
   };
   const onDelete = () => {
     if (!id) return;
-    Alert.alert('Удалить актив?', 'Действие необратимо.', [
+    appAlert('Удалить актив?', 'Действие необратимо.', [
       { text: 'Отмена', style: 'cancel' },
       { text: 'Удалить', style: 'destructive', onPress: async () => { await deleteAsset(id); router.back(); } },
     ]);

@@ -1,289 +1,563 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, {
+  Defs,
+  G,
+  LinearGradient as SvgLinearGradient,
+  Path,
+  Stop,
+} from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { ScreenBackground } from '@/components/ScreenBackground';
-import { Card } from '@/components/Card';
-import { Sparkline } from '@/components/Sparkline';
 import { useData } from '@/state/DataContext';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
-import { formatMoney } from '@/format';
+import { CURRENCY_SYMBOL } from '@/format';
 import { timeAgo } from '@/format/date';
-import { t } from '@/i18n';
+import { tapBuzz } from '@/lib/haptics';
+import { Flag } from '@/components/Flag';
+import { openCurrencyPicker } from '@/lib/currencyPicker';
+import { ScreenTitle } from '@/components/ScreenTitle';
 
-const ALL: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'CNY'];
-const NAME: Record<CurrencyCode, string> = {
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+// Порядок строго как в макете Figma (node 255-2981)
+const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
+const HIST_TABS: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'KZT'];
+
+const CURRENCY_NAME: Record<CurrencyCode, string> = {
   RUB: 'Российский рубль',
   USD: 'Доллар США',
   EUR: 'Евро',
   TRY: 'Турецкая лира',
+  KZT: 'Казахстанский тенге',
+  BYN: 'Белорусский рубль',
   CNY: 'Китайский юань',
-};
-const FLAG: Record<CurrencyCode, string> = {
-  RUB: '🇷🇺',
-  USD: '🇺🇸',
-  EUR: '🇪🇺',
-  TRY: '🇹🇷',
-  CNY: '🇨🇳',
+  INR: 'Индийская рупия',
+  AED: 'Дирхам ОАЭ',
+  BRL: 'Бразильский реал',
+  ARS: 'Аргентинское песо',
 };
 
-function trimNum(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return '';
-  return String(Number(n.toFixed(2)));
+const CHART_LINE = '#6B7ECB';
+const CHART_FILL = '#7D90C7';
+
+const D = {
+  bg1: '#F2F4F9', bg2: '#E0EDF4', bg3: '#F5F7FF',
+  sourceText: '#2B2B2B', sourceLabel: '#909497',
+  placeholder: 'rgba(144,148,151,0.45)',
+  rateHint: '#7D90C7',
+  updated: 'rgba(33,33,33,0.3)',
+  bigRate: '#667085',
+  resetBg: '#A8B6E2', resetBorder: '#E2EDF8',
+  chipBg: '#F7F7F7',
+  divider: '#EAECF2',
+  tabBarBg: 'rgba(215,226,235,0.5)',
+  tabActiveBg: '#A8B6E2',
+  badgeNegBg: 'rgba(229,139,139,0.1)', badgeNeg: '#C11818',
+  badgePosBg: 'rgba(139,229,139,0.1)', badgePos: '#1A8A1A',
+};
+
+type Slots = [CurrencyCode, CurrencyCode, CurrencyCode];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function toRub(amount: number, c: CurrencyCode, rates: Record<CurrencyCode, number>): number {
+  return amount * (rates[c] ?? 1);
+}
+function fromRub(rub: number, c: CurrencyCode, rates: Record<CurrencyCode, number>): number {
+  const r = rates[c] ?? 1;
+  return r > 0 ? rub / r : 0;
+}
+function convert(amount: number, from: CurrencyCode, to: CurrencyCode, rates: Record<CurrencyCode, number>): number {
+  return fromRub(toRub(amount, from, rates), to, rates);
 }
 
-export default function ConverterScreen() {
-  const insets = useSafeAreaInsets();
-  const { data, refreshRates, backfillRateHistory } = useData();
+/** Форматированное значение для показа (с разделителями тысяч). */
+function displayAmount(value: number): string {
+  if (!isFinite(value) || value === 0) return '0';
+  const s = value < 0.01 ? value.toFixed(4) : value.toFixed(2).replace(/\.?0+$/, '');
+  const [int, dec] = s.split('.');
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return dec ? `${grouped},${dec}` : grouped;
+}
 
-  const [slots, setSlots] = useState<CurrencyCode[]>(['RUB', 'USD', 'EUR', 'CNY']);
-  const [active, setActive] = useState(0);
-  const [amount, setAmount] = useState('100000');
-  const [picker, setPicker] = useState<number | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingHist, setLoadingHist] = useState(false);
+/** Голая редактируемая строка (без группировки), '' для нуля. */
+function toEditable(value: number): string {
+  if (!isFinite(value) || value === 0) return '';
+  const s = value < 0.01 ? value.toFixed(4) : value.toFixed(2).replace(/\.?0+$/, '');
+  return s.replace('.', ',');
+}
 
-  const rates = data.rates;
-  const parsed = parseFloat(amount.replace(',', '.')) || 0;
+function parseRaw(text: string): number {
+  return parseFloat(text.replace(/\s/g, '').replace(',', '.')) || 0;
+}
 
-  const numericFor = (i: number) =>
-    i === active ? parsed : (parsed * (rates[slots[active]] ?? 1)) / (rates[slots[i]] ?? 1);
-  const displayFor = (i: number) =>
-    i === active ? amount : formatMoney(numericFor(i), { withSymbol: false, kopecks: 'auto' });
+/** 'YYYY-MM-DD' → 'ДД.ММ.ГГ' */
+function fmtShort(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y.slice(2)}`;
+}
 
-  const focusSlot = (i: number) => {
-    if (i === active) return;
-    setActive(i);
-    setAmount(trimNum(numericFor(i)));
-  };
-  const changeSlot = (i: number, text: string) => {
-    if (i !== active) setActive(i);
-    setAmount(text.replace(/[^0-9.,]/g, ''));
-  };
-  const setCurrency = (i: number, c: CurrencyCode) => {
-    setSlots((prev) => prev.map((s, idx) => (idx === i ? c : s)));
-    setPicker(null);
-  };
-  const doRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refreshRates();
-    } catch {
-      // офлайн — оставляем последние курсы
-    } finally {
-      setRefreshing(false);
+/** Не даём выбрать одинаковые валюты: конфликтный слот получает первую свободную. */
+function resolveDuplicates(next: Slots, changedIdx: number): Slots {
+  for (let j = 0; j < 3; j++) {
+    if (j !== changedIdx && next[j] === next[changedIdx]) {
+      const used = next.filter((_, k) => k !== j);
+      const free = ALL_CURRENCIES.find((c) => !used.includes(c)) ?? next[j];
+      next[j] = free;
     }
-  };
-  const doBackfill = async () => {
-    setLoadingHist(true);
-    try {
-      await backfillRateHistory();
-    } catch {
-      // архив ЦБ недоступен
-    } finally {
-      setLoadingHist(false);
-    }
-  };
+  }
+  return next;
+}
 
-  const histCurrencies = Array.from(new Set(slots.filter((c) => c !== 'RUB')));
-  const seriesFor = (c: CurrencyCode): number[] =>
-    data.ratesHistory.map((s) => s.rates[c]).filter((x): x is number => typeof x === 'number');
-  const hasHistory = histCurrencies.some((c) => seriesFor(c).length >= 2);
+// ─── Area Chart (всегда синий, уходит в прозрачность, без нижней границы) ──────
+
+/** Гладкая кривая через точки — монотонный кубический сплайн (Фрица–Карлсона):
+ *  не выскакивает за пределы данных и не делает «рывков», как Q-Безье через середины. */
+function monotonePath(pts: { x: number; y: number }[]): string {
+  const n = pts.length;
+  if (n < 2) return '';
+  // секущие наклоны
+  const dx: number[] = [], dy: number[] = [], m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = pts[i + 1].x - pts[i].x;
+    dy[i] = pts[i + 1].y - pts[i].y;
+    m[i] = dy[i] / (dx[i] || 1);
+  }
+  // касательные в точках
+  const t: number[] = new Array(n);
+  t[0] = m[0];
+  t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) t[i] = 0;
+    else t[i] = (m[i - 1] + m[i]) / 2;
+  }
+  // ограничение монотонности
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+    const a = t[i] / m[i], b = t[i + 1] / m[i];
+    const h = Math.hypot(a, b);
+    if (h > 3) { const s = 3 / h; t[i] = s * a * m[i]; t[i + 1] = s * b * m[i]; }
+  }
+  let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const x1 = pts[i].x + dx[i] / 3;
+    const y1 = pts[i].y + (t[i] * dx[i]) / 3;
+    const x2 = pts[i + 1].x - dx[i] / 3;
+    const y2 = pts[i + 1].y - (t[i + 1] * dx[i]) / 3;
+    d += ` C ${x1.toFixed(2)} ${y1.toFixed(2)}, ${x2.toFixed(2)} ${y2.toFixed(2)}, ${pts[i + 1].x.toFixed(2)} ${pts[i + 1].y.toFixed(2)}`;
+  }
+  return d;
+}
+
+function AreaChart({ data, width, height }: { data: number[]; width: number; height: number }) {
+  if (data.length < 2) return null;
+  const dataMin = Math.min(...data);
+  const dataMax = Math.max(...data);
+  const span = (dataMax - dataMin) || 1;
+  // Воздух сверху и снизу: данные занимают ~70% высоты — колебания пологие, не пики.
+  const headroom = span * 0.21;
+  const lo = dataMin - headroom;
+  const range = span + headroom * 2;
+  const pad = 7;
+
+  const pts = data.map((v, i) => ({
+    x: (i / (data.length - 1)) * width,
+    y: height - pad - ((v - lo) / range) * (height - pad * 2),
+  }));
+
+  const linePath = monotonePath(pts);
+  const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
 
   return (
-    <ScreenBackground>
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + tokens.spacing.md,
-          paddingHorizontal: tokens.spacing.screenH,
-          paddingBottom: insets.bottom + 90,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.topRow}>
-          <Text style={styles.screenTitle}>{t.tabs.converter}</Text>
-          <Pressable style={styles.iconBtn} onPress={() => setAmount('')} hitSlop={8}>
-            <MaterialIcons name="restart-alt" size={20} color={tokens.accent.base} />
-          </Pressable>
-        </View>
-
-        {/* Основная полоса */}
-        <Text style={styles.label}>У меня есть</Text>
-        <Card style={[styles.mainCard, active === 0 && styles.activeCard]} padded={false}>
-          <View style={styles.mainInner}>
-            <TextInput
-              style={styles.mainInput}
-              value={displayFor(0)}
-              onChangeText={(text) => changeSlot(0, text)}
-              onFocus={() => focusSlot(0)}
-              keyboardType="numeric"
-              placeholder="0"
-              placeholderTextColor={tokens.text.tertiary}
-            />
-            <Pressable style={styles.mainChip} onPress={() => setPicker(0)}>
-              <Text style={styles.flagBig}>{FLAG[slots[0]]}</Text>
-              <Text style={styles.codeBig}>{slots[0]}</Text>
-              <MaterialIcons name="expand-more" size={20} color={tokens.text.tertiary} />
-            </Pressable>
-          </View>
-        </Card>
-
-        <Text style={[styles.label, { marginTop: tokens.spacing.lg }]}>Я получу</Text>
-        <View style={styles.grid}>
-          {[1, 2, 3].map((i) => (
-            <Pressable key={i} style={[styles.cell, active === i && styles.activeCell]} onPress={() => focusSlot(i)}>
-              <Pressable style={styles.cellHead} onPress={() => setPicker(i)} hitSlop={6}>
-                <Text style={styles.flagSmall}>{FLAG[slots[i]]}</Text>
-                <Text style={styles.codeSmall}>{slots[i]}</Text>
-                <MaterialIcons name="expand-more" size={14} color={tokens.text.tertiary} />
-              </Pressable>
-              <TextInput
-                style={styles.cellInput}
-                value={displayFor(i)}
-                onChangeText={(text) => changeSlot(i, text)}
-                onFocus={() => focusSlot(i)}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={tokens.text.tertiary}
-              />
-              <Text style={styles.cellRate} numberOfLines={1}>
-                1 {slots[i]} = {formatMoney(rates[slots[i]] ?? 1, { currency: 'RUB', kopecks: 'auto' })}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* Источник курса + обновление */}
-        <View style={styles.updatedRow}>
-          <Text style={styles.updatedText} numberOfLines={1}>
-            Курс ЦБ РФ · обновлено {timeAgo(data.ratesUpdatedAt)}
-          </Text>
-          <Pressable style={styles.refreshBtn} onPress={doRefresh} disabled={refreshing} hitSlop={8}>
-            {refreshing ? (
-              <ActivityIndicator size="small" color={tokens.accent.base} />
-            ) : (
-              <MaterialIcons name="refresh" size={18} color={tokens.accent.base} />
-            )}
-            <Text style={styles.refreshText}>{refreshing ? 'Обновляю…' : 'Обновить'}</Text>
-          </Pressable>
-        </View>
-
-        <Text style={[styles.label, { marginTop: tokens.spacing.lg }]}>История курса</Text>
-        <Card>
-          {hasHistory ? (
-            histCurrencies.map((c, i) => {
-              const series = seriesFor(c);
-              const first = series[0] ?? 0;
-              const last = series[series.length - 1] ?? 0;
-              const pct = first > 0 ? ((last - first) / first) * 100 : 0;
-              // курс валюты растёт = рубль дешевеет (bad для рубля), инвертируем
-              const rubbleUp = last < first;
-              return (
-                <View key={c} style={[styles.histRow, i > 0 && styles.histGap]}>
-                  <Text style={styles.flagSmall}>{FLAG[c]}</Text>
-                  <View style={{ width: 56 }}>
-                    <Text style={styles.histCode}>{c}</Text>
-                    <Text style={styles.histRate}>{formatMoney(data.rates[c] ?? 0, { currency: 'RUB', kopecks: 'auto' })}</Text>
-                  </View>
-                  <View style={styles.histChart}>
-                    {series.length >= 2 ? (
-                      <Sparkline data={series} width={110} height={36} color={rubbleUp ? tokens.semantic.positive : tokens.semantic.negative} />
-                    ) : (
-                      <Text style={styles.histNone}>—</Text>
-                    )}
-                  </View>
-                  <Text style={[styles.histPct, { color: rubbleUp ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {rubbleUp ? '+' : '−'}{Math.abs(pct).toFixed(1).replace('.', ',')}%
-                  </Text>
-                </View>
-              );
-            })
-          ) : (
-            <View style={styles.histEmpty}>
-              <Text style={styles.histEmptyText}>График появится по мере ежедневных обновлений. Можно сразу подгрузить историю за 30 дней с ЦБ.</Text>
-              <Pressable style={styles.histBtn} onPress={doBackfill} disabled={loadingHist}>
-                {loadingHist ? <ActivityIndicator size="small" color="#FFFFFF" /> : <MaterialIcons name="download" size={18} color="#FFFFFF" />}
-                <Text style={styles.histBtnText}>{loadingHist ? 'Загружаю…' : 'Загрузить историю'}</Text>
-              </Pressable>
-            </View>
-          )}
-        </Card>
-      </ScrollView>
-
-      {/* Пикер валюты */}
-      <Modal visible={picker !== null} transparent animationType="fade" onRequestClose={() => setPicker(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setPicker(null)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.sheetTitle}>Валюта окна</Text>
-            {ALL.map((c) => (
-              <Pressable key={c} style={styles.optionRow} onPress={() => picker !== null && setCurrency(picker, c)}>
-                <Text style={styles.flagBig}>{FLAG[c]}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.optionCode}>{c}</Text>
-                  <Text style={styles.optionName}>{NAME[c]}</Text>
-                </View>
-                {picker !== null && slots[picker] === c ? (
-                  <MaterialIcons name="check" size={20} color={tokens.accent.base} />
-                ) : null}
-              </Pressable>
-            ))}
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </ScreenBackground>
+    <Svg width={width} height={height}>
+      <Defs>
+        {/* Мягкий fill: затухает до самого низа (offset 1) — без видимого шва-перехода */}
+        <SvgLinearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={CHART_FILL} stopOpacity="0.7" />
+          <Stop offset="0.45" stopColor={CHART_FILL} stopOpacity="0.28" />
+          <Stop offset="0.75" stopColor={CHART_FILL} stopOpacity="0.08" />
+          <Stop offset="1" stopColor={CHART_FILL} stopOpacity="0" />
+        </SvgLinearGradient>
+      </Defs>
+      <G opacity={0.5}>
+        <Path d={areaPath} fill="url(#chartFill)" />
+        <Path d={linePath} stroke={CHART_LINE} strokeWidth={1} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </G>
+    </Svg>
   );
 }
 
-const styles = StyleSheet.create({
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.md },
-  screenTitle: { fontSize: tokens.typography.display, fontWeight: '600', color: tokens.text.primary },
-  iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: tokens.surface.white, alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500', marginBottom: tokens.spacing.sm },
-  mainCard: { borderWidth: 1.5, borderColor: 'transparent' },
-  activeCard: { borderColor: tokens.accent.base },
-  mainInner: { flexDirection: 'row', alignItems: 'center', padding: tokens.spacing.lg },
-  mainInput: { flex: 1, fontSize: tokens.typography.metric, fontWeight: '800', color: tokens.text.primary, padding: 0 },
-  mainChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: tokens.spacing.sm },
-  flagBig: { fontSize: 24 },
-  codeBig: { fontSize: tokens.typography.body, fontWeight: '700', color: tokens.text.primary },
-  grid: { flexDirection: 'row', gap: tokens.spacing.sm },
-  cell: { flex: 1, backgroundColor: tokens.surface.white, borderRadius: tokens.radius.md, padding: tokens.spacing.md, borderWidth: 1.5, borderColor: 'transparent' },
-  activeCell: { borderColor: tokens.accent.base },
-  cellHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  flagSmall: { fontSize: 16 },
-  codeSmall: { fontSize: tokens.typography.caption, fontWeight: '700', color: tokens.text.primary },
-  cellInput: { fontSize: tokens.typography.title, fontWeight: '800', color: tokens.text.primary, padding: 0, marginTop: tokens.spacing.sm },
-  cellRate: { fontSize: 10, color: tokens.text.tertiary, marginTop: 4 },
-  updatedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: tokens.spacing.lg },
-  updatedText: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.tertiary },
-  refreshBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  refreshText: { fontSize: tokens.typography.caption, color: tokens.accent.base, fontWeight: '600' },
-  backdrop: { flex: 1, backgroundColor: 'rgba(20,30,28,0.35)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: tokens.surface.white, borderTopLeftRadius: tokens.radius.xl, borderTopRightRadius: tokens.radius.xl, padding: tokens.spacing.lg, paddingBottom: tokens.spacing.xxl },
-  sheetTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginBottom: tokens.spacing.md },
-  optionRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md, borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
-  optionCode: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
-  optionName: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 1 },
-  histRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
-  histGap: { marginTop: tokens.spacing.md, paddingTop: tokens.spacing.md, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
-  histCode: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
-  histRate: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 1 },
-  histChart: { flex: 1, alignItems: 'center' },
-  histNone: { fontSize: tokens.typography.caption, color: tokens.text.tertiary },
-  histPct: { fontSize: tokens.typography.caption, fontWeight: '700', width: 52, textAlign: 'right' },
-  histEmpty: { alignItems: 'center' },
-  histEmptyText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, textAlign: 'center', lineHeight: 18 },
-  histBtn: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, backgroundColor: tokens.accent.base, borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.md, marginTop: tokens.spacing.md },
-  histBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: tokens.typography.label },
+// ─── Currency pill (flag + code + chevron) ────────────────────────────────────
+
+function CurrencyPill({ currency, large = false, onPress }: {
+  currency: CurrencyCode; large?: boolean; onPress?: () => void;
+}) {
+  return (
+    <Pressable style={[s.pill, large && s.pillLg]} onPress={onPress} hitSlop={8}>
+      <Flag code={currency} size={large ? 32 : 28} />
+      <Text style={[s.pillCode, large && s.pillCodeLg]}>{currency}</Text>
+      <MaterialIcons name="keyboard-arrow-down" size={large ? 14 : 12} color="rgba(33,33,33,0.45)" />
+    </Pressable>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
+const DEFAULT_SLOTS: Slots = ['RUB', 'USD', 'EUR'];
+const SLOTS_KEY = 'converter_slots';
+
+export default function ConverterScreen() {
+  const insets = useSafeAreaInsets();
+  const { width: screenW } = useWindowDimensions();
+  const { data, refreshRates, backfillRateHistory } = useData();
+
+  const [slots, setSlots] = useState<Slots>(DEFAULT_SLOTS);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [amountText, setAmountText] = useState(''); // текст в активном поле; '' = плейсхолдер
+  const [histTab, setHistTab] = useState<CurrencyCode>('USD');
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingHist, setLoadingHist] = useState(false);
+  const [topCardH, setTopCardH] = useState(114);
+  const [chartH, setChartH] = useState(220);
+
+  const refs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
+  const rates = data.rates as Record<CurrencyCode, number>;
+
+  useEffect(() => {
+    AsyncStorage.getItem(SLOTS_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw) as Slots;
+        if (Array.isArray(saved) && saved.length === 3) setSlots(saved);
+      } catch {}
+    });
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
+  }, [slots]);
+
+  const activeAmount = useMemo(() => parseRaw(amountText), [amountText]);
+  const isEmpty = activeAmount === 0;
+
+  // Значение для конкретного поля: активное — сырой текст, остальные — пересчёт.
+  const valueFor = (idx: number): number =>
+    idx === activeIdx ? activeAmount : convert(activeAmount, slots[activeIdx], slots[idx], rates);
+
+  const fieldText = (idx: number): string => {
+    if (idx === activeIdx) return amountText;
+    return isEmpty ? '' : displayAmount(valueFor(idx));
+  };
+
+  const handleChange = (idx: number, text: string) => {
+    if (idx !== activeIdx) setActiveIdx(idx);
+    setAmountText(text.replace(/[^\d.,]/g, ''));
+  };
+
+  const handleFocus = (idx: number) => {
+    if (idx === activeIdx) return;
+    // переносим текущее значение в фокусируемое поле (в его валюте)
+    setAmountText(toEditable(valueFor(idx)));
+    setActiveIdx(idx);
+  };
+
+  const resetAmounts = () => {
+    tapBuzz();
+    setAmountText('');
+    setActiveIdx(0);
+  };
+
+  const openPicker = (slotIdx: number) => {
+    openCurrencyPicker((code) => {
+      setSlots((prev) => {
+        const next = [...prev] as Slots;
+        next[slotIdx] = code;
+        return resolveDuplicates(next, slotIdx);
+      });
+    }, slots[slotIdx]);
+  };
+
+  const doRefresh = async () => {
+    setRefreshing(true);
+    try { await refreshRates(); } catch {} finally { setRefreshing(false); }
+  };
+
+  const doBackfill = async () => {
+    setLoadingHist(true);
+    try { await backfillRateHistory(); } catch {} finally { setLoadingHist(false); }
+  };
+
+  // Окно «последний месяц»: ровно 30 календарных дней назад от сегодня.
+  // Если start попадает на выходной — берём последнюю пятницу до него (курс ЦБ
+  // на пятницу действует и в выходные → сопоставимо с источниками вроде Яндекса).
+  const { rangeText, histSnaps } = useMemo(() => {
+    const p = (n: number) => String(n).padStart(2, '0');
+    const toIso = (d: Date) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    const today = new Date();
+    // Ровно «месяц назад» (как у Яндекса): 30.06 → 30.05. setDate(-30) даёт 31.05
+    // из-за арифметики «день 0», поэтому только setMonth(-1).
+    const start = new Date(today);
+    start.setMonth(start.getMonth() - 1);
+    const startIso = toIso(start);
+
+    const all = data.ratesHistory.filter((s) => typeof s.rates[histTab] === 'number');
+    const inWindow = all.filter((s) => s.date >= startIso);
+    // последняя точка ДО окна = курс «на дату старта» (пятница перед выходными)
+    const baseBefore = [...all].reverse().find((s) => s.date < startIso);
+    const snaps =
+      baseBefore && (!inWindow.length || inWindow[0].date !== baseBefore.date)
+        ? [{ ...baseBefore, date: startIso }, ...inWindow]
+        : inWindow;
+
+    const label = `${fmtShort(startIso)} — ${fmtShort(toIso(today))}`;
+    return { rangeText: label, histSnaps: snaps };
+  }, [data.ratesHistory, histTab]);
+
+  const histSeries = histSnaps.map((snap) => snap.rates[histTab] as number);
+  const histFirst = histSeries[0] ?? 0;
+  const histLast = histSeries[histSeries.length - 1] ?? 0;
+  const histDelta = histLast - histFirst;
+  const histPct = histFirst > 0 ? (histDelta / histFirst) * 100 : 0;
+  const histRubbleUp = histLast < histFirst; // рубль крепнет, когда валюта дешевеет
+  const hasHistory = histSeries.length >= 2;
+
+  const rateLabel = (c: CurrencyCode) =>
+    `1 ${CURRENCY_SYMBOL[c]} = ${displayAmount(rates[c] ?? 0)} ${CURRENCY_SYMBOL.RUB}`;
+
+  // Поле ввода (используется и для верхней карточки, и для нижних столбцов)
+  const AmountInput = (idx: number, big: boolean) => (
+    <TextInput
+      ref={refs[idx]}
+      style={big ? s.bigInput : s.colInput}
+      value={fieldText(idx)}
+      onChangeText={(t) => handleChange(idx, t)}
+      onFocus={() => handleFocus(idx)}
+      keyboardType="decimal-pad"
+      placeholder="0"
+      placeholderTextColor={D.placeholder}
+      selectionColor={D.resetBg}
+    />
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      <LinearGradient
+        colors={[D.bg1, D.bg2, D.bg3]}
+        locations={[0.027, 0.565, 0.992]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <View
+        style={{ flex: 1, paddingTop: 80, paddingHorizontal: 16, paddingBottom: insets.bottom + 80 }}
+      >
+        <ScreenTitle>Конвертер</ScreenTitle>
+
+        {/* ── Карточки (поле 0 сверху, поля 1|2 снизу) + кнопка сброса ── */}
+        <View style={s.cardsBlock}>
+          {/* Верхнее поле */}
+          <Pressable
+            style={s.topCard}
+            onPress={() => refs[0].current?.focus()}
+            onLayout={(e) => setTopCardH(e.nativeEvent.layout.height)}
+          >
+            <View style={s.topLeft}>
+              <Text style={s.topLabel}>{CURRENCY_NAME[slots[0]]}</Text>
+              {AmountInput(0, true)}
+            </View>
+            <CurrencyPill currency={slots[0]} large onPress={() => openPicker(0)} />
+          </Pressable>
+
+          {/* Нижние два поля */}
+          <View style={s.bottomCard}>
+            <Pressable style={s.col} onPress={() => refs[1].current?.focus()}>
+              <CurrencyPill currency={slots[1]} onPress={() => openPicker(1)} />
+              {AmountInput(1, false)}
+              <Text style={s.rateHint}>{rateLabel(slots[1])}</Text>
+            </Pressable>
+
+            <View style={s.divider} />
+
+            <Pressable style={s.col} onPress={() => refs[2].current?.focus()}>
+              <CurrencyPill currency={slots[2]} onPress={() => openPicker(2)} />
+              {AmountInput(2, false)}
+              <Text style={s.rateHint}>{rateLabel(slots[2])}</Text>
+            </Pressable>
+          </View>
+
+          {/* Кнопка сброса показаний */}
+          <Pressable style={[s.resetBtn, { top: topCardH - 22 }]} onPress={resetAmounts} hitSlop={8}>
+            <MaterialIcons name="close" size={20} color="#FFFFFF" />
+          </Pressable>
+        </View>
+
+        {/* ── Строка обновления ── */}
+        <View style={s.footerRow}>
+          <Text style={s.updatedText}>Курс: ЦБ РФ</Text>
+          <Pressable style={s.footerRight} onPress={doRefresh} disabled={refreshing}>
+            <Text style={s.updatedText}>
+              {refreshing ? 'Обновляю…' : `Обновлено: ${data.ratesUpdatedAt ? timeAgo(data.ratesUpdatedAt) : '—'}`}
+            </Text>
+            <MaterialIcons name="refresh" size={13} color={D.updated} />
+          </Pressable>
+        </View>
+
+        {/* ── История курса ── */}
+        <View style={s.histSection}>
+          <Text style={s.histTitle}>История курса</Text>
+
+          <View style={s.histHeaderRow}>
+            <View style={s.tabBar}>
+              {HIST_TABS.map((c) => (
+                <Pressable
+                  key={c}
+                  style={[s.tab, histTab === c && s.tabActive]}
+                  onPress={() => { tapBuzz(); setHistTab(c); }}
+                >
+                  <Text style={[s.tabText, histTab === c && s.tabTextActive]}>{c}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={s.bigRate}>{displayAmount(rates[histTab] ?? 0)} {CURRENCY_SYMBOL.RUB}</Text>
+          </View>
+
+          {hasHistory && (
+            <View style={s.subRow}>
+              <Text style={s.rangeText}>{rangeText}</Text>
+              <View style={[s.badge, { backgroundColor: histRubbleUp ? D.badgePosBg : D.badgeNegBg }]}>
+                <Text style={[s.badgeText, { color: histRubbleUp ? D.badgePos : D.badgeNeg }]}>
+                  {histRubbleUp ? '▲' : '▼'} {displayAmount(Math.abs(histDelta))} {CURRENCY_SYMBOL.RUB} · {Math.abs(histPct).toFixed(1).replace('.', ',')}%
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* График — во всю ширину экрана, как фоновый. Высота — что осталось до низа. */}
+          <View
+            style={[s.chartWrap, { marginHorizontal: -16, width: screenW }]}
+            onLayout={(e) => setChartH(e.nativeEvent.layout.height)}
+          >
+            {hasHistory ? (
+              <AreaChart data={histSeries} width={screenW} height={Math.max(120, chartH)} />
+            ) : (
+              <View style={s.emptyChart}>
+                <Text style={s.emptyChartText}>
+                  График появится по мере ежедневных обновлений.{'\n'}Можно загрузить сразу историю за 30 дней.
+                </Text>
+                <Pressable style={s.loadHistBtn} onPress={doBackfill} disabled={loadingHist}>
+                  {loadingHist
+                    ? <ActivityIndicator size="small" color="#FFF" />
+                    : <MaterialIcons name="download" size={18} color="#FFF" />}
+                  <Text style={s.loadHistBtnText}>{loadingHist ? 'Загружаю…' : 'Загрузить историю'}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  cardsBlock: { gap: 6, position: 'relative' },
+
+  // Верхняя карточка
+  topCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  topLeft: { flex: 1, gap: 16, paddingRight: 12 },
+  topLabel: { fontSize: 14, fontFamily: 'Onest_500Medium', color: D.sourceLabel },
+  bigInput: {
+    fontSize: 36, fontFamily: 'Onest_600SemiBold', color: D.sourceText,
+    letterSpacing: -0.72, padding: 0,
+  },
+
+  // Нижняя карточка (2 столбца + дивайдер)
+  bottomCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20,
+    flexDirection: 'row', alignItems: 'stretch',
+  },
+  col: { flex: 1, gap: 14 },
+  colInput: {
+    fontSize: 28, fontFamily: 'Onest_600SemiBold', color: '#212121',
+    letterSpacing: -0.56, padding: 0,
+  },
+  divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
+  rateHint: { fontSize: 13, fontFamily: 'Onest_600SemiBold', color: D.rateHint },
+
+  // Кнопка сброса
+  resetBtn: {
+    position: 'absolute', right: 0,
+    backgroundColor: D.resetBg, borderWidth: 6, borderColor: D.resetBorder,
+    borderRadius: 35, padding: 8, zIndex: 10,
+  },
+
+  // Чип валюты
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: D.chipBg, borderRadius: 35,
+    paddingLeft: 4, paddingRight: 8, paddingVertical: 4, alignSelf: 'flex-start',
+  },
+  pillLg: { gap: 8 },
+  pillCode: {
+    fontSize: 14, fontFamily: 'Onest_500Medium', color: '#212121',
+    textTransform: 'uppercase', letterSpacing: -0.56,
+  },
+  pillCodeLg: { fontSize: 16, letterSpacing: -0.64 },
+
+  // Строка обновления
+  footerRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 10, marginTop: 10,
+  },
+  footerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  updatedText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: D.updated, letterSpacing: -0.26 },
+
+  // История
+  histSection: { marginTop: 40, flex: 1 },
+  histTitle: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: '#212121', marginBottom: 12 },
+  histHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  rangeText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: D.updated, paddingLeft: 10 },
+  tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: 35, padding: 1 },
+  tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 35 },
+  tabActive: { backgroundColor: D.tabActiveBg },
+  tabText: {
+    fontSize: 14, fontFamily: 'Onest_500Medium', textTransform: 'uppercase',
+    letterSpacing: -0.56, color: 'rgba(33,33,33,0.5)',
+  },
+  tabTextActive: { color: '#FFFFFF' },
+  bigRate: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate },
+  badge: { borderRadius: 35, paddingHorizontal: 10, paddingVertical: 6 },
+  badgeText: { fontSize: 14, fontFamily: 'Onest_500Medium', letterSpacing: -0.28 },
+
+  // График
+  chartWrap: { marginTop: 0, overflow: 'hidden', flex: 1 },
+  emptyChart: { paddingHorizontal: 16, paddingVertical: 28, alignItems: 'center' },
+  emptyChartText: {
+    fontSize: 13, fontFamily: 'Onest_400Regular',
+    color: tokens.text.secondary, textAlign: 'center', lineHeight: 20, marginBottom: 16,
+  },
+  loadHistBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: D.resetBg, borderRadius: 35, paddingHorizontal: 20, paddingVertical: 12,
+  },
+  loadHistBtnText: { color: '#FFF', fontFamily: 'Onest_700Bold', fontSize: 14 },
 });

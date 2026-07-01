@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { appAlert } from '@/lib/dialog';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
@@ -14,7 +15,7 @@ export default function DemoScreen() {
   const { hasDemo, deleteDemoData, reseedDemo } = useData();
 
   const confirmDelete = () => {
-    Alert.alert(t.settings.deleteDemo, t.settings.deleteDemoHint, [
+    appAlert(t.settings.deleteDemo, t.settings.deleteDemoHint, [
       { text: t.common.cancel, style: 'cancel' },
       { text: t.common.delete, style: 'destructive', onPress: () => void deleteDemoData() },
     ]);

@@ -4,11 +4,17 @@ import type { AppData } from '@/storage/types';
 import { tokens } from '@/theme';
 
 const CURRENCY_COLOR: Record<string, string> = {
-  RUB: '#10B3A3',
+  RUB: '#62709C',
   USD: '#3E63DD',
   EUR: '#9A6DD7',
   TRY: '#F2A900',
+  KZT: '#1FA971',
+  BYN: '#D7263D',
   CNY: '#E5478B',
+  INR: '#FF9933',
+  AED: '#00843D',
+  BRL: '#009C3B',
+  ARS: '#74ACDF',
 };
 
 /** Пересчёт суммы из валюты актива в основную валюту приложения (по последним курсам). */

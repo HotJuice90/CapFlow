@@ -6,7 +6,7 @@ import type { RateSnapshot } from '@/storage/types';
  * Возвращаем ₽ за 1 единицу валюты.
  */
 const CBR_URL = 'https://www.cbr-xml-daily.ru/daily_json.js';
-const WANTED: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'CNY'];
+const WANTED: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
 
 interface CbrValute {
   Value: number;
@@ -35,11 +35,14 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-/** История курса с архива ЦБ: ~16 точек за последние 30 дней (каждый 2-й день). */
+/** История курса с архива ЦБ: каждый день за последние 30 дней (месяц).
+ *  По будням ЦБ публикует курс — выходные/праздники отсеются (fetch не пройдёт),
+ *  поэтому остаются только реальные точки ЦБ, а пятница→понедельник просто соединяются. */
 export async function fetchCbrHistory(): Promise<RateSnapshot[]> {
   const today = new Date();
   const targets: { date: string; url: string }[] = [];
-  for (let i = 0; i <= 30; i += 2) {
+  // Чуть глубже месяца, чтобы захватить пятничный курс до начала окна (он же — курс на выходные).
+  for (let i = 0; i <= 35; i += 1) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const y = d.getFullYear();

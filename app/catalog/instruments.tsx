@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
+import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
 import { tokens } from '@/theme';
 
@@ -51,7 +52,7 @@ export default function InstrumentsScreen() {
             return (
               <View key={o.id} style={{ marginBottom: tokens.spacing.lg }}>
                 <View style={styles.groupHeader}>
-                  <View style={[styles.dot, { backgroundColor: o.color }]} />
+                  <OrgLogo color={o.color} logo={o.logo} size={20} radius={6} />
                   <Text style={styles.groupName}>{o.name}</Text>
                 </View>
                 <Card padded={false}>
