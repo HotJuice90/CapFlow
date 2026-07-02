@@ -333,10 +333,16 @@ function EarnedStripe({ amount, currency }: { amount: number; currency: Currency
       {size ? (
         <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
           <Defs>
-            <SvgGradient id="glint" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor={tokens.semantic.positive} stopOpacity="0" />
-              <Stop offset="0.5" stopColor={tokens.semantic.positive} stopOpacity="0.55" />
-              <Stop offset="1" stopColor={tokens.semantic.positive} stopOpacity="0" />
+            <SvgGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
+              <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0.4" />
+              <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+            </SvgGradient>
+            <SvgGradient id="core" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
+              <Stop offset="0.35" stopColor="#FFFFFF" stopOpacity="1" />
+              <Stop offset="0.65" stopColor="#FFFFFF" stopOpacity="1" />
+              <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
             </SvgGradient>
           </Defs>
           {/* спокойное дно рамки */}
@@ -348,15 +354,28 @@ function EarnedStripe({ amount, currency }: { amount: number; currency: Currency
             stroke={hexToRgba(tokens.semantic.positive, 0.1)}
             strokeWidth={strokeW}
           />
-          {/* бегущий блик поверх */}
+          {/* мягкое свечение блика — короткое, круглые концы, чтобы читалось как точка света */}
           <AnimatedRect
             x={strokeW / 2} y={strokeW / 2}
             width={size.w - strokeW} height={size.h - strokeW}
             rx={radius} ry={radius}
             fill="none"
-            stroke="url(#glint)"
-            strokeWidth={strokeW}
-            strokeDasharray={`${perimeter * 0.22}, ${perimeter * 0.78}`}
+            stroke="url(#glow)"
+            strokeWidth={strokeW * 3}
+            strokeLinecap="round"
+            strokeDasharray={`${Math.max(perimeter * 0.11, 1)}, ${perimeter}`}
+            strokeDashoffset={dashOffset}
+          />
+          {/* яркое ядро поверх */}
+          <AnimatedRect
+            x={strokeW / 2} y={strokeW / 2}
+            width={size.w - strokeW} height={size.h - strokeW}
+            rx={radius} ry={radius}
+            fill="none"
+            stroke="url(#core)"
+            strokeWidth={strokeW * 1.4}
+            strokeLinecap="round"
+            strokeDasharray={`${Math.max(perimeter * 0.07, 1)}, ${perimeter}`}
             strokeDashoffset={dashOffset}
           />
         </Svg>
