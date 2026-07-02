@@ -10,9 +10,24 @@ const MAX_DOTS = 3;
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
-function iso(year: number, month: number, day: number): string {
+export function buildIso(year: number, month: number, day: number): string {
   return `${year}-${pad2(month + 1)}-${pad2(day)}`;
 }
+
+/** Сетка недель месяца (null = пустая ячейка до/после месяца) — общая для всех календарей приложения. */
+export function monthWeeks(year: number, month: number): (number | null)[][] {
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // Пн = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+export { WEEKDAYS };
 
 export function MonthCalendar({
   year,
@@ -34,16 +49,7 @@ export function MonthCalendar({
   onPrev: () => void;
   onNext: () => void;
 }) {
-  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // Пн = 0
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const weeks: (number | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  const weeks = monthWeeks(year, month);
 
   return (
     <View>
@@ -67,7 +73,7 @@ export function MonthCalendar({
         <View key={wi} style={styles.week}>
           {week.map((day, di) => {
             if (day === null) return <View key={di} style={styles.cell} />;
-            const dayIso = iso(year, month, day);
+            const dayIso = buildIso(year, month, day);
             const isSelected = dayIso === selected;
             const isToday = dayIso === today;
             const isPast = dayIso < today; // только визуально, логику не трогаем

@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
-import { BankLogo } from '@/components/BankLogo';
+import { OrgLogo } from '@/components/BankLogo';
 import { TextField, SelectField, ColorField } from '@/components/form/fields';
 import { useData } from '@/state/DataContext';
 import type { Organization } from '@/domain/types';
 import { BANKS } from '@/domain/banks';
-import { tokens, font, tintToWhite } from '@/theme';
+import { tokens, font } from '@/theme';
+import { boxShadow } from '@/theme/shadow';
 import { tapBuzz, successBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
 
@@ -37,8 +38,15 @@ export default function OrganizationFormScreen() {
   const [type, setType] = useState(editing?.type ?? 'Банк');
   const [color, setColor] = useState(editing?.color ?? BRAND_COLORS[4]);
   const [logo, setLogo] = useState<string | undefined>(editing?.logo);
+  const [query, setQuery] = useState('');
 
   const canSave = name.trim().length > 0;
+
+  const filteredBanks = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return BANKS;
+    return BANKS.filter((b) => b.name.toLowerCase().includes(q));
+  }, [query]);
 
   const pickBank = (bank: { id: string; name: string; color: string }) => {
     tapBuzz();
@@ -49,7 +57,7 @@ export default function OrganizationFormScreen() {
     }
     setLogo(bank.id);
     setColor(bank.color);
-    if (!name.trim()) setName(bank.name);
+    setName(bank.name);
   };
 
   const onSave = async () => {
@@ -87,38 +95,55 @@ export default function OrganizationFormScreen() {
           <View style={{ width: 26 }} />
         </View>
 
-        <Text style={styles.pickerLabel}>Банк</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.banksRow}
-          style={styles.banksScroll}
-        >
-          {BANKS.map((bank) => {
-            const selected = logo === bank.id;
-            return (
-              <Pressable
-                key={bank.id}
-                onPress={() => pickBank(bank)}
-                style={[
-                  styles.bankChip,
-                  { backgroundColor: tintToWhite(bank.color, 0.9) },
-                  selected && { borderColor: bank.color, borderWidth: 2 },
-                ]}
-              >
-                <BankLogo bankId={bank.id} size={34} />
+        {/* Поиск по предустановленным банкам: лого + название одной строкой */}
+        <Card style={styles.softCard} padded={false}>
+          <View style={styles.searchRow}>
+            <MaterialIcons name="search" size={20} color={tokens.text.tertiary} />
+            <TextInput
+              style={styles.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Поиск банка"
+              placeholderTextColor={tokens.text.tertiary}
+            />
+            {query.length > 0 ? (
+              <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                <MaterialIcons name="close" size={18} color={tokens.text.tertiary} />
               </Pressable>
-            );
-          })}
-        </ScrollView>
+            ) : null}
+          </View>
+          <ScrollView style={styles.bankList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+            {filteredBanks.map((bank, i) => {
+              const selected = logo === bank.id;
+              return (
+                <Pressable
+                  key={bank.id}
+                  onPress={() => pickBank(bank)}
+                  style={({ pressed }) => [
+                    styles.bankRow,
+                    i < filteredBanks.length - 1 && styles.bankRowDivider,
+                    pressed && { opacity: 0.6 },
+                  ]}
+                >
+                  <OrgLogo color={bank.color} logo={bank.id} size={40} radius={14} variant={selected ? 'solid' : 'tint'} />
+                  <Text style={styles.bankName} numberOfLines={1}>{bank.name}</Text>
+                  {selected ? <MaterialIcons name="check" size={20} color={tokens.accent.base} /> : null}
+                </Pressable>
+              );
+            })}
+            {filteredBanks.length === 0 ? (
+              <Text style={styles.bankEmpty}>Не нашли — заполните вручную ниже</Text>
+            ) : null}
+          </ScrollView>
+        </Card>
 
-        <Card>
+        <Text style={styles.section}>Или вручную</Text>
+        <Card style={styles.softCard}>
           <TextField
             label="Название"
             value={name}
             onChangeText={setName}
-            placeholder="Альфа-Банк, Т-Банк…"
-            autoFocus={!editing}
+            placeholder="Например: Мой банк"
           />
           <SelectField
             label="Тип"
@@ -147,14 +172,30 @@ const styles = StyleSheet.create({
     marginBottom: tokens.spacing.lg,
   },
   headerTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary },
-  pickerLabel: { fontFamily: font.medium, fontSize: tokens.typography.label, color: tokens.text.secondary, marginBottom: tokens.spacing.sm, marginLeft: tokens.spacing.xs },
-  banksScroll: { marginBottom: tokens.spacing.lg },
-  banksRow: { gap: tokens.spacing.sm, paddingRight: tokens.spacing.lg },
-  bankChip: {
-    width: 56, height: 56, borderRadius: tokens.radius.md,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: 'transparent',
+  softCard: boxShadow('0px 6px 18px rgba(48,69,62,0.05)'),
+  section: {
+    fontSize: tokens.typography.title,
+    fontWeight: '600',
+    color: '#212121',
+    letterSpacing: -0.2,
+    marginTop: tokens.spacing.xl,
+    marginBottom: tokens.spacing.md,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.sm,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: tokens.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAF2F9',
+  },
+  searchInput: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary, paddingVertical: tokens.spacing.sm },
+  bankList: { maxHeight: 320, paddingHorizontal: tokens.spacing.lg },
+  bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
+  bankRowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
+  bankName: { flex: 1, fontFamily: font.medium, fontSize: tokens.typography.body, color: '#212121' },
+  bankEmpty: { fontFamily: font.regular, paddingVertical: tokens.spacing.xl, color: tokens.text.tertiary, textAlign: 'center' },
   footer: {
     position: 'absolute',
     left: 0,

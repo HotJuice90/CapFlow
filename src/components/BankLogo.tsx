@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { tintToWhite } from '@/theme';
 
 // Цветные
 import Alfa from '../../assets/banks/alfa.svg';
@@ -66,23 +65,29 @@ export function BankLogo({ bankId, name = '', size = 24, variant = 'color', fall
 }
 
 /**
- * Единый бейдж организации — ЛОГО банка на подложке фирменного цвета,
- * либо цветной кружок-заглушка. Используется ВЕЗДЕ, где показываем организацию,
- * чтобы привязка лого↔банк была сквозной.
+ * Единый бейдж организации. Ровно ДВА канонических варианта (договорённость):
+ *  - tint (по умолчанию) — ЦВЕТНАЯ иконка на белой подложке с тонкой обводкой;
+ *  - solid — БЕЛАЯ иконка на фирменном цвете банка.
+ * Используется ВЕЗДЕ, где показываем организацию, чтобы привязка лого↔банк была сквозной.
  */
 export function OrgLogo({
   color, logo, size = 36, radius, variant = 'tint',
 }: {
   color: string; logo?: string; size?: number; radius?: number;
-  /** tint — цветная иконка на светлой подложке (по умолчанию); solid — белая иконка на фирменном цвете */
   variant?: 'tint' | 'solid';
 }) {
   const br = radius ?? Math.round(size / 4);
   if (hasBankLogo(logo)) {
-    const bg = variant === 'solid' ? color : tintToWhite(color, 0.88);
+    if (variant === 'solid') {
+      return (
+        <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: color }]}>
+          <BankLogo bankId={logo} size={Math.round(size * 0.78)} variant="white" />
+        </View>
+      );
+    }
     return (
-      <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: bg }]}>
-        <BankLogo bankId={logo} size={Math.round(size * 0.78)} variant={variant === 'solid' ? 'white' : 'color'} />
+      <View style={[styles.orgBox, styles.orgBoxLight, { width: size, height: size, borderRadius: br }]}>
+        <BankLogo bankId={logo} size={Math.round(size * 0.78)} variant="color" />
       </View>
     );
   }
@@ -92,4 +97,5 @@ export function OrgLogo({
 const styles = StyleSheet.create({
   fallback: { justifyContent: 'center', alignItems: 'center' },
   orgBox: { alignItems: 'center', justifyContent: 'center' },
+  orgBoxLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAF2F9' },
 });

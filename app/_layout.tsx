@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,8 +21,14 @@ applyGlobalFont();
  * встретится с системными иконками — иконки остаются читаемыми, кашу не видно.
  * Цвет = верхний стоп фонового градиента (#F2F4F9).
  */
+const SHEET_ROUTES = ['/currency-picker', '/option-picker', '/date-picker'];
+
 function StatusBarMask() {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  // Пока открыт нативный шит — не рисуем маску поверх статус-бара, иначе она
+  // перекрывает системное затемнение фона под шитом (строка остаётся «светлой»).
+  if (SHEET_ROUTES.includes(pathname)) return null;
   return (
     <View
       pointerEvents="none"
@@ -80,6 +86,16 @@ export default function RootLayout() {
                 sheetCornerRadius: 24,
                 sheetGrabberVisible: false,
                 gestureEnabled: true,
+                animation: 'none',
+              }}
+            />
+            {/* Не нативный formSheet: экран сам рисует Modal+Animated шит (высота
+                грид-сетки прыгает 5↔6 недель — нативный формшит на Android дёргал
+                высоту при этом, здесь обычный layout RN, без скачков). */}
+            <Stack.Screen
+              name="date-picker"
+              options={{
+                presentation: 'transparentModal',
                 animation: 'none',
               }}
             />

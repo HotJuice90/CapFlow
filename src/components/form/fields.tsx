@@ -10,6 +10,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { tokens } from '@/theme';
 import { OrgLogo } from '@/components/BankLogo';
 import { openOptionPicker } from '@/lib/optionPicker';
+import { openDatePicker } from '@/lib/datePicker';
 
 // ---------- Field wrapper ----------
 export function Field({
@@ -99,33 +100,12 @@ export function NumberField({
   );
 }
 
-// ---------- DateField (маска ДД.ММ.ГГГГ) ----------
+// ---------- DateField (открывает нативный шит-календарь) ----------
 function isoToDisplay(iso: string | undefined): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '';
   return `${d}.${m}.${y}`;
-}
-
-function displayToIso(display: string): string | undefined {
-  const digits = display.replace(/\D/g, '');
-  if (digits.length !== 8) return undefined;
-  const d = digits.slice(0, 2);
-  const m = digits.slice(2, 4);
-  const y = digits.slice(4, 8);
-  const dn = Number(d);
-  const mn = Number(m);
-  if (dn < 1 || dn > 31 || mn < 1 || mn > 12) return undefined;
-  return `${y}-${m}-${d}`;
-}
-
-function maskDate(input: string): string {
-  const digits = input.replace(/\D/g, '').slice(0, 8);
-  const parts: string[] = [];
-  if (digits.length > 0) parts.push(digits.slice(0, 2));
-  if (digits.length >= 3) parts.push(digits.slice(2, 4));
-  if (digits.length >= 5) parts.push(digits.slice(4, 8));
-  return parts.join('.');
 }
 
 export function DateField({
@@ -136,24 +116,20 @@ export function DateField({
 }: {
   label: string;
   value: string | undefined;
-  onChange: (iso: string | undefined) => void;
+  onChange: (iso: string) => void;
   hint?: string;
 }) {
-  const [text, setText] = useState(isoToDisplay(value));
   return (
     <Field label={label} hint={hint}>
-      <TextInput
-        style={styles.input}
-        value={text}
-        keyboardType="numeric"
-        placeholder="ДД.ММ.ГГГГ"
-        placeholderTextColor={tokens.text.tertiary}
-        onChangeText={(t) => {
-          const masked = maskDate(t);
-          setText(masked);
-          onChange(displayToIso(masked));
-        }}
-      />
+      <Pressable
+        style={[styles.input, styles.selectRow]}
+        onPress={() => openDatePicker({ title: label, value, onPick: onChange })}
+      >
+        <Text style={[styles.selectText, !value && styles.placeholder]} numberOfLines={1}>
+          {value ? isoToDisplay(value) : 'ДД.ММ.ГГГГ'}
+        </Text>
+        <MaterialIcons name="calendar-today" size={18} color={tokens.text.tertiary} />
+      </Pressable>
     </Field>
   );
 }
