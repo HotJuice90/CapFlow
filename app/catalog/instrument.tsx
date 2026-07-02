@@ -18,7 +18,7 @@ import { uid } from '@/utils/id';
 
 const TYPE_OPTIONS: { label: string; value: InstrumentTypeId }[] = [
   { label: 'Вклад', value: 'deposit' },
-  { label: 'Накопительный', value: 'savings' },
+  { label: 'Накоп. счёт', value: 'savings' },
   { label: 'ЦФА', value: 'dfa' },
 ];
 
@@ -54,7 +54,7 @@ export default function InstrumentFormScreen() {
   const [allowWithdraw, setAllowWithdraw] = useState(editing?.allowPartialWithdraw ?? false);
 
   const orgOptions = useMemo(
-    () => data.organizations.filter((o) => !o.archived).map((o) => ({ label: o.name, value: o.id, color: o.color })),
+    () => data.organizations.filter((o) => !o.archived).map((o) => ({ label: o.name, value: o.id, color: o.color, logo: o.logo })),
     [data.organizations],
   );
 

@@ -39,6 +39,7 @@ interface DataContextValue {
   reload: () => Promise<void>;
   // активы
   addAsset: (asset: Asset) => Promise<void>;
+  createAssetBundle: (bundle: { organization?: Organization; instrument?: FinancialInstrument; asset: Asset }) => Promise<void>;
   updateAsset: (asset: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   setAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
@@ -149,6 +150,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const addAsset = useCallback(
     async (asset: Asset) => {
       await persist({ ...data, assets: [...data.assets, asset] });
+    },
+    [data, persist],
+  );
+
+  /** Атомарное создание актива вместе с новыми организацией/инструментом (флоу
+   * «Новый актив»): последовательные addOrganization+addInstrument+addAsset из
+   * одного обработчика затирали бы друг друга — каждый persist от одного data. */
+  const createAssetBundle = useCallback(
+    async (bundle: { organization?: Organization; instrument?: FinancialInstrument; asset: Asset }) => {
+      await persist({
+        ...data,
+        organizations: bundle.organization ? [...data.organizations, bundle.organization] : data.organizations,
+        instruments: bundle.instrument ? [...data.instruments, bundle.instrument] : data.instruments,
+        assets: [...data.assets, bundle.asset],
+      });
     },
     [data, persist],
   );
@@ -361,6 +377,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       hasDemo,
       reload,
       addAsset,
+      createAssetBundle,
       updateAsset,
       deleteAsset,
       setAssetStatus,
@@ -385,6 +402,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       hasDemo,
       reload,
       addAsset,
+      createAssetBundle,
       updateAsset,
       deleteAsset,
       setAssetStatus,
