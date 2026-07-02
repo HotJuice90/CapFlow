@@ -3,17 +3,16 @@ import type { CalcParams } from '@/domain/types';
 /**
  * Налог (решение #1) — настраиваемый: ставка и необлагаемый лимит берутся из
  * настроек (CalcParams). Структурно как НК РФ: налог на процентный доход сверх
- * годового необлагаемого лимита.
+ * годового необлагаемого лимита — лимит ОДИН на все активы, не на каждый отдельно.
  *
- * MVP-упрощение: на карточке актива налог считается «отдельно стоящим» (как если
- * бы этот актив был единственным). На портфельном уровне доходы суммируются и
- * лимит применяется ОДИН раз за год — поэтому per-asset и портфельный налог могут
- * не сходиться копейка-в-копейку. Точную поактивную аллокацию — после MVP.
+ * На карточке актива `limitAlreadyUsed` — сколько лимита уже «съели» другие активы
+ * (см. `buildAssetViews` в selectors.ts, распределяет лимит по дате открытия).
  */
 
-/** Налог на заданный годовой процентный доход. */
-export function calcTax(taxableIncome: number, params: CalcParams): number {
-  const overLimit = Math.max(0, taxableIncome - params.taxFreeLimit);
+/** Налог на заданный годовой процентный доход. `limitAlreadyUsed` — часть лимита, занятая другими активами. */
+export function calcTax(taxableIncome: number, params: CalcParams, limitAlreadyUsed = 0): number {
+  const remainingLimit = Math.max(0, params.taxFreeLimit - limitAlreadyUsed);
+  const overLimit = Math.max(0, taxableIncome - remainingLimit);
   return overLimit * (params.taxRate / 100);
 }
 

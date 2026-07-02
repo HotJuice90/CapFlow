@@ -1,4 +1,4 @@
-import type { AssetView, CurrencyCode } from '@/domain/types';
+import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Organization } from '@/domain/types';
 import { calculate, calcPortfolioTax, daysInYear, parseLocal } from '@/calc';
 import type { AppData } from '@/storage/types';
 import { tokens } from '@/theme';
@@ -28,17 +28,36 @@ export function buildAssetViews(data: AppData, now: Date = new Date()): AssetVie
   const orgById = new Map(data.organizations.map((o) => [o.id, o]));
   const instrById = new Map(data.instruments.map((i) => [i.id, i]));
 
-  const views: AssetView[] = [];
+  const active: { asset: Asset; instrument: FinancialInstrument; organization: Organization }[] = [];
   for (const asset of data.assets) {
     if (asset.status !== 'active') continue;
     const instrument = instrById.get(asset.instrumentId);
     if (!instrument) continue;
     const organization = orgById.get(instrument.organizationId);
     if (!organization) continue;
-    const derived = calculate(asset, instrument, data.params, now);
-    views.push({ asset, instrument, organization, derived });
+    active.push({ asset, instrument, organization });
   }
-  return views;
+
+  // Необлагаемый лимит — один на весь портфель, а не на каждый актив отдельно.
+  // Активы, открытые раньше, «расходуют» его первыми (детерминированный порядок) —
+  // так сумма налога по карточкам сходится с портфельным (см. analyticsSummary).
+  const byOpenDate = [...active].sort((a, b) => {
+    const d = a.asset.openDate.localeCompare(b.asset.openDate);
+    return d !== 0 ? d : a.asset.id.localeCompare(b.asset.id);
+  });
+  const limitUsedById = new Map<string, number>();
+  let runningLimitUsed = 0;
+  for (const { asset } of byOpenDate) {
+    limitUsedById.set(asset.id, runningLimitUsed);
+    runningLimitUsed += convert((asset.amount * asset.rate) / 100, asset.currency, data);
+  }
+
+  return active.map(({ asset, instrument, organization }) => ({
+    asset,
+    instrument,
+    organization,
+    derived: calculate(asset, instrument, data.params, now, limitUsedById.get(asset.id) ?? 0),
+  }));
 }
 
 export interface PortfolioSummary {

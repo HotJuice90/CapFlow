@@ -88,8 +88,10 @@ export interface DerivedValues {
   incomePerMonth: number;
   incomeTotalTerm?: number; // для срочных
   accrued: number; // начислено на «сейчас»
-  tax: number; // расчётная оценка налога
-  net: number; // чистыми
+  tax: number; // расчётная оценка налога (на весь срок/накопленное)
+  net: number; // чистыми (на весь срок/накопленное)
+  monthlyTax: number; // налог с дохода за ближайший месяц
+  monthlyNet: number; // чистыми за ближайший месяц (incomePerMonth − monthlyTax)
   finalAmount?: number; // итоговая сумма (срочные)
   earnedSoFar: number; // уже заработано
   remainingToEarn?: number; // осталось заработать

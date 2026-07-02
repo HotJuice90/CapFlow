@@ -8,6 +8,8 @@ export interface PickerOption {
   color?: string;
   /** id лого банка из реестра (assets/banks) */
   logo?: string;
+  /** иконка MaterialCommunityIcons — для пунктов без цвета/лого (период, тип …) */
+  icon?: string;
 }
 
 export interface PickerConfig {

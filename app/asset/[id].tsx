@@ -181,8 +181,8 @@ export default function AssetScreen() {
               iconColor="#586692"
               iconBg="#EEF0FB"
               label={t.asset.accrued}
-              value={formatMoney(derived.accrued, { currency: cur, kopecks: 'hide' })}
-              sub="доход по вкладу"
+              value={formatMoney(derived.incomePerMonth, { currency: cur, kopecks: 'hide' })}
+              sub="если ничего не менять"
             />
             <View style={styles.finSep} />
             <FinCol
@@ -190,8 +190,8 @@ export default function AssetScreen() {
               iconColor="#C11818"
               iconBg="#FCEEEE"
               label={t.asset.tax}
-              value={formatMoney(derived.tax, { currency: cur, kopecks: 'hide' })}
-              sub={derived.accrued > 0 ? `${formatPercent((derived.tax / derived.accrued) * 100)} от дохода` : 'пока нет дохода'}
+              value={formatMoney(derived.monthlyTax, { currency: cur, kopecks: 'hide' })}
+              sub={derived.incomePerMonth > 0 ? `${formatPercent((derived.monthlyTax / derived.incomePerMonth) * 100)} от дохода` : 'нет дохода'}
             />
             <View style={styles.finSep} />
             <FinCol
@@ -199,7 +199,7 @@ export default function AssetScreen() {
               iconColor="#009933"
               iconBg="#EAF6EE"
               label={t.asset.net}
-              value={formatMoney(derived.net, { currency: cur, kopecks: 'hide' })}
+              value={formatMoney(derived.monthlyNet, { currency: cur, kopecks: 'hide' })}
               valueColor="#009933"
               sub="после налога"
             />

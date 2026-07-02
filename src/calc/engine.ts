@@ -7,7 +7,7 @@ import type {
   PayoutPeriod,
 } from '@/domain/types';
 import { calcTax } from './tax';
-import { clamp, daysInYear, diffDays, parseLocal } from './dayCount';
+import { clamp, daysInMonth, daysInYear, diffDays, parseLocal } from './dayCount';
 
 /** Версия движка — пишется в Snapshot, чтобы история не «плыла» при смене формул. */
 export const ENGINE_VERSION = '1.0.0';
@@ -47,6 +47,8 @@ export function calculate(
   instrument: FinancialInstrument,
   params: CalcParams,
   now: string | Date = new Date(),
+  /** сколько необлагаемого лимита уже занято другими активами портфеля (см. buildAssetViews) */
+  limitAlreadyUsed = 0,
 ): DerivedValues {
   const annualRate = asset.rate / 100;
   const mode: CapitalizationMode =
@@ -55,9 +57,20 @@ export function calculate(
 
   const balanceNow = currentBalance(asset, mode, payout, now);
   const incomePerDay = (balanceNow * annualRate) / daysInYear(now);
-  const annualRunRate = asset.amount * annualRate;
-  const incomePerMonth = annualRunRate / 12;
+  // Прогноз вперёд (месяц/год) — от ТЕКУЩЕГО баланса, а не от суммы открытия:
+  // при капитализации проценты уже легли на баланс и сами приносят доход.
+  const annualRunRate = balanceNow * annualRate;
+  // Месяц — по факту дней в ТЕКУЩЕМ календарном месяце (как считают банки:
+  // прогноз «за июль» = дневной доход × 31, а не среднемесячное /12).
+  const incomePerMonth = incomePerDay * daysInMonth(now);
   const premiumToKeyRate = asset.rate - params.keyRate;
+
+  // Налог на месяц: считаем эффективную (после общего лимита) годовую ставку
+  // налога и переносим её на месячный доход — та же логика, что и «доход».
+  const annualTax = calcTax(annualRunRate, params, limitAlreadyUsed);
+  const effectiveTaxRate = annualRunRate > 0 ? annualTax / annualRunRate : 0;
+  const monthlyTax = incomePerMonth * effectiveTaxRate;
+  const monthlyNet = incomePerMonth - monthlyTax;
 
   if (instrument.behavior === 'term' && asset.endDate) {
     const termDays = Math.max(0, diffDays(asset.openDate, asset.endDate));
@@ -71,7 +84,7 @@ export function calculate(
     const remainingToEarn = Math.max(0, incomeTotalTerm - earnedSoFar);
 
     // Налог считается на доход всего срока (проценты по вкладу облагаются в год выплаты).
-    const tax = calcTax(incomeTotalTerm, params);
+    const tax = calcTax(incomeTotalTerm, params, limitAlreadyUsed);
     const net = incomeTotalTerm - tax;
     const finalAmount = asset.amount + net;
 
@@ -82,6 +95,8 @@ export function calculate(
       accrued: earnedSoFar,
       tax,
       net,
+      monthlyTax,
+      monthlyNet,
       finalAmount,
       earnedSoFar,
       remainingToEarn,
@@ -94,7 +109,7 @@ export function calculate(
   // Бессрочный (накопительный счёт): нет срока/прогресса.
   const elapsedDays = Math.max(0, diffDays(asset.openDate, now));
   const earnedSoFar = asset.amount * annualRate * (elapsedDays / 365);
-  const tax = calcTax(earnedSoFar, params);
+  const tax = calcTax(earnedSoFar, params, limitAlreadyUsed);
   const net = earnedSoFar - tax;
 
   return {
@@ -103,10 +118,12 @@ export function calculate(
     accrued: earnedSoFar,
     tax,
     net,
+    monthlyTax,
+    monthlyNet,
     earnedSoFar,
     premiumToKeyRate,
     // Прогноз «если ничего не менять»
-    forecastNextMonth: annualRunRate / 12,
+    forecastNextMonth: incomePerMonth,
     forecastNextYear: annualRunRate,
   };
 }

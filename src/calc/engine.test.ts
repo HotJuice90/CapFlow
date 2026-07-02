@@ -100,6 +100,24 @@ describe('налог сверх лимита', () => {
   });
 });
 
+describe('лимит, уже занятый другими активами портфеля', () => {
+  const asset: Asset = {
+    id: 'a4',
+    instrumentId: 'i1',
+    amount: 1_000_000,
+    currency: 'RUB',
+    rate: 18,
+    openDate: '2026-01-01',
+    endDate: '2027-01-01',
+    status: 'active',
+  };
+
+  test('доход 180k сам по себе < лимита, но лимит уже занят другим активом → налог не 0', () => {
+    const d = calculate(asset, depositInstrument, params, '2026-07-02', 210_000);
+    expect(d.tax).toBeCloseTo(180_000 * 0.13, 2);
+  });
+});
+
 describe('накопительный счёт (бессрочный)', () => {
   const asset: Asset = {
     id: 'a3',
@@ -116,6 +134,16 @@ describe('накопительный счёт (бессрочный)', () => {
     expect(d.daysRemaining).toBeUndefined();
     expect(d.termProgress).toBeUndefined();
     expect(d.forecastNextYear).toBeCloseTo(500_000 * 0.16, 2);
-    expect(d.forecastNextMonth).toBeCloseTo((500_000 * 0.16) / 12, 2);
+    // Месяц — по факту дней в июле (31), как считают банки, а не /12.
+    expect(d.forecastNextMonth).toBeCloseTo(((500_000 * 0.16) / 365) * 31, 2);
+  });
+
+  test('с ежедневной капитализацией прогноз считается от подросшего баланса, не от суммы открытия', () => {
+    const capitalizing: Asset = { ...asset, capitalization: 'capitalize', payoutPeriod: 'daily' };
+    const d = calculate(capitalizing, savingsInstrument, params, '2026-07-01');
+    const elapsedDays = 181; // 01.01 → 01.07
+    const expectedBalance = 500_000 * Math.pow(1 + 0.16 / 365, elapsedDays);
+    expect(d.forecastNextYear).toBeCloseTo(expectedBalance * 0.16, 2);
+    expect(d.forecastNextYear).toBeGreaterThan(500_000 * 0.16);
   });
 });

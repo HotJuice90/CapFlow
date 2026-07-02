@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,7 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
@@ -42,12 +44,12 @@ import { uid } from '@/utils/id';
 
 const CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY'];
 const PAYOUT_OPTIONS = [
-  { label: 'Ежемесячно', value: 'monthly' },
-  { label: 'Ежеквартально', value: 'quarterly' },
-  { label: 'Раз в полгода', value: 'semiannual' },
-  { label: 'Ежегодно', value: 'annual' },
-  { label: 'В конце срока', value: 'end' },
-  { label: 'Ежедневно', value: 'daily' },
+  { label: 'Ежедневно', value: 'daily', icon: 'calendar-today' },
+  { label: 'Ежемесячно', value: 'monthly', icon: 'calendar-month' },
+  { label: 'Ежеквартально', value: 'quarterly', icon: 'calendar-range' },
+  { label: 'Раз в полгода', value: 'semiannual', icon: 'calendar-clock' },
+  { label: 'Ежегодно', value: 'annual', icon: 'calendar-star' },
+  { label: 'В конце срока', value: 'end', icon: 'flag-checkered' },
 ];
 const TYPE_OPTIONS: { label: string; value: InstrumentTypeId }[] = [
   { label: 'Вклад', value: 'deposit' },
@@ -55,8 +57,24 @@ const TYPE_OPTIONS: { label: string; value: InstrumentTypeId }[] = [
   { label: 'ЦФА', value: 'dfa' },
 ];
 
+const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  dfa: 'chart-line',
+};
+
 function behaviorFor(typeId: InstrumentTypeId): 'term' | 'perpetual' {
   return typeId === 'savings' ? 'perpetual' : 'term';
+}
+
+/** Плавное появление секции: fade + лёгкий подъём (нативный драйвер). */
+function FadeIn({ children }: { children: React.ReactNode }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [anim]);
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+  return <Animated.View style={{ opacity: anim, transform: [{ translateY }] }}>{children}</Animated.View>;
 }
 
 function typeLabel(typeId: string): string {
@@ -110,7 +128,7 @@ export default function AssetFormScreen() {
   const [openDate, setOpenDate] = useState<string | undefined>(editing?.openDate ?? todayIso());
   const [endDate, setEndDate] = useState<string | undefined>(editing?.endDate);
   const [capitalization, setCapitalization] = useState<CapitalizationMode>(editing?.capitalization ?? 'none');
-  const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | undefined>(editing?.payoutPeriod);
+  const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | undefined>(editing?.payoutPeriod ?? 'monthly');
   const [comment, setComment] = useState(editing?.comment ?? '');
 
   // Список банков: существующие организации пользователя + пресеты, которых ещё нет.
@@ -185,7 +203,7 @@ export default function AssetFormScreen() {
   }, [previewInstrument, amount, rate, openDate, endDate, currency, capitalization, payoutPeriod, isTerm, data.params, editing?.id]);
 
   const canSave =
-    !!bank && productChosen && !!amount && amount > 0 && rate !== undefined && !!openDate && (!isTerm || !!endDate);
+    !!bank && productChosen && !!amount && amount > 0 && rate !== undefined && !!openDate && !!payoutPeriod && (!isTerm || !!endDate);
 
   const onSave = async () => {
     if (!canSave || !bank || amount === undefined || rate === undefined || !openDate) return;
@@ -320,32 +338,42 @@ export default function AssetFormScreen() {
 
           {/* Шаг 2: продукт */}
           {bank ? (
-            <>
+            <FadeIn key={`product-${bank.kind === 'org' ? bank.org.id : bank.bank.id}`}>
               <Text style={styles.section}>Продукт</Text>
               <Card style={styles.softCard}>
                 {orgInstruments.length > 0 ? (
                   <View style={{ marginBottom: newProduct ? tokens.spacing.md : 0 }}>
-                    {orgInstruments.map((instr, i) => (
-                      <Pressable
-                        key={instr.id}
-                        onPress={() => pickInstrument(instr)}
-                        style={({ pressed }) => [
-                          styles.productRow,
-                          i < orgInstruments.length - 1 && styles.rowDivider,
-                          pressed && { opacity: 0.6 },
-                        ]}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.productName} numberOfLines={1}>{instr.name}</Text>
-                          <Text style={styles.productSub} numberOfLines={1}>{typeLabel(instr.typeId)}</Text>
-                        </View>
-                        {instrumentId === instr.id ? (
-                          <MaterialIcons name="check-circle" size={22} color={tokens.accent.base} />
-                        ) : (
-                          <View style={styles.radioOff} />
-                        )}
-                      </Pressable>
-                    ))}
+                    {orgInstruments.map((instr, i) => {
+                      const active = instrumentId === instr.id;
+                      return (
+                        <Pressable
+                          key={instr.id}
+                          onPress={() => pickInstrument(instr)}
+                          style={({ pressed }) => [
+                            styles.productRow,
+                            i < orgInstruments.length - 1 && styles.rowDivider,
+                            pressed && { opacity: 0.6 },
+                          ]}
+                        >
+                          <View style={[styles.productIcon, active && styles.productIconActive]}>
+                            <MaterialCommunityIcons
+                              name={ICON_BY_TYPE[instr.typeId] ?? 'bank-outline'}
+                              size={18}
+                              color={active ? '#FFFFFF' : tokens.accent.base}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.productName} numberOfLines={1}>{instr.name}</Text>
+                            <Text style={styles.productSub} numberOfLines={1}>{typeLabel(instr.typeId)}</Text>
+                          </View>
+                          {active ? (
+                            <MaterialIcons name="check-circle" size={22} color={tokens.accent.base} />
+                          ) : (
+                            <View style={styles.radioOff} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
                     <Pressable
                       onPress={startNewProduct}
                       style={({ pressed }) => [styles.newProductRow, pressed && { opacity: 0.6 }]}
@@ -374,12 +402,12 @@ export default function AssetFormScreen() {
                   </>
                 ) : null}
               </Card>
-            </>
+            </FadeIn>
           ) : null}
 
           {/* Шаг 3: параметры */}
           {bank && productChosen ? (
-            <>
+            <FadeIn key="params">
               <Text style={styles.section}>Параметры</Text>
               <Card style={styles.softCard}>
                 <NumberField
@@ -410,10 +438,9 @@ export default function AssetFormScreen() {
                   onChange={(v) => setCapitalization(v as CapitalizationMode)}
                 />
                 <SelectField
-                  label="Период выплаты (необязательно)"
+                  label="Период выплаты"
                   value={payoutPeriod}
                   options={PAYOUT_OPTIONS}
-                  placeholder="Не указан"
                   onChange={(v) => setPayoutPeriod(v as PayoutPeriod)}
                 />
                 <TextField
@@ -429,12 +456,12 @@ export default function AssetFormScreen() {
                   placeholder=""
                 />
               </Card>
-            </>
+            </FadeIn>
           ) : null}
 
           {/* Живой предрасчёт */}
           {preview ? (
-            <>
+            <FadeIn key="preview">
               <Text style={styles.section}>Предварительный расчёт</Text>
               <Card style={styles.softCard}>
                 <PreviewRow
@@ -461,7 +488,7 @@ export default function AssetFormScreen() {
                   value={`${formatPercentSigned(preview.premiumToKeyRate)}`}
                 />
               </Card>
-            </>
+            </FadeIn>
           ) : null}
         </ScrollView>
 
@@ -534,6 +561,12 @@ const styles = StyleSheet.create({
 
   // продукт
   productRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
+  productIcon: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: tokens.accent.soft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  productIconActive: { backgroundColor: tokens.accent.base },
   productName: { fontFamily: font.semibold, fontSize: tokens.typography.body, color: '#212121' },
   productSub: { fontFamily: font.regular, fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
   radioOff: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#D8DFE9', marginRight: 1 },

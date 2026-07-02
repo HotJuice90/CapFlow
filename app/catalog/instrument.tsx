@@ -23,12 +23,12 @@ const TYPE_OPTIONS: { label: string; value: InstrumentTypeId }[] = [
 ];
 
 const PAYOUT_OPTIONS = [
-  { label: 'Ежемесячно', value: 'monthly' },
-  { label: 'Ежеквартально', value: 'quarterly' },
-  { label: 'Раз в полгода', value: 'semiannual' },
-  { label: 'Ежегодно', value: 'annual' },
-  { label: 'В конце срока', value: 'end' },
-  { label: 'Ежедневно', value: 'daily' },
+  { label: 'Ежедневно', value: 'daily', icon: 'calendar-today' },
+  { label: 'Ежемесячно', value: 'monthly', icon: 'calendar-month' },
+  { label: 'Ежеквартально', value: 'quarterly', icon: 'calendar-range' },
+  { label: 'Раз в полгода', value: 'semiannual', icon: 'calendar-clock' },
+  { label: 'Ежегодно', value: 'annual', icon: 'calendar-star' },
+  { label: 'В конце срока', value: 'end', icon: 'flag-checkered' },
 ];
 
 function behaviorFor(typeId: InstrumentTypeId): 'term' | 'perpetual' {

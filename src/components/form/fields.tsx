@@ -140,6 +140,7 @@ export interface Option {
   value: string;
   color?: string;
   logo?: string;
+  icon?: string;
   subtitle?: string;
 }
 

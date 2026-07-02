@@ -32,6 +32,12 @@ export function daysInYear(value: string | Date): number {
   return isLeapYear(parseLocal(value).getFullYear()) ? 366 : 365;
 }
 
+/** Число дней в текущем календарном месяце даты (28..31) — как считают банки «прогноз на месяц». */
+export function daysInMonth(value: string | Date): number {
+  const d = parseLocal(value);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
