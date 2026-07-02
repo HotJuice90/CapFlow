@@ -1,5 +1,5 @@
 import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Organization } from '@/domain/types';
-import { calculate, calcPortfolioTax, daysInYear, parseLocal } from '@/calc';
+import { calculate, calcPortfolioTax, daysInYear, diffDays, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import { tokens } from '@/theme';
 
@@ -576,6 +576,10 @@ export interface DayContribution {
   termProgress?: number;
   isEndDay: boolean;
   capStepped: boolean;
+  /** периодическая (не ежедневная) выплата наступает именно в этот день — «заберите» */
+  isPayoutDay: boolean;
+  /** сколько всего заработано (проценты, не тело) с даты открытия по эту дату */
+  accrued: number;
 }
 
 /** Вклад КАЖДОГО активного на эту дату актива в доход дня — включая простые проценты без событий. */
@@ -596,6 +600,21 @@ export function dayContributions(data: AppData, dateIso: string): DayContributio
       capStepped = Math.abs(v.derived.incomePerDay - prevDerived.incomePerDay) > 1e-9;
     }
     const finalAmount = isEndDay ? v.derived.finalAmount ?? v.asset.amount : undefined;
+
+    // Периодическая выплата (мес./кв./полугодие/год) — та же арифметика, что и точки
+    // в календаре: считаем именно день пересечения границы периода, не каждый день.
+    const payout = v.asset.payoutPeriod ?? v.instrument.payoutPeriod;
+    let isPayoutDay = false;
+    if (!isEndDay && payout && payout !== 'daily' && payout !== 'end') {
+      const ppy = periodsPerYear(payout);
+      const elapsedToday = diffDays(v.asset.openDate, day);
+      if (elapsedToday > 0) {
+        const periodToday = Math.floor((elapsedToday * ppy) / 365);
+        const periodYesterday = Math.floor(((elapsedToday - 1) * ppy) / 365);
+        isPayoutDay = periodToday > periodYesterday;
+      }
+    }
+
     out.push({
       assetId: v.asset.id,
       instrumentName: v.instrument.name,
@@ -610,6 +629,8 @@ export function dayContributions(data: AppData, dateIso: string): DayContributio
       termProgress: v.derived.termProgress,
       isEndDay,
       capStepped,
+      isPayoutDay,
+      accrued: v.derived.accrued,
     });
   }
   return out.sort((a, b) => b.incomePerDayBase - a.incomePerDayBase);

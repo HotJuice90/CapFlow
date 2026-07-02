@@ -15,7 +15,8 @@ import {
   monthlyIncomeForecast,
   type DayContribution,
 } from '@/state/selectors';
-import { tokens } from '@/theme';
+import { diffDays, periodsPerYear } from '@/calc';
+import { tokens, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort } from '@/format/date';
@@ -47,6 +48,9 @@ const PAYOUT_LABEL: Record<string, string> = {
   end: 'В конце срока',
 };
 
+/** Тусклая версия «рост»-зелёного — точка обычного дня с капитализацией. */
+const DIM_POSITIVE = hexToRgba(tokens.semantic.positive, 0.32);
+
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
@@ -77,21 +81,55 @@ export default function CalendarScreen() {
   const daysInMonth = new Date(view.year, view.month + 1, 0).getDate();
   const daysLeft = isCurrentMonth ? daysInMonth - now.getDate() : daysInMonth;
 
-  // Точка = «инструмент работает в этот день». У каждого активного актива своя
-  // точка КАЖДЫЙ день его жизни: вклад закончился — точка исчезла. Живой календарь.
+  // Точка = «в этот день реально что-то произошло»:
+  // — тусклая точка: объединяющий индикатор «сегодня есть хоть одна ежедневная
+  //   выплата» — ОДНА на день, не по штуке на актив (иначе опять ковёр из точек);
+  // — полноцветная точка банка: ровно на дни фактической периодической выплаты
+  //   этого актива или на дату окончания вклада — своя точка на каждый банк/событие.
   const markers = useMemo(() => {
     const map = new Map<string, string[]>();
+    const dailyDays = new Set<string>();
+    const push = (dayIso: string, color: string) => {
+      const arr = map.get(dayIso);
+      if (arr) arr.push(color);
+      else map.set(dayIso, [color]);
+    };
+    const monthStart = `${view.year}-${pad2(view.month + 1)}-01`;
     const daysInM = new Date(view.year, view.month + 1, 0).getDate();
-    for (let d = 1; d <= daysInM; d++) {
-      const dayIso = `${view.year}-${pad2(view.month + 1)}-${pad2(d)}`;
-      const colors: string[] = [];
-      for (const v of views) {
-        if (dayIso < v.asset.openDate) continue;
-        if (v.asset.endDate && dayIso > v.asset.endDate) continue;
-        colors.push(v.organization.color);
+    const monthEnd = `${view.year}-${pad2(view.month + 1)}-${pad2(daysInM)}`;
+
+    for (const v of views) {
+      const payout = v.asset.payoutPeriod ?? v.instrument.payoutPeriod;
+      const openDate = v.asset.openDate;
+      const endDate = v.asset.endDate;
+
+      if (payout === 'daily') {
+        for (let d = 1; d <= daysInM; d++) {
+          const dayIso = `${view.year}-${pad2(view.month + 1)}-${pad2(d)}`;
+          if (dayIso < openDate || (endDate && dayIso > endDate)) continue;
+          dailyDays.add(dayIso);
+        }
+      } else if (payout && payout !== 'end') {
+        // Периодическая выплата (мес./кв./полугодие/год) — точка ровно на дни
+        // пересечения границы периода, той же арифметикой, что и капитализация в движке.
+        const ppy = periodsPerYear(payout);
+        for (let d = 1; d <= daysInM; d++) {
+          const dayIso = `${view.year}-${pad2(view.month + 1)}-${pad2(d)}`;
+          if (dayIso < openDate || (endDate && dayIso > endDate)) continue;
+          const elapsedToday = diffDays(openDate, dayIso);
+          if (elapsedToday <= 0) continue;
+          const periodToday = Math.floor((elapsedToday * ppy) / 365);
+          const periodYesterday = Math.floor(((elapsedToday - 1) * ppy) / 365);
+          if (periodToday > periodYesterday) push(dayIso, v.organization.color);
+        }
       }
-      if (colors.length > 0) map.set(dayIso, colors);
+
+      // Погашение вклада — отдельная точка цветом банка, независимо от периода выплаты.
+      if (endDate && endDate >= monthStart && endDate <= monthEnd) {
+        push(endDate, v.organization.color);
+      }
     }
+    for (const dayIso of dailyDays) push(dayIso, DIM_POSITIVE);
     return map;
   }, [views, view.year, view.month]);
 
@@ -220,34 +258,52 @@ function InstrumentRow({
   const rate = view?.asset.rate;
   const payout = view?.asset.payoutPeriod ?? view?.instrument.payoutPeriod;
 
+  // Реальная выплата сегодня (не ежедневная рутина): погашение вклада ИЛИ
+  // периодическая выплата процентов (мес./кв./полугодие/год).
+  const isEvent = c.isEndDay || c.isPayoutDay;
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, !isLast && styles.rowDivider, pressed && { opacity: 0.6 }]}>
-      {org ? (
-        <OrgLogo color={org.color} logo={org.logo} size={44} radius={16} variant="solid" />
-      ) : (
-        <View style={[styles.iconFallback, { backgroundColor: c.color }]} />
-      )}
-      <View style={{ flex: 1 }}>
-        <View style={styles.rowTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.rowName} numberOfLines={1}>{c.instrumentName}</Text>
-            <Text style={styles.rowSub} numberOfLines={1}>{org?.name ?? ''}</Text>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.rowWrap, !isLast && styles.rowDivider, pressed && { opacity: 0.6 }]}>
+      <View style={styles.row}>
+        {org ? (
+          <OrgLogo color={org.color} logo={org.logo} size={44} radius={16} variant="solid" />
+        ) : (
+          <View style={[styles.iconFallback, { backgroundColor: c.color }]} />
+        )}
+        <View style={{ flex: 1 }}>
+          <View style={styles.rowTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowName} numberOfLines={1}>{c.instrumentName}</Text>
+              <Text style={styles.rowSub} numberOfLines={1}>{org?.name ?? ''}</Text>
+            </View>
+            <Text style={styles.rowAmount} numberOfLines={1}>
+              {c.incomePerDay >= 0 ? '+' : ''}{formatMoney(c.incomePerDay, { currency: c.currency, abbreviateMillions: true })}
+            </Text>
           </View>
-          <Text style={styles.rowAmount} numberOfLines={1}>
-            {c.incomePerDay >= 0 ? '+' : ''}{formatMoney(c.incomePerDay, { currency: c.currency, abbreviateMillions: true })}
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+            {rate !== undefined ? (
+              <View style={[styles.pill, styles.pillPct]}><Text style={styles.pillText}>{formatPercent(rate)}</Text></View>
+            ) : null}
+            <View style={styles.pill}><Text style={styles.pillText}>{TYPE_LABEL[c.typeId] ?? c.typeId}</Text></View>
+            {payout ? (
+              <View style={styles.pill}><Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text></View>
+            ) : null}
+          </ScrollView>
+        </View>
+      </View>
+
+      {isEvent ? (
+        <View style={[styles.earnedStripe, { backgroundColor: hexToRgba(c.color, 0.08) }]}>
+          <View style={styles.earnedStripeLeft}>
+            <MaterialCommunityIcons name="flag-checkered" size={14} color={c.color} />
+            <Text style={styles.earnedStripeText}>Доход за период</Text>
+          </View>
+          <Text style={[styles.earnedStripeAmount, { color: c.color }]}>
+            +{formatMoney(c.accrued, { currency: c.currency, abbreviateMillions: true })}
           </Text>
         </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
-          {rate !== undefined ? (
-            <View style={[styles.pill, styles.pillPct]}><Text style={styles.pillText}>{formatPercent(rate)}</Text></View>
-          ) : null}
-          <View style={styles.pill}><Text style={styles.pillText}>{TYPE_LABEL[c.typeId] ?? c.typeId}</Text></View>
-          {payout ? (
-            <View style={styles.pill}><Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text></View>
-          ) : null}
-        </ScrollView>
-      </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -281,13 +337,29 @@ const styles = StyleSheet.create({
   dayEmpty: { fontSize: tokens.typography.label, color: tokens.text.tertiary, padding: tokens.spacing.lg, textAlign: 'center' },
   dayList: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
 
-  row: { flexDirection: 'row', gap: 12, paddingVertical: 16 },
+  rowWrap: { paddingVertical: 16 },
+  row: { flexDirection: 'row', gap: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
   iconFallback: { width: 44, height: 44, borderRadius: 16 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.sm },
   rowName: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: '#212121', letterSpacing: -0.36 },
   rowSub: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: 6, letterSpacing: -0.28 },
   rowAmount: { fontSize: 17, fontWeight: '600', color: '#586692', letterSpacing: -0.17 },
+
+  // Полоска-баннер под строкой — показывается только в дни реальной выплаты/погашения.
+  earnedStripe: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    marginLeft: 56,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: tokens.radius.sm,
+  },
+  earnedStripeLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  earnedStripeText: { fontSize: 12, fontWeight: '500', color: tokens.text.secondary, letterSpacing: -0.12 },
+  earnedStripeAmount: { fontSize: 13, fontWeight: '700', letterSpacing: -0.13 },
 
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 10 },
   pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },

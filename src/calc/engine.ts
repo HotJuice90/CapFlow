@@ -12,7 +12,7 @@ import { clamp, daysInMonth, daysInYear, diffDays, parseLocal } from './dayCount
 /** Версия движка — пишется в Snapshot, чтобы история не «плыла» при смене формул. */
 export const ENGINE_VERSION = '1.0.0';
 
-function periodsPerYear(period: PayoutPeriod | undefined): number {
+export function periodsPerYear(period: PayoutPeriod | undefined): number {
   switch (period) {
     case 'daily': return 365;
     case 'monthly': return 12;
