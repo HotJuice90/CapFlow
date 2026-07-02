@@ -633,7 +633,13 @@ export function dayContributions(data: AppData, dateIso: string): DayContributio
       accrued: v.derived.accrued,
     });
   }
-  return out.sort((a, b) => b.incomePerDayBase - a.incomePerDayBase);
+  // Активы с плашкой (реальная выплата/погашение сегодня) — первыми в списке.
+  return out.sort((a, b) => {
+    const aEvent = a.isEndDay || a.isPayoutDay;
+    const bEvent = b.isEndDay || b.isPayoutDay;
+    if (aEvent !== bEvent) return aEvent ? -1 : 1;
+    return b.incomePerDayBase - a.incomePerDayBase;
+  });
 }
 
 /** Реконструкция капитала по дням за последние N дней (для графика в аналитике). */

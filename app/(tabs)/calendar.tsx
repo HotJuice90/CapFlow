@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,11 +17,14 @@ import {
   type DayContribution,
 } from '@/state/selectors';
 import { diffDays, periodsPerYear } from '@/calc';
+import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
+
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -293,18 +297,80 @@ function InstrumentRow({
         </View>
       </View>
 
-      {isEvent ? (
-        <View style={[styles.earnedStripe, { backgroundColor: hexToRgba(c.color, 0.08) }]}>
-          <View style={styles.earnedStripeLeft}>
-            <MaterialCommunityIcons name="flag-checkered" size={14} color={c.color} />
-            <Text style={styles.earnedStripeText}>Доход за период</Text>
-          </View>
-          <Text style={[styles.earnedStripeAmount, { color: c.color }]}>
-            +{formatMoney(c.accrued, { currency: c.currency, abbreviateMillions: true })}
-          </Text>
-        </View>
-      ) : null}
+      {isEvent ? <EarnedStripe amount={c.accrued} currency={c.currency} /> : null}
     </Pressable>
+  );
+}
+
+/** Полоска «Доход за период» с бликом, бегущим по контуру (SVG-обводка + strokeDashoffset). */
+function EarnedStripe({ amount, currency }: { amount: number; currency: CurrencyCode }) {
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(progress, { toValue: 1, duration: 2600, easing: Easing.linear, useNativeDriver: false }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [progress]);
+
+  const strokeW = 1.5;
+  const radius = tokens.radius.xs - strokeW / 2;
+  const perimeter = size
+    ? 2 * (size.w - strokeW - 2 * radius) + 2 * (size.h - strokeW - 2 * radius) + 2 * Math.PI * radius
+    : 0;
+  const dashOffset = progress.interpolate({ inputRange: [0, 1], outputRange: [0, -perimeter] });
+
+  return (
+    <View
+      style={styles.earnedStripe}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setSize({ w: width, h: height });
+      }}
+    >
+      {size ? (
+        <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
+          <Defs>
+            <SvgGradient id="glint" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={tokens.semantic.positive} stopOpacity="0" />
+              <Stop offset="0.5" stopColor={tokens.semantic.positive} stopOpacity="0.55" />
+              <Stop offset="1" stopColor={tokens.semantic.positive} stopOpacity="0" />
+            </SvgGradient>
+          </Defs>
+          {/* спокойное дно рамки */}
+          <Rect
+            x={strokeW / 2} y={strokeW / 2}
+            width={size.w - strokeW} height={size.h - strokeW}
+            rx={radius} ry={radius}
+            fill="none"
+            stroke={hexToRgba(tokens.semantic.positive, 0.1)}
+            strokeWidth={strokeW}
+          />
+          {/* бегущий блик поверх */}
+          <AnimatedRect
+            x={strokeW / 2} y={strokeW / 2}
+            width={size.w - strokeW} height={size.h - strokeW}
+            rx={radius} ry={radius}
+            fill="none"
+            stroke="url(#glint)"
+            strokeWidth={strokeW}
+            strokeDasharray={`${perimeter * 0.22}, ${perimeter * 0.78}`}
+            strokeDashoffset={dashOffset}
+          />
+        </Svg>
+      ) : null}
+      <View style={styles.earnedStripeInner}>
+        <View style={styles.earnedStripeLeft}>
+          <MaterialCommunityIcons name="flag-checkered" size={14} color={tokens.semantic.positive} />
+          <Text style={styles.earnedStripeText}>Доход за период</Text>
+        </View>
+        <Text style={styles.earnedStripeAmount}>
+          +{formatMoney(amount, { currency, abbreviateMillions: true })}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -347,19 +413,25 @@ const styles = StyleSheet.create({
   rowAmount: { fontSize: 17, fontWeight: '600', color: '#586692', letterSpacing: -0.17 },
 
   // Полоска-баннер под строкой — показывается только в дни реальной выплаты/погашения.
+  // Цвет универсальный (зелёный «рост»), не завязан на бренд-цвет банка.
+  // Рамка рисуется SVG-обводкой поверх (см. EarnedStripe) — тут только контент.
   earnedStripe: {
+    marginTop: 10,
+    marginLeft: 56,
+    borderRadius: tokens.radius.xs,
+  },
+  earnedStripeInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 10,
-    marginLeft: 56,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: tokens.radius.sm,
+    borderRadius: tokens.radius.xs,
+    backgroundColor: hexToRgba(tokens.semantic.positive, 0.08),
   },
   earnedStripeLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   earnedStripeText: { fontSize: 12, fontWeight: '500', color: tokens.text.secondary, letterSpacing: -0.12 },
-  earnedStripeAmount: { fontSize: 13, fontWeight: '700', letterSpacing: -0.13 },
+  earnedStripeAmount: { fontSize: 13, fontWeight: '700', letterSpacing: -0.13, color: tokens.semantic.positive },
 
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 10 },
   pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
