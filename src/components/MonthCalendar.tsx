@@ -5,6 +5,7 @@ import { tokens } from '@/theme';
 import { formatMonthYear } from '@/format/date';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const MAX_DOTS = 3;
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -25,7 +26,8 @@ export function MonthCalendar({
 }: {
   year: number;
   month: number;
-  markers: Set<string>;
+  /** дата → цвета точек-маркеров под числом (до 3 шт., разные типы событий) */
+  markers: Map<string, string[]>;
   selected: string | null;
   today: string;
   onSelect: (iso: string) => void;
@@ -47,17 +49,17 @@ export function MonthCalendar({
     <View>
       <View style={styles.header}>
         <Pressable onPress={onPrev} hitSlop={12} style={styles.navBtn}>
-          <MaterialIcons name="chevron-left" size={26} color={tokens.text.primary} />
+          <MaterialIcons name="chevron-left" size={22} color={tokens.accent.base} />
         </Pressable>
         <Text style={styles.title}>{formatMonthYear(year, month)}</Text>
         <Pressable onPress={onNext} hitSlop={12} style={styles.navBtn}>
-          <MaterialIcons name="chevron-right" size={26} color={tokens.text.primary} />
+          <MaterialIcons name="chevron-right" size={22} color={tokens.accent.base} />
         </Pressable>
       </View>
 
       <View style={styles.weekRow}>
-        {WEEKDAYS.map((w) => (
-          <Text key={w} style={styles.weekday}>{w}</Text>
+        {WEEKDAYS.map((w, i) => (
+          <Text key={w} style={[styles.weekday, i >= 5 && styles.weekdayWeekend]}>{w}</Text>
         ))}
       </View>
 
@@ -68,15 +70,20 @@ export function MonthCalendar({
             const dayIso = iso(year, month, day);
             const isSelected = dayIso === selected;
             const isToday = dayIso === today;
-            const hasEvent = markers.has(dayIso);
+            const isPast = dayIso < today; // только визуально, логику не трогаем
+            const dots = markers.get(dayIso)?.slice(0, MAX_DOTS) ?? [];
             return (
-              <Pressable key={di} style={styles.cell} onPress={() => onSelect(dayIso)}>
-                <View style={[styles.dayCircle, isSelected && styles.daySelected, !isSelected && isToday && styles.dayToday]}>
-                  <Text style={[styles.dayText, isSelected && styles.dayTextSelected, !isSelected && isToday && styles.dayTextToday]}>
+              <Pressable key={di} style={[styles.cell, isPast && styles.cellPast]} onPress={() => onSelect(dayIso)}>
+                <View style={[styles.dayCircle, isSelected && !isToday && styles.daySelected, isToday && styles.dayToday]}>
+                  <Text style={[styles.dayText, di >= 5 && styles.dayTextWeekend, isSelected && !isToday && styles.dayTextSelected, isToday && styles.dayTextToday]}>
                     {day}
                   </Text>
                 </View>
-                <View style={[styles.dot, hasEvent && !isSelected && styles.dotOn]} />
+                <View style={styles.dotsRow}>
+                  {dots.length > 0
+                    ? dots.map((c, i) => <View key={i} style={[styles.dot, { backgroundColor: c }]} />)
+                    : <View style={styles.dotSpacer} />}
+                </View>
               </Pressable>
             );
           })}
@@ -88,18 +95,22 @@ export function MonthCalendar({
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.md },
-  navBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  navBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: tokens.accent.soft, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: tokens.typography.title, fontWeight: '700', color: tokens.text.primary },
   weekRow: { flexDirection: 'row', marginBottom: tokens.spacing.xs },
   weekday: { flex: 1, textAlign: 'center', fontSize: tokens.typography.micro, color: tokens.text.tertiary, fontWeight: '600' },
+  weekdayWeekend: { color: '#D48CA6' },
   week: { flexDirection: 'row' },
   cell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
-  dayCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  daySelected: { backgroundColor: tokens.accent.base },
-  dayToday: { borderWidth: 1.5, borderColor: tokens.accent.base },
-  dayText: { fontSize: tokens.typography.label, color: tokens.text.primary, fontWeight: '500' },
-  dayTextSelected: { color: '#FFFFFF', fontWeight: '700' },
-  dayTextToday: { color: tokens.accent.base, fontWeight: '700' },
-  dot: { width: 5, height: 5, borderRadius: 3, marginTop: 3, backgroundColor: 'transparent' },
-  dotOn: { backgroundColor: tokens.semantic.warning },
+  cellPast: { opacity: 0.4 },
+  dayCircle: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  daySelected: { backgroundColor: tokens.accent.soft, borderRadius: 10 },
+  dayToday: { backgroundColor: tokens.accent.base, borderRadius: 18 },
+  dayText: { fontSize: tokens.typography.body, color: tokens.text.primary, fontWeight: '500' },
+  dayTextWeekend: { color: '#D48CA6' },
+  dayTextSelected: { color: tokens.text.primary, fontWeight: '700' },
+  dayTextToday: { color: '#FFFFFF', fontWeight: '700' },
+  dotsRow: { flexDirection: 'row', gap: 2, marginTop: 1, height: 4, alignItems: 'center' },
+  dot: { width: 4, height: 4, borderRadius: 2 },
+  dotSpacer: { width: 4, height: 4 },
 });

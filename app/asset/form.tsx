@@ -24,6 +24,7 @@ import { useData } from '@/state/DataContext';
 import { calculate } from '@/calc';
 import type { Asset, CapitalizationMode, CurrencyCode, PayoutPeriod } from '@/domain/types';
 import { tokens } from '@/theme';
+import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercentSigned } from '@/format';
 import { uid } from '@/utils/id';
 
@@ -72,7 +73,7 @@ export default function AssetFormScreen() {
     () =>
       data.organizations
         .filter((o) => !o.archived)
-        .map((o) => ({ label: o.name, value: o.id, color: o.color, subtitle: o.type })),
+        .map((o) => ({ label: o.name, value: o.id, color: o.color, logo: o.logo, subtitle: o.type })),
     [data.organizations],
   );
 
@@ -163,7 +164,7 @@ export default function AssetFormScreen() {
             <View style={{ width: 26 }} />
           </View>
 
-          <Card>
+          <Card style={styles.softCard}>
             <SelectField
               label="Организация"
               value={orgId}
@@ -192,12 +193,12 @@ export default function AssetFormScreen() {
               label="Название актива (необязательно)"
               value={title}
               onChangeText={setTitle}
-              placeholder="Подушка безопасности, Отпуск 2027…"
+              placeholder="Например: отпуск"
             />
           </Card>
 
           <Text style={styles.section}>Параметры</Text>
-          <Card>
+          <Card style={styles.softCard}>
             <NumberField
               label="Сумма"
               value={amount}
@@ -248,7 +249,7 @@ export default function AssetFormScreen() {
           {preview ? (
             <>
               <Text style={styles.section}>Предварительный расчёт</Text>
-              <Card>
+              <Card style={styles.softCard}>
                 <PreviewRow
                   label="Доход в день"
                   value={`+${formatMoney(preview.incomePerDay, { currency, kopecks: 'hide' })}`}
@@ -309,6 +310,7 @@ function Sep() {
 }
 
 const styles = StyleSheet.create({
+  softCard: boxShadow('0px 6px 18px rgba(48,69,62,0.05)'),
   header: {
     flexDirection: 'row',
     alignItems: 'center',

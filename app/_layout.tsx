@@ -72,6 +72,17 @@ export default function RootLayout() {
                 animation: 'none',
               }}
             />
+            <Stack.Screen
+              name="option-picker"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: 'fitToContents',
+                sheetCornerRadius: 24,
+                sheetGrabberVisible: false,
+                gestureEnabled: true,
+                animation: 'none',
+              }}
+            />
           </Stack>
           <StatusBarMask />
           <AppDialogHost />

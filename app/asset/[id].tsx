@@ -1,17 +1,36 @@
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { appAlert } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
+import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
 import { buildAssetViews } from '@/state/selectors';
+import { findBank } from '@/domain/banks';
+import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
+import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { t } from '@/i18n';
+
+const TYPE_LABEL: Record<string, string> = {
+  deposit: 'Вклад',
+  savings: 'Накопительный счёт',
+  dfa: 'ЦФА',
+};
+
+const PAYOUT_LABEL: Record<string, string> = {
+  daily: 'Ежедневно',
+  monthly: 'Ежемесячно',
+  quarterly: 'Ежеквартально',
+  semiannual: 'Раз в полгода',
+  annual: 'Ежегодно',
+  end: 'В конце срока',
+};
 
 export default function AssetScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,12 +83,15 @@ export default function AssetScreen() {
   const { asset, instrument, organization, derived } = view;
   const cur = asset.currency;
   const isTerm = instrument.behavior === 'term';
+  const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
+  const progress = Math.round((derived.termProgress ?? 0) * 100);
+  const bankUrl = findBank(organization.logo)?.url;
 
   return (
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + tokens.spacing.sm,
+          paddingTop: insets.top + tokens.spacing.xl,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + tokens.spacing.xxl,
         }}
@@ -82,279 +104,339 @@ export default function AssetScreen() {
           <Pressable
             style={styles.editBtn}
             onPress={() => router.push(`/asset/form?id=${asset.id}`)}
-            hitSlop={12}
+            hitSlop={8}
           >
-            <MaterialIcons name="edit" size={16} color={tokens.accent.base} />
-            <Text style={styles.editText}>Изменить</Text>
+            <MaterialIcons name="edit" size={20} color={tokens.text.secondary} />
           </Pressable>
         </View>
 
-        <Text style={styles.name}>{instrument.name}</Text>
-        <Text style={styles.subtitle}>
-          {asset.title ? `↳ ${asset.title} · ` : ''}
-          {organization.name}
-        </Text>
+        {/* Название с иконкой банка */}
+        <View style={styles.titleRow}>
+          <OrgLogo color={organization.color} logo={organization.logo} size={44} radius={16} variant="solid" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>{instrument.name}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {organization.name}{asset.title ? ` · ${asset.title}` : ''}
+            </Text>
+          </View>
+        </View>
 
-        {/* Hero */}
+        <View style={styles.pillRow}>
+          <View style={styles.pill}><Text style={styles.pillText}>{TYPE_LABEL[instrument.typeId] ?? instrument.typeId}</Text></View>
+          {payout ? (
+            <View style={styles.pill}><Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text></View>
+          ) : null}
+          {cur !== 'RUB' ? (
+            <View style={styles.pill}><Text style={styles.pillText}>{cur}</Text></View>
+          ) : null}
+        </View>
+
+        {/* Hero: сумма + ставка, прогресс срока — здесь же */}
         <Card style={styles.hero}>
           <View style={styles.heroTop}>
-            <View style={styles.heroLeft}>
-              <Text style={styles.heroLabel}>{t.asset.incomePerDay}</Text>
-              <Text style={styles.heroMetric}>
-                +{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroLabel}>{isTerm ? 'Сумма вклада' : 'На счёте'}</Text>
+              <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(asset.amount, { currency: cur, kopecks: 'hide' })}
               </Text>
             </View>
-            <View style={styles.badge}>
-              {isTerm && derived.daysRemaining !== undefined ? (
-                <>
-                  <Text style={styles.badgeLabel}>{t.asset.remaining}</Text>
-                  <Text style={styles.badgeValue}>
-                    {derived.daysRemaining} {pluralDays(derived.daysRemaining)}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.badgeLabel}>{t.asset.payout}</Text>
-                  <Text style={styles.badgeValue}>{t.common.perMonth}</Text>
-                </>
-              )}
+            <View style={styles.rateBadge}>
+              <Text style={styles.rateValue}>{formatPercent(asset.rate)}</Text>
+              <Text style={styles.ratePremium}>
+                {formatPercentSigned(derived.premiumToKeyRate)} {t.asset.toKeyRate}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.heroParams}>
-            <View style={styles.heroParam}>
-              <Text style={styles.cellLabel}>{t.asset.rate}</Text>
-              <Text style={styles.cellValue}>
-                {formatPercent(asset.rate)}{' '}
-                <Text style={styles.premium}>
-                  {formatPercentSigned(derived.premiumToKeyRate)} {t.asset.toKeyRate}
-                </Text>
-              </Text>
-            </View>
-            <View style={styles.heroParam}>
-              <Text style={styles.cellLabel}>{t.asset.amount}</Text>
-              <Text style={styles.cellValue}>{formatMoney(asset.amount, { currency: cur })}</Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* Финансовый результат */}
-        <Text style={styles.sectionTitle}>{t.asset.financialResult}</Text>
-        <Card>
-          <StatRow label={t.asset.accrued} value={formatMoney(derived.accrued, { currency: cur })} />
-          <Divider />
-          <StatRow label={t.asset.tax} value={formatMoney(derived.tax, { currency: cur })} />
-          <Divider />
-          <StatRow
-            label={t.asset.net}
-            value={formatMoney(derived.net, { currency: cur })}
-            accent
-          />
-          {derived.finalAmount !== undefined && (
-            <>
-              <Divider />
-              <StatRow
-                label={t.asset.finalAmount}
-                value={formatMoney(derived.finalAmount, { currency: cur })}
-              />
-            </>
-          )}
-        </Card>
-
-        {/* Второй блок — зависит от поведения */}
-        <Text style={styles.sectionTitle}>
-          {isTerm ? t.asset.endDate : t.asset.forecast}
-        </Text>
-        <Card>
           {isTerm && asset.endDate ? (
-            <>
-              <StatRow label={t.asset.endDate} value={formatDateShort(asset.endDate)} />
-              <Divider />
-              <StatRow
-                label={t.asset.earnedSoFar}
-                value={formatMoney(derived.earnedSoFar, { currency: cur })}
-              />
-              <Divider />
-              <StatRow
-                label={t.asset.remainingToEarn}
-                value={formatMoney(derived.remainingToEarn ?? 0, { currency: cur })}
-              />
-              <View style={styles.progressWrap}>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${Math.round((derived.termProgress ?? 0) * 100)}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  {t.asset.termProgress}: {Math.round((derived.termProgress ?? 0) * 100)}%
+            <View style={styles.progressWrap}>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: organization.color }]} />
+              </View>
+              <View style={styles.progressMeta}>
+                <Text style={styles.progressMetaText}>
+                  {derived.daysRemaining !== undefined
+                    ? `Осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)} · до ${formatDateShort(asset.endDate)}`
+                    : `До ${formatDateShort(asset.endDate)}`}
+                </Text>
+                <Text style={styles.progressMetaPct}>{progress}%</Text>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.heroIncomeRow}>
+            <Text style={styles.heroIncomeLabel}>{t.asset.incomePerDay}</Text>
+            <Text style={styles.heroIncomeValue}>
+              +{formatMoney(derived.incomePerDay, { currency: cur })}
+            </Text>
+          </View>
+        </Card>
+
+        {/* Финансовый результат — один собранный блок с иконками */}
+        <Card style={styles.finCard}>
+          <Text style={styles.finTitle}>{t.asset.financialResult}</Text>
+          <View style={styles.finRow}>
+            <FinCol
+              icon="trending-up"
+              iconColor="#586692"
+              iconBg="#EEF0FB"
+              label={t.asset.accrued}
+              value={formatMoney(derived.accrued, { currency: cur, kopecks: 'hide' })}
+              sub="доход по вкладу"
+            />
+            <View style={styles.finSep} />
+            <FinCol
+              icon="percent"
+              iconColor="#C11818"
+              iconBg="#FCEEEE"
+              label={t.asset.tax}
+              value={formatMoney(derived.tax, { currency: cur, kopecks: 'hide' })}
+              sub={derived.accrued > 0 ? `${formatPercent((derived.tax / derived.accrued) * 100)} от дохода` : 'пока нет дохода'}
+            />
+            <View style={styles.finSep} />
+            <FinCol
+              icon="account-balance-wallet"
+              iconColor="#009933"
+              iconBg="#EAF6EE"
+              label={t.asset.net}
+              value={formatMoney(derived.net, { currency: cur, kopecks: 'hide' })}
+              valueColor="#009933"
+              sub="после налога"
+            />
+          </View>
+
+          {isTerm && derived.finalAmount !== undefined ? (
+            <View style={styles.finTotal}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.finTotalLabel}>Итоговая сумма к получению</Text>
+                <Text style={styles.finTotalValue}>{formatMoney(derived.finalAmount, { currency: cur, kopecks: 'hide' })}</Text>
+              </View>
+              <View style={styles.finTotalChip}>
+                <Text style={styles.finTotalChipText}>
+                  ещё +{formatMoney(derived.remainingToEarn ?? 0, { currency: cur, kopecks: 'hide' })}
                 </Text>
               </View>
-            </>
-          ) : (
-            <>
-              <StatRow
-                label={t.asset.forecastMonth}
-                value={formatMoney(derived.forecastNextMonth ?? 0, { currency: cur, kopecks: 'hide' })}
-              />
-              <Divider />
-              <StatRow
-                label={t.asset.forecastYear}
-                value={formatMoney(derived.forecastNextYear ?? 0, { currency: cur, kopecks: 'hide' })}
-              />
-            </>
-          )}
+            </View>
+          ) : null}
         </Card>
 
-        {/* Действия */}
-        <Text style={styles.sectionTitle}>Действия</Text>
-        <Card padded={false}>
-          <View style={{ paddingHorizontal: tokens.spacing.lg }}>
-            <ActionRow icon="content-copy" label="Дублировать" onPress={onDuplicate} />
-            <Divider />
-            {isTerm ? (
-              <>
-                <ActionRow
-                  icon="autorenew"
-                  label="Продлить"
-                  onPress={() => router.push(`/asset/form?id=${asset.id}`)}
-                />
-                <Divider />
-              </>
-            ) : null}
-            <ActionRow icon="check-circle" label="Закрыть" onPress={onClose} />
-            <Divider />
-            <ActionRow icon="archive" label="Архивировать" onPress={onArchive} />
-            <Divider />
-            <ActionRow icon="delete-outline" label="Удалить" danger onPress={onDelete} />
-          </View>
-        </Card>
+        {/* Накопительный: сколько будет, если не снимать */}
+        {!isTerm ? (
+          <Card style={styles.finCard}>
+            <Text style={styles.finTitle}>Если ничего не менять</Text>
+            <Text style={styles.forecastHint}>Ваш счёт будет приносить</Text>
+            <View style={styles.finRow}>
+              <ForecastCol label="Ещё 1 месяц" value={derived.forecastNextMonth ?? 0} cur={cur} />
+              <View style={styles.finSep} />
+              <ForecastCol label="Ещё 6 месяцев" value={(derived.forecastNextYear ?? 0) / 2} cur={cur} />
+              <View style={styles.finSep} />
+              <ForecastCol label="Ещё 12 месяцев" value={derived.forecastNextYear ?? 0} cur={cur} />
+            </View>
+          </Card>
+        ) : null}
+
+        {/* Переход в приложение/на сайт банка */}
+        {bankUrl ? (
+          <Pressable onPress={() => Linking.openURL(bankUrl).catch(() => {})} style={({ pressed }) => pressed && { opacity: 0.7 }}>
+            <Card style={styles.bankCard}>
+              <View style={styles.bankRow}>
+                <OrgLogo color={organization.color} logo={organization.logo} size={36} radius={12} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bankName} numberOfLines={1}>{organization.name}</Text>
+                  <Text style={styles.bankHint} numberOfLines={1}>Приложение банка</Text>
+                </View>
+                <View style={styles.bankOpen}>
+                  <Text style={styles.bankOpenText}>Открыть</Text>
+                  <MaterialIcons name="chevron-right" size={16} color={tokens.accent.base} />
+                </View>
+              </View>
+            </Card>
+          </Pressable>
+        ) : null}
+
+        {/* Действия — в самом низу, иконки одного сета (MCI outline) */}
+        <View style={styles.actionsRow}>
+          <ActionItem icon="content-copy" label="Дублировать" onPress={onDuplicate} />
+          {isTerm ? (
+            <ActionItem icon="autorenew" label="Продлить" onPress={() => router.push(`/asset/form?id=${asset.id}`)} />
+          ) : null}
+          <ActionItem icon="check-circle-outline" label="Закрыть" onPress={onClose} />
+          <ActionItem icon="archive-outline" label="В архив" onPress={onArchive} />
+          <ActionItem icon="trash-can-outline" label="Удалить" danger onPress={onDelete} />
+        </View>
       </ScrollView>
     </ScreenBackground>
   );
 }
 
-function ActionRow({
+function FinCol({
+  icon,
+  iconColor,
+  iconBg,
+  label,
+  value,
+  valueColor,
+  sub,
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  iconColor: string;
+  iconBg: string;
+  label: string;
+  value: string;
+  valueColor?: string;
+  sub: string;
+}) {
+  return (
+    <View style={styles.finCol}>
+      <View style={styles.finColHead}>
+        <View style={[styles.finIcon, { backgroundColor: iconBg }]}>
+          <MaterialIcons name={icon} size={13} color={iconColor} />
+        </View>
+        <Text style={styles.finColLabel} numberOfLines={1}>{label}</Text>
+      </View>
+      <Text style={[styles.finColValue, valueColor ? { color: valueColor } : null]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Text style={styles.finColSub} numberOfLines={1}>{sub}</Text>
+    </View>
+  );
+}
+
+function ForecastCol({ label, value, cur }: { label: string; value: number; cur: CurrencyCode }) {
+  return (
+    <View style={styles.finCol}>
+      <Text style={styles.finColLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.forecastValue} numberOfLines={1} adjustsFontSizeToFit>
+        ≈ +{formatMoney(value, { currency: cur, kopecks: 'hide' })}
+      </Text>
+    </View>
+  );
+}
+
+function ActionItem({
   icon,
   label,
   onPress,
   danger,
 }: {
-  icon: keyof typeof MaterialIcons.glyphMap;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
   onPress: () => void;
   danger?: boolean;
 }) {
-  const color = danger ? tokens.semantic.negative : tokens.text.primary;
+  const color = danger ? tokens.semantic.negative : '#586692';
   return (
-    <Pressable style={styles.actionRow} onPress={onPress}>
-      <MaterialIcons name={icon} size={22} color={color} />
-      <Text style={[styles.actionLabel, { color }]}>{label}</Text>
+    <Pressable style={({ pressed }) => [styles.actionItem, pressed && { opacity: 0.6 }]} onPress={onPress}>
+      <View style={[styles.actionIcon, danger && styles.actionIconDanger]}>
+        <MaterialCommunityIcons name={icon} size={20} color={color} />
+      </View>
+      <Text style={[styles.actionItemLabel, danger && { color: tokens.semantic.negative }]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
-function StatRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <View style={styles.statRow}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statValue, accent && styles.statAccent]}>{value}</Text>
-    </View>
-  );
-}
-
-function Divider() {
-  return <View style={styles.divider} />;
-}
+const SOFT_SHADOW = '0px 6px 18px rgba(48,69,62,0.05)';
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   muted: { color: tokens.text.secondary },
-  back: { marginBottom: tokens.spacing.md, width: 32 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: tokens.spacing.md,
-  },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  editText: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: tokens.spacing.md,
-    paddingVertical: tokens.spacing.md,
-  },
-  actionLabel: { fontSize: tokens.typography.body, fontWeight: '500' },
-  name: { fontSize: tokens.typography.display, fontWeight: '600', color: tokens.text.primary },
-  subtitle: {
-    fontSize: tokens.typography.label,
-    color: tokens.text.secondary,
-    marginTop: 4,
     marginBottom: tokens.spacing.lg,
   },
-  hero: { marginBottom: tokens.spacing.xl },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  heroLeft: { flex: 1 },
-  heroLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary, fontWeight: '500' },
-  heroMetric: {
-    fontSize: tokens.typography.metricLg,
-    fontWeight: '800',
-    color: tokens.text.primary,
-    marginTop: tokens.spacing.xs,
+  editBtn: {
+    width: 44, height: 44, borderRadius: tokens.radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1, borderColor: tokens.surface.glassBorder,
+    alignItems: 'center', justifyContent: 'center',
   },
-  badge: {
-    backgroundColor: tokens.accent.soft,
-    borderRadius: tokens.radius.sm,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    alignItems: 'flex-end',
-  },
-  badgeLabel: { fontSize: tokens.typography.micro, color: tokens.text.secondary },
-  badgeValue: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.accent.deep },
-  heroParams: {
-    flexDirection: 'row',
-    marginTop: tokens.spacing.lg,
-    paddingTop: tokens.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: tokens.surface.hairline,
-    gap: tokens.spacing.lg,
-  },
-  heroParam: { flex: 1 },
-  cellLabel: { fontSize: tokens.typography.caption, color: tokens.text.tertiary },
-  cellValue: {
-    fontSize: tokens.typography.body,
-    fontWeight: '700',
-    color: tokens.text.primary,
-    marginTop: 2,
-  },
-  premium: { fontSize: tokens.typography.caption, color: tokens.accent.base, fontWeight: '600' },
-  sectionTitle: {
-    fontSize: tokens.typography.title,
-    fontWeight: '600',
-    color: tokens.text.primary,
-    marginBottom: tokens.spacing.md,
-    marginTop: tokens.spacing.sm,
-  },
-  statRow: {
+
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  name: { fontSize: 24, lineHeight: 26, fontWeight: '600', color: '#212121', letterSpacing: -0.48 },
+  subtitle: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: 6, letterSpacing: -0.28 },
+
+  pillRow: { flexDirection: 'row', gap: 2, marginTop: 12, marginBottom: tokens.spacing.lg },
+  pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  pillText: { fontSize: 11, fontWeight: '500', color: 'rgba(33,33,33,0.8)' },
+
+  softShadow: boxShadow(SOFT_SHADOW),
+
+  hero: { marginBottom: tokens.spacing.xl, ...boxShadow(SOFT_SHADOW) },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
+  heroLabel: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24 },
+  heroAmount: { fontSize: 32, lineHeight: 34, fontWeight: '600', color: '#212121', letterSpacing: -0.64, marginTop: 8 },
+  rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
+  rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: '#586692' },
+  ratePremium: { fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.4)', marginTop: 4 },
+
+  progressWrap: { marginTop: tokens.spacing.lg },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: '#F0F3FA', overflow: 'hidden' },
+  progressFill: { height: 8, borderRadius: 4 },
+  progressMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  progressMetaText: { fontSize: 12, color: 'rgba(33,33,33,0.4)', letterSpacing: -0.24 },
+  progressMetaPct: { fontSize: 12, fontWeight: '600', color: '#586692' },
+
+  heroIncomeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: tokens.spacing.sm,
+    marginTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: '#EAF2F9',
   },
-  statLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
-  statValue: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
-  statAccent: { color: tokens.accent.base, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: tokens.surface.hairline },
-  progressWrap: { marginTop: tokens.spacing.md },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: tokens.surface.neutral,
-    overflow: 'hidden',
+  heroIncomeLabel: { fontSize: 14, color: tokens.text.tertiary, letterSpacing: -0.28 },
+  heroIncomeValue: { fontSize: 17, fontWeight: '600', color: '#009933', letterSpacing: -0.17 },
+
+  finCard: { marginBottom: tokens.spacing.lg, ...boxShadow(SOFT_SHADOW) },
+  finTitle: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: '#212121', letterSpacing: -0.36, marginBottom: tokens.spacing.lg },
+  finRow: { flexDirection: 'row', alignItems: 'stretch' },
+  finCol: { flex: 1 },
+  finSep: { width: 1, backgroundColor: '#EAF2F9', marginHorizontal: 10 },
+  finColHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  finIcon: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  finColLabel: { fontSize: 12, color: 'rgba(33,33,33,0.5)', letterSpacing: -0.24, flexShrink: 1 },
+  finColValue: { fontSize: 17, lineHeight: 17, fontWeight: '600', color: '#212121', letterSpacing: -0.34, marginTop: 10 },
+  finColSub: { fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.22, marginTop: 5 },
+
+  finTotal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.md,
+    marginTop: tokens.spacing.lg,
+    backgroundColor: '#EAF6EE',
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: tokens.spacing.md,
   },
-  progressFill: { height: 6, borderRadius: 3, backgroundColor: tokens.accent.base },
-  progressText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 6 },
+  finTotalLabel: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.4)', letterSpacing: -0.24 },
+  finTotalValue: { fontSize: 20, lineHeight: 22, fontWeight: '700', color: '#009933', letterSpacing: -0.4, marginTop: 6 },
+  finTotalChip: { backgroundColor: '#FFFFFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  finTotalChipText: { fontSize: 11, fontWeight: '500', color: '#009933' },
+
+  forecastHint: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24, marginTop: -10, marginBottom: tokens.spacing.lg },
+  forecastValue: { fontSize: 16, lineHeight: 16, fontWeight: '600', color: '#009933', letterSpacing: -0.32, marginTop: 8 },
+
+  bankCard: boxShadow(SOFT_SHADOW),
+  bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  bankName: { fontSize: 15, lineHeight: 15, fontWeight: '600', color: '#212121', letterSpacing: -0.3 },
+  bankHint: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24, marginTop: 4 },
+  bankOpen: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  bankOpenText: { fontSize: 14, fontWeight: '600', color: tokens.accent.base },
+  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: tokens.spacing.xl, paddingHorizontal: 4 },
+  actionItem: { flex: 1, alignItems: 'center', gap: 6 },
+  actionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 17,
+    backgroundColor: tokens.surface.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...boxShadow(SOFT_SHADOW),
+  },
+  actionIconDanger: { backgroundColor: '#FCEEEE' },
+  actionItemLabel: { fontSize: 11, fontWeight: '500', color: 'rgba(33,33,33,0.8)' },
 });

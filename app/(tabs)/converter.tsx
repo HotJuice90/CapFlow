@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
@@ -58,14 +59,14 @@ const D = {
   placeholder: 'rgba(144,148,151,0.45)',
   rateHint: '#7D90C7',
   updated: 'rgba(33,33,33,0.3)',
-  bigRate: '#667085',
+  bigRate: '#5C667B',
   resetBg: '#A8B6E2', resetBorder: '#E2EDF8',
   chipBg: '#F7F7F7',
   divider: '#EAECF2',
   tabBarBg: 'rgba(215,226,235,0.5)',
   tabActiveBg: '#A8B6E2',
-  badgeNegBg: 'rgba(229,139,139,0.1)', badgeNeg: '#C11818',
-  badgePosBg: 'rgba(139,229,139,0.1)', badgePos: '#1A8A1A',
+  badgeNeg: '#C11818', badgeNegBg: 'rgba(229,139,139,0.1)',
+  badgePos: '#1A8A1A', badgePosBg: 'rgba(139,229,139,0.1)',
 };
 
 type Slots = [CurrencyCode, CurrencyCode, CurrencyCode];
@@ -101,12 +102,6 @@ function toEditable(value: number): string {
 
 function parseRaw(text: string): number {
   return parseFloat(text.replace(/\s/g, '').replace(',', '.')) || 0;
-}
-
-/** 'YYYY-MM-DD' → 'ДД.ММ.ГГ' */
-function fmtShort(iso: string): string {
-  const [y, m, d] = iso.split('-');
-  return `${d}.${m}.${y.slice(2)}`;
 }
 
 /** Не даём выбрать одинаковые валюты: конфликтный слот получает первую свободную. */
@@ -191,7 +186,7 @@ function AreaChart({ data, width, height }: { data: number[]; width: number; hei
           <Stop offset="1" stopColor={CHART_FILL} stopOpacity="0" />
         </SvgLinearGradient>
       </Defs>
-      <G opacity={0.5}>
+      <G opacity={0.4}>
         <Path d={areaPath} fill="url(#chartFill)" />
         <Path d={linePath} stroke={CHART_LINE} strokeWidth={1} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </G>
@@ -231,6 +226,7 @@ export default function ConverterScreen() {
   const [loadingHist, setLoadingHist] = useState(false);
   const [topCardH, setTopCardH] = useState(114);
   const [chartH, setChartH] = useState(220);
+  const [histPeriod, setHistPeriod] = useState<'day' | 'month'>('day');
 
   const refs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
   const rates = data.rates as Record<CurrencyCode, number>;
@@ -248,6 +244,11 @@ export default function ConverterScreen() {
   useEffect(() => {
     AsyncStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
   }, [slots]);
+
+  // Период истории курса не запоминаем — при каждом возврате на вкладку
+  // (не только при первом монтировании — таб-экраны не размонтируются)
+  // сбрасываем на «День».
+  useFocusEffect(useCallback(() => { setHistPeriod('day'); }, []));
 
   const activeAmount = useMemo(() => parseRaw(amountText), [amountText]);
   const isEmpty = activeAmount === 0;
@@ -302,7 +303,7 @@ export default function ConverterScreen() {
   // Окно «последний месяц»: ровно 30 календарных дней назад от сегодня.
   // Если start попадает на выходной — берём последнюю пятницу до него (курс ЦБ
   // на пятницу действует и в выходные → сопоставимо с источниками вроде Яндекса).
-  const { rangeText, histSnaps } = useMemo(() => {
+  const { histSnaps, all } = useMemo(() => {
     const p = (n: number) => String(n).padStart(2, '0');
     const toIso = (d: Date) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
     const today = new Date();
@@ -312,26 +313,34 @@ export default function ConverterScreen() {
     start.setMonth(start.getMonth() - 1);
     const startIso = toIso(start);
 
-    const all = data.ratesHistory.filter((s) => typeof s.rates[histTab] === 'number');
-    const inWindow = all.filter((s) => s.date >= startIso);
+    const allSnaps = data.ratesHistory.filter((s) => typeof s.rates[histTab] === 'number');
+    const inWindow = allSnaps.filter((s) => s.date >= startIso);
     // последняя точка ДО окна = курс «на дату старта» (пятница перед выходными)
-    const baseBefore = [...all].reverse().find((s) => s.date < startIso);
+    const baseBefore = [...allSnaps].reverse().find((s) => s.date < startIso);
     const snaps =
       baseBefore && (!inWindow.length || inWindow[0].date !== baseBefore.date)
         ? [{ ...baseBefore, date: startIso }, ...inWindow]
         : inWindow;
 
-    const label = `${fmtShort(startIso)} — ${fmtShort(toIso(today))}`;
-    return { rangeText: label, histSnaps: snaps };
+    return { histSnaps: snaps, all: allSnaps };
   }, [data.ratesHistory, histTab]);
 
   const histSeries = histSnaps.map((snap) => snap.rates[histTab] as number);
-  const histFirst = histSeries[0] ?? 0;
-  const histLast = histSeries[histSeries.length - 1] ?? 0;
+  const hasHistory = histSeries.length >= 2;
+
+  // Бейдж изменения — переключается тапом по иконке слева между «за сутки»
+  // (последнее обновление ЦБ vs предыдущее) и «за месяц» (весь видимый график).
+  const dayPrev = all[all.length - 2]?.rates[histTab];
+  const dayLast = all[all.length - 1]?.rates[histTab];
+  const monthFirst = histSeries[0];
+  const monthLast = histSeries[histSeries.length - 1];
+
+  const histFirst = (histPeriod === 'day' ? dayPrev : monthFirst) ?? 0;
+  const histLast = (histPeriod === 'day' ? dayLast : monthLast) ?? 0;
   const histDelta = histLast - histFirst;
   const histPct = histFirst > 0 ? (histDelta / histFirst) * 100 : 0;
-  const histRubbleUp = histLast < histFirst; // рубль крепнет, когда валюта дешевеет
-  const hasHistory = histSeries.length >= 2;
+  const histRateUp = histLast > histFirst; // курс валюты вырос — стрелка ▲, вне зависимости от смысла для рубля
+  const histRubbleUp = histLast < histFirst; // рубль крепнет, когда валюта дешевеет — определяет ТОЛЬКО цвет
 
   const rateLabel = (c: CurrencyCode) =>
     `1 ${CURRENCY_SYMBOL[c]} = ${displayAmount(rates[c] ?? 0)} ${CURRENCY_SYMBOL.RUB}`;
@@ -362,7 +371,7 @@ export default function ConverterScreen() {
       />
 
       <View
-        style={{ flex: 1, paddingTop: 80, paddingHorizontal: 16, paddingBottom: insets.bottom + 80 }}
+        style={{ flex: 1, paddingTop: 80, paddingHorizontal: 16, paddingBottom: insets.bottom + 66 }}
       >
         <ScreenTitle>Конвертер</ScreenTitle>
 
@@ -415,9 +424,9 @@ export default function ConverterScreen() {
           </Pressable>
         </View>
 
-        {/* ── История курса ── */}
+        {/* ── Динамика курса ── */}
         <View style={s.histSection}>
-          <Text style={s.histTitle}>История курса</Text>
+          <Text style={s.histTitle}>Динамика курса</Text>
 
           <View style={s.histHeaderRow}>
             <View style={s.tabBar}>
@@ -436,10 +445,17 @@ export default function ConverterScreen() {
 
           {hasHistory && (
             <View style={s.subRow}>
-              <Text style={s.rangeText}>{rangeText}</Text>
+              <Pressable
+                style={s.periodToggle}
+                onPress={() => { tapBuzz(); setHistPeriod((p) => (p === 'day' ? 'month' : 'day')); }}
+                hitSlop={8}
+              >
+                <MaterialIcons name="swap-horiz" size={16} color={D.updated} />
+                <Text style={s.periodToggleText}>{histPeriod === 'day' ? 'День' : 'Месяц'}</Text>
+              </Pressable>
               <View style={[s.badge, { backgroundColor: histRubbleUp ? D.badgePosBg : D.badgeNegBg }]}>
                 <Text style={[s.badgeText, { color: histRubbleUp ? D.badgePos : D.badgeNeg }]}>
-                  {histRubbleUp ? '▲' : '▼'} {displayAmount(Math.abs(histDelta))} {CURRENCY_SYMBOL.RUB} · {Math.abs(histPct).toFixed(1).replace('.', ',')}%
+                  {histRateUp ? '▲' : '▼'} {displayAmount(Math.abs(histDelta))} {CURRENCY_SYMBOL.RUB} · {Math.abs(histPct).toFixed(1).replace('.', ',')}%
                 </Text>
               </View>
             </View>
@@ -481,6 +497,7 @@ const s = StyleSheet.create({
   topCard: {
     backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
   topLeft: { flex: 1, gap: 16, paddingRight: 12 },
   topLabel: { fontSize: 14, fontFamily: 'Onest_500Medium', color: D.sourceLabel },
@@ -493,6 +510,7 @@ const s = StyleSheet.create({
   bottomCard: {
     backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20,
     flexDirection: 'row', alignItems: 'stretch',
+    boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
   col: { flex: 1, gap: 14 },
   colInput: {
@@ -532,10 +550,11 @@ const s = StyleSheet.create({
 
   // История
   histSection: { marginTop: 40, flex: 1 },
-  histTitle: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: '#212121', marginBottom: 12 },
+  histTitle: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: '#212121', letterSpacing: -0.24, marginBottom: 12 },
   histHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  rangeText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: D.updated, paddingLeft: 10 },
+  subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  periodToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 10, paddingVertical: 4 },
+  periodToggleText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: D.updated, letterSpacing: -0.26 },
   tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: 35, padding: 1 },
   tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 35 },
   tabActive: { backgroundColor: D.tabActiveBg },
@@ -544,9 +563,12 @@ const s = StyleSheet.create({
     letterSpacing: -0.56, color: 'rgba(33,33,33,0.5)',
   },
   tabTextActive: { color: '#FFFFFF' },
-  bigRate: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate },
-  badge: { borderRadius: 35, paddingHorizontal: 10, paddingVertical: 6 },
-  badgeText: { fontSize: 14, fontFamily: 'Onest_500Medium', letterSpacing: -0.28 },
+  bigRate: { fontSize: 24, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate },
+  badge: {
+    borderRadius: 35, padding: 8, gap: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+  },
+  badgeText: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', letterSpacing: -0.14 },
 
   // График
   chartWrap: { marginTop: 0, overflow: 'hidden', flex: 1 },

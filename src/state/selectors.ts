@@ -379,6 +379,223 @@ export function calendarEvents(data: AppData, now: Date = new Date()): CalendarE
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface PayoutEvent {
+  date: string; // YYYY-MM-DD
+  assetId: string;
+  instrumentName: string;
+  title?: string;
+  typeId: string;
+  color: string; // цвет организации
+  amount: number; // оценка начисления за период, в валюте актива
+  amountBase: number; // то же в основной валюте
+  currency: CurrencyCode;
+}
+
+const PAYOUT_STEP_MONTHS: Partial<Record<string, number>> = {
+  monthly: 1,
+  quarterly: 3,
+  semiannual: 6,
+  annual: 12,
+};
+
+function isoDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * Плановые даты начисления процентов (не окончание срока) — для активов с явным
+ * payoutPeriod (monthly/quarterly/semiannual/annual). 'daily' не считаем — слишком
+ * часто для месячной сетки; 'end'/undefined — это уже calendarEvents() (срок).
+ * Работает и для срочных вкладов с промежуточными выплатами, и для бессрочных счетов.
+ */
+export function payoutEventsForMonth(data: AppData, year: number, month: number, now: Date = new Date()): PayoutEvent[] {
+  const views = buildAssetViews(data, now);
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0);
+  const out: PayoutEvent[] = [];
+
+  for (const v of views) {
+    // Капитализирующиеся активы считает monthlyIncomeForecast() — там реальный
+    // движок calculate() честно даёт «скачок» дохода на дату начисления,
+    // а не оценку по формуле простого процента, как здесь.
+    const mode = v.asset.capitalization ?? v.instrument.capitalization ?? 'none';
+    if (mode === 'capitalize') continue;
+
+    const payout = v.asset.payoutPeriod ?? v.instrument.payoutPeriod;
+    const step = payout ? PAYOUT_STEP_MONTHS[payout] : undefined;
+    if (!step) continue;
+
+    const open = parseLocal(v.asset.openDate);
+    const hardEnd = v.asset.endDate ? parseLocal(v.asset.endDate) : null;
+    const periodsPerYear = 12 / step;
+    const periodAmount = (v.asset.amount * v.asset.rate) / 100 / periodsPerYear;
+
+    // первое начисление — через один период после открытия
+    const occ = new Date(open);
+    occ.setMonth(occ.getMonth() + step);
+    while (occ < monthStart) occ.setMonth(occ.getMonth() + step);
+
+    while (occ <= monthEnd) {
+      if (!hardEnd || occ <= hardEnd) {
+        out.push({
+          date: isoDate(occ),
+          assetId: v.asset.id,
+          instrumentName: v.instrument.name,
+          title: v.asset.title,
+          typeId: v.instrument.typeId,
+          color: v.organization.color,
+          amount: periodAmount,
+          amountBase: convert(periodAmount, v.asset.currency, data),
+          currency: v.asset.currency,
+        });
+      }
+      occ.setMonth(occ.getMonth() + step);
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface ForecastDayChange {
+  assetId: string;
+  instrumentName: string;
+  title?: string;
+  typeId: string;
+  color: string;
+  currency: CurrencyCode;
+  kind: 'end' | 'capStep';
+  /** для 'end' — итоговая сумма к выплате; для 'capStep' — новый доход в день после скачка */
+  amount: number;
+  amountBase: number;
+}
+
+export interface ForecastDay {
+  date: string; // YYYY-MM-DD
+  /** прогнозный доход портфеля в этот день (сумма incomePerDay всех валидных на дату активов) */
+  total: number;
+  /** почему день «особенный»: погашение вклада или скачок капитализации */
+  changes: ForecastDayChange[];
+}
+
+/**
+ * Прогноз, не факт: для каждого дня месяца прогоняем движок calculate() по каждому
+ * активу на ЭТУ дату (не только «сейчас») — он уже честно учитывает капитализацию
+ * (currentBalance() внутри), просто раньше вызывался только для today. Отсюда и
+ * дневная сумма реально скачет у капитализирующихся счетов, а не растёт гладко.
+ * changes — дни, где есть на что посмотреть: актив погашается или капитализация
+ * даёт скачок дневного дохода конкретного счёта.
+ */
+export function monthlyIncomeForecast(data: AppData, year: number, month: number): ForecastDay[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const orgById = new Map(data.organizations.map((o) => [o.id, o]));
+  const instrById = new Map(data.instruments.map((i) => [i.id, i]));
+  const assets = data.assets.filter((a) => a.status === 'active');
+
+  const prevIncome = new Map<string, number>(); // incomePerDay актива на предыдущий валидный день
+  const out: ForecastDay[] = [];
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const day = new Date(year, month, d);
+    let total = 0;
+    const changes: ForecastDayChange[] = [];
+
+    for (const asset of assets) {
+      const instrument = instrById.get(asset.instrumentId);
+      if (!instrument) continue;
+      const open = parseLocal(asset.openDate);
+      const end = asset.endDate ? parseLocal(asset.endDate) : null;
+      const validToday = open <= day && (!end || day <= end);
+      if (!validToday) {
+        prevIncome.delete(asset.id);
+        continue;
+      }
+
+      const derived = calculate(asset, instrument, data.params, day);
+      total += convert(derived.incomePerDay, asset.currency, data);
+
+      const org = orgById.get(instrument.organizationId);
+      const color = org?.color ?? tokens.accent.base;
+      const isEndDay = end !== null && day.getTime() === end.getTime();
+      const prev = prevIncome.get(asset.id);
+      const capStepped = prev !== undefined && Math.abs(derived.incomePerDay - prev) > 1e-9;
+
+      if (isEndDay) {
+        const amount = derived.finalAmount ?? asset.amount;
+        changes.push({
+          assetId: asset.id, instrumentName: instrument.name, title: asset.title,
+          typeId: instrument.typeId, color, currency: asset.currency, kind: 'end',
+          amount, amountBase: convert(amount, asset.currency, data),
+        });
+      } else if (capStepped) {
+        changes.push({
+          assetId: asset.id, instrumentName: instrument.name, title: asset.title,
+          typeId: instrument.typeId, color, currency: asset.currency, kind: 'capStep',
+          amount: derived.incomePerDay, amountBase: convert(derived.incomePerDay, asset.currency, data),
+        });
+      }
+
+      prevIncome.set(asset.id, derived.incomePerDay);
+    }
+
+    out.push({ date: isoDate(day), total, changes });
+  }
+  return out;
+}
+
+export interface DayContribution {
+  assetId: string;
+  instrumentName: string;
+  title?: string;
+  typeId: string;
+  color: string;
+  currency: CurrencyCode;
+  incomePerDay: number;
+  incomePerDayBase: number;
+  /** для isEndDay — итоговая сумма к выплате (проценты + тело, если применимо) */
+  finalAmount?: number;
+  finalAmountBase?: number;
+  termProgress?: number;
+  isEndDay: boolean;
+  capStepped: boolean;
+}
+
+/** Вклад КАЖДОГО активного на эту дату актива в доход дня — включая простые проценты без событий. */
+export function dayContributions(data: AppData, dateIso: string): DayContribution[] {
+  const day = parseLocal(dateIso);
+  const prevDay = new Date(day);
+  prevDay.setDate(prevDay.getDate() - 1);
+  const views = buildAssetViews(data, day);
+  const out: DayContribution[] = [];
+  for (const v of views) {
+    const open = parseLocal(v.asset.openDate);
+    const end = v.asset.endDate ? parseLocal(v.asset.endDate) : null;
+    if (open > day || (end && day > end)) continue;
+    const isEndDay = end !== null && day.getTime() === end.getTime();
+    let capStepped = false;
+    if (!isEndDay && open <= prevDay && (!end || prevDay <= end)) {
+      const prevDerived = calculate(v.asset, v.instrument, data.params, prevDay);
+      capStepped = Math.abs(v.derived.incomePerDay - prevDerived.incomePerDay) > 1e-9;
+    }
+    const finalAmount = isEndDay ? v.derived.finalAmount ?? v.asset.amount : undefined;
+    out.push({
+      assetId: v.asset.id,
+      instrumentName: v.instrument.name,
+      title: v.asset.title,
+      typeId: v.instrument.typeId,
+      color: v.organization.color,
+      currency: v.asset.currency,
+      incomePerDay: v.derived.incomePerDay,
+      incomePerDayBase: convert(v.derived.incomePerDay, v.asset.currency, data),
+      finalAmount,
+      finalAmountBase: finalAmount !== undefined ? convert(finalAmount, v.asset.currency, data) : undefined,
+      termProgress: v.derived.termProgress,
+      isEndDay,
+      capStepped,
+    });
+  }
+  return out.sort((a, b) => b.incomePerDayBase - a.incomePerDayBase);
+}
+
 /** Реконструкция капитала по дням за последние N дней (для графика в аналитике). */
 export function capitalSeries(data: AppData, days = 30): number[] {
   const today = new Date();

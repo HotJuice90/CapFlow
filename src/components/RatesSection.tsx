@@ -17,8 +17,9 @@ const NAME: Record<string, string> = {
 };
 
 export function RatesSection() {
-  const { data, updateRates, refreshRates } = useData();
+  const { data, updateRates, refreshRates, resetRateHistory } = useData();
   const [refreshing, setRefreshing] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
 
   const doRefresh = async () => {
     setRefreshing(true);
@@ -28,6 +29,17 @@ export function RatesSection() {
       // офлайн
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const doRebuildHistory = async () => {
+    setRebuilding(true);
+    try {
+      await resetRateHistory();
+    } catch {
+      // офлайн
+    } finally {
+      setRebuilding(false);
     }
   };
 
@@ -53,8 +65,18 @@ export function RatesSection() {
           )}
           <Text style={styles.refreshText}>{refreshing ? 'Обновляю…' : 'Обновить с ЦБ'}</Text>
         </Pressable>
+        <View style={styles.divider} />
+        <Pressable style={styles.refreshBtn} onPress={doRebuildHistory} disabled={rebuilding}>
+          {rebuilding ? (
+            <ActivityIndicator size="small" color={tokens.accent.base} />
+          ) : (
+            <MaterialIcons name="history" size={20} color={tokens.accent.base} />
+          )}
+          <Text style={styles.refreshText}>{rebuilding ? 'Пересобираю…' : 'Пересобрать историю курсов'}</Text>
+        </Pressable>
+        <Text style={styles.manualHint}>Полностью перезагружает график истории с нуля — на случай, если он выглядит криво.</Text>
 
-        <Text style={styles.manualHint}>Или задать вручную (₽ за 1 единицу):</Text>
+        <Text style={[styles.manualHint, { marginTop: tokens.spacing.lg }]}>Или задать вручную (₽ за 1 единицу):</Text>
         {MANUAL.map((c) => (
           <NumberField
             key={c}

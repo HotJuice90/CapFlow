@@ -55,6 +55,7 @@ interface DataContextValue {
   updateRates: (patch: Partial<AppData['rates']>) => Promise<void>;
   refreshRates: () => Promise<void>;
   backfillRateHistory: () => Promise<void>;
+  resetRateHistory: () => Promise<void>;
   updateSettings: (patch: Partial<AppData['settings']>) => Promise<void>;
   replaceAll: (incoming: AppData) => Promise<void>;
 }
@@ -309,6 +310,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await persist({ ...data, ratesHistory: merged });
   }, [data, persist]);
 
+  /**
+   * Полный пересбор истории курсов с нуля — выбрасывает всё старое (в т.ч.
+   * записи, задвоенные старым багом бэкфилла, когда архивный запрос на «сегодня»
+   * перетирал живое значение), тянет архив заново (уже без «сегодня» в диапазоне)
+   * и добавляет актуальный курс на сегодня отдельным live-запросом.
+   */
+  const resetRateHistory = useCallback(async () => {
+    const hist = await fetchCbrHistory();
+    const fetched = await fetchCbrRates();
+    const rates = { ...data.rates, ...fetched };
+    const withToday = appendSnapshot(hist, rates);
+    await persist({
+      ...data,
+      rates,
+      ratesUpdatedAt: new Date().toISOString(),
+      ratesHistory: withToday.slice(-90),
+    });
+  }, [data, persist]);
+
   const updateSettings = useCallback(
     async (patch: Partial<AppData['settings']>) => {
       await persist({ ...data, settings: { ...data.settings, ...patch } });
@@ -355,6 +375,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateRates,
       refreshRates,
       backfillRateHistory,
+      resetRateHistory,
       updateSettings,
       replaceAll,
     }),
@@ -378,6 +399,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateRates,
       refreshRates,
       backfillRateHistory,
+      resetRateHistory,
       updateSettings,
       replaceAll,
     ],

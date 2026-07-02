@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,6 +8,8 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { tokens } from '@/theme';
+import { OrgLogo } from '@/components/BankLogo';
+import { openOptionPicker } from '@/lib/optionPicker';
 
 // ---------- Field wrapper ----------
 export function Field({
@@ -158,11 +158,12 @@ export function DateField({
   );
 }
 
-// ---------- SelectField (модальный пикер) ----------
+// ---------- SelectField (нативный formSheet через option-picker) ----------
 export interface Option {
   label: string;
   value: string;
   color?: string;
+  logo?: string;
   subtitle?: string;
 }
 
@@ -187,67 +188,34 @@ export function SelectField({
   createLabel?: string;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
+
+  const open = () => {
+    if (disabled) return;
+    openOptionPicker({
+      title: label,
+      options,
+      current: value,
+      onPick: onChange,
+      onCreateNew,
+      createLabel,
+    });
+  };
 
   return (
     <Field label={label} hint={hint}>
       <Pressable
         style={[styles.input, styles.selectRow, disabled && styles.disabled]}
-        onPress={() => !disabled && setOpen(true)}
+        onPress={open}
       >
         {selected?.color ? (
-          <View style={[styles.dot, { backgroundColor: selected.color }]} />
+          <OrgLogo color={selected.color} logo={selected.logo} size={24} radius={8} />
         ) : null}
         <Text style={[styles.selectText, !selected && styles.placeholder]} numberOfLines={1}>
           {selected ? selected.label : placeholder}
         </Text>
         <MaterialIcons name="expand-more" size={22} color={tokens.text.tertiary} />
       </Pressable>
-
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.sheetTitle}>{label}</Text>
-            <ScrollView style={{ maxHeight: 360 }}>
-              {options.map((o) => (
-                <Pressable
-                  key={o.value}
-                  style={styles.optionRow}
-                  onPress={() => {
-                    onChange(o.value);
-                    setOpen(false);
-                  }}
-                >
-                  {o.color ? <View style={[styles.dot, { backgroundColor: o.color }]} /> : null}
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.optionLabel}>{o.label}</Text>
-                    {o.subtitle ? <Text style={styles.optionSub}>{o.subtitle}</Text> : null}
-                  </View>
-                  {o.value === value ? (
-                    <MaterialIcons name="check" size={20} color={tokens.accent.base} />
-                  ) : null}
-                </Pressable>
-              ))}
-              {options.length === 0 ? (
-                <Text style={styles.emptyOption}>Пока пусто — создайте первую запись</Text>
-              ) : null}
-            </ScrollView>
-            {onCreateNew ? (
-              <Pressable
-                style={styles.createRow}
-                onPress={() => {
-                  setOpen(false);
-                  onCreateNew();
-                }}
-              >
-                <MaterialIcons name="add" size={20} color={tokens.accent.base} />
-                <Text style={styles.createText}>{createLabel}</Text>
-              </Pressable>
-            ) : null}
-          </Pressable>
-        </Pressable>
-      </Modal>
     </Field>
   );
 }
@@ -349,39 +317,6 @@ const styles = StyleSheet.create({
   selectText: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary },
   placeholder: { color: tokens.text.tertiary },
   disabled: { opacity: 0.5 },
-  dot: { width: 14, height: 14, borderRadius: 7 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(20,30,28,0.35)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: tokens.surface.white,
-    borderTopLeftRadius: tokens.radius.xl,
-    borderTopRightRadius: tokens.radius.xl,
-    padding: tokens.spacing.lg,
-    paddingBottom: tokens.spacing.xxl,
-  },
-  sheetTitle: {
-    fontSize: tokens.typography.title,
-    fontWeight: '600',
-    color: tokens.text.primary,
-    marginBottom: tokens.spacing.md,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: tokens.spacing.md,
-    paddingVertical: tokens.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: tokens.surface.hairline,
-  },
-  optionLabel: { fontSize: tokens.typography.body, color: tokens.text.primary, fontWeight: '500' },
-  optionSub: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 2 },
-  emptyOption: { paddingVertical: tokens.spacing.lg, color: tokens.text.tertiary, textAlign: 'center' },
-  createRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: tokens.spacing.sm,
-    paddingTop: tokens.spacing.lg,
-  },
-  createText: { fontSize: tokens.typography.body, color: tokens.accent.base, fontWeight: '600' },
   segment: {
     flexDirection: 'row',
     backgroundColor: tokens.surface.neutral,

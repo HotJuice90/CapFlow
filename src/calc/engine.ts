@@ -33,7 +33,7 @@ function currentBalance(
   if (mode !== 'capitalize') return asset.amount;
   const ppy = periodsPerYear(payout);
   const elapsedDays = Math.max(0, diffDays(asset.openDate, now));
-  const elapsedPeriods = Math.floor((elapsedDays / 365) * ppy);
+  const elapsedPeriods = Math.floor((elapsedDays * ppy) / 365);
   const periodRate = asset.rate / 100 / ppy;
   return asset.amount * Math.pow(1 + periodRate, elapsedPeriods);
 }

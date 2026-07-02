@@ -2,9 +2,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tokens } from '@/theme';
-import { NoiseOverlay } from './NoiseOverlay';
 
-/** Фон экрана — диагональный пастельный градиент (мята → лаванда → голубой) + лёгкий шум. */
+/** Фон экрана — диагональный пастельный градиент (мята → лаванда → голубой). */
 export function ScreenBackground({ children }: { children: React.ReactNode }) {
   const g = tokens.backgroundGradient;
   return (
@@ -16,7 +15,6 @@ export function ScreenBackground({ children }: { children: React.ReactNode }) {
         end={g.end}
         style={StyleSheet.absoluteFill}
       />
-      <NoiseOverlay />
       {children}
     </View>
   );

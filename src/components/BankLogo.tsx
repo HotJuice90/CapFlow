@@ -71,15 +71,18 @@ export function BankLogo({ bankId, name = '', size = 24, variant = 'color', fall
  * чтобы привязка лого↔банк была сквозной.
  */
 export function OrgLogo({
-  color, logo, size = 36, radius,
+  color, logo, size = 36, radius, variant = 'tint',
 }: {
   color: string; logo?: string; size?: number; radius?: number;
+  /** tint — цветная иконка на светлой подложке (по умолчанию); solid — белая иконка на фирменном цвете */
+  variant?: 'tint' | 'solid';
 }) {
   const br = radius ?? Math.round(size / 4);
   if (hasBankLogo(logo)) {
+    const bg = variant === 'solid' ? color : tintToWhite(color, 0.88);
     return (
-      <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: tintToWhite(color, 0.88) }]}>
-        <BankLogo bankId={logo} size={Math.round(size * 0.78)} />
+      <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: bg }]}>
+        <BankLogo bankId={logo} size={Math.round(size * 0.78)} variant={variant === 'solid' ? 'white' : 'color'} />
       </View>
     );
   }
