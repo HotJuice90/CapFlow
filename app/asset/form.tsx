@@ -25,7 +25,8 @@ import {
   Segmented,
 } from '@/components/form/fields';
 import { useData } from '@/state/DataContext';
-import { calculate } from '@/calc';
+import { appAlert } from '@/lib/dialog';
+import { calculate, diffDays } from '@/calc';
 import type {
   Asset,
   CapitalizationMode,
@@ -86,6 +87,14 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Переносит длительность [fromIso, toIso] на сегодня — для даты окончания дубликата вклада. */
+function shiftToToday(fromIso: string, toIso: string): string {
+  const days = diffDays(fromIso, toIso);
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function normalizeName(s: string): string {
   return s.toLowerCase().replace(/[\s-]/g, '');
 }
@@ -96,40 +105,52 @@ type BankChoice =
   | { kind: 'preset'; bank: { id: string; name: string; color: string } };
 
 export default function AssetFormScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, duplicateFrom } = useLocalSearchParams<{ id?: string; duplicateFrom?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, createAssetBundle, updateAsset } = useData();
 
   const editing = data.assets.find((a) => a.id === id);
-  const editingInstr = editing
-    ? data.instruments.find((i) => i.id === editing.instrumentId)
+  // Дублирование: подставляем параметры источника как черновик НОВОГО актива —
+  // ничего не пишем в хранилище, пока пользователь сам не нажмёт «Сохранить».
+  const duplicateSource = !editing ? data.assets.find((a) => a.id === duplicateFrom) : undefined;
+  const src = editing ?? duplicateSource;
+
+  const srcInstr = src
+    ? data.instruments.find((i) => i.id === src.instrumentId)
     : undefined;
-  const editingOrg = editingInstr
-    ? data.organizations.find((o) => o.id === editingInstr.organizationId)
+  const srcOrg = srcInstr
+    ? data.organizations.find((o) => o.id === srcInstr.organizationId)
+    : undefined;
+
+  // Дубликат срочного вклада — переносим ДЛИТЕЛЬНОСТЬ срока на новую дату
+  // открытия (сегодня), а не старую абсолютную дату окончания (она могла
+  // уже пройти).
+  const duplicateEndDate = duplicateSource?.endDate
+    ? shiftToToday(duplicateSource.openDate, duplicateSource.endDate)
     : undefined;
 
   // --- Шаг 1: банк ---
-  const [bank, setBank] = useState<BankChoice | null>(editingOrg ? { kind: 'org', org: editingOrg } : null);
-  const [bankOpen, setBankOpen] = useState(!editingOrg);
+  const [bank, setBank] = useState<BankChoice | null>(srcOrg ? { kind: 'org', org: srcOrg } : null);
+  const [bankOpen, setBankOpen] = useState(!srcOrg);
   const [query, setQuery] = useState('');
 
   // --- Шаг 2: продукт ---
-  const [instrumentId, setInstrumentId] = useState<string | undefined>(editing?.instrumentId);
+  const [instrumentId, setInstrumentId] = useState<string | undefined>(src?.instrumentId);
   const [newProduct, setNewProduct] = useState(false);
   const [productName, setProductName] = useState('');
   const [typeId, setTypeId] = useState<InstrumentTypeId>('deposit');
 
   // --- Шаг 3: параметры ---
-  const [title, setTitle] = useState(editing?.title ?? '');
-  const [amount, setAmount] = useState<number | undefined>(editing?.amount);
-  const [currency, setCurrency] = useState<CurrencyCode>(editing?.currency ?? data.settings.defaultCurrency);
-  const [rate, setRate] = useState<number | undefined>(editing?.rate);
+  const [title, setTitle] = useState(src?.title ?? '');
+  const [amount, setAmount] = useState<number | undefined>(src?.amount);
+  const [currency, setCurrency] = useState<CurrencyCode>(src?.currency ?? data.settings.defaultCurrency);
+  const [rate, setRate] = useState<number | undefined>(src?.rate);
   const [openDate, setOpenDate] = useState<string | undefined>(editing?.openDate ?? todayIso());
-  const [endDate, setEndDate] = useState<string | undefined>(editing?.endDate);
-  const [capitalization, setCapitalization] = useState<CapitalizationMode>(editing?.capitalization ?? 'none');
-  const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | undefined>(editing?.payoutPeriod ?? 'monthly');
-  const [comment, setComment] = useState(editing?.comment ?? '');
+  const [endDate, setEndDate] = useState<string | undefined>(editing?.endDate ?? duplicateEndDate);
+  const [capitalization, setCapitalization] = useState<CapitalizationMode>(src?.capitalization ?? 'none');
+  const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | undefined>(src?.payoutPeriod ?? 'monthly');
+  const [comment, setComment] = useState(src?.comment ?? '');
 
   // Список банков: существующие организации пользователя + пресеты, которых ещё нет.
   const bankList = useMemo<BankChoice[]>(() => {
@@ -244,6 +265,29 @@ export default function AssetFormScreen() {
       isDemo: editing?.isDemo,
     };
 
+    // Нельзя сохранить актив 1в1 как уже существующий (тот же продукт, сумма,
+    // ставка) — типично при дублировании без правок. Даты НЕ сравниваем: у
+    // дубликата openDate всегда «сегодня», а не дата источника, так что по
+    // датам они и так почти всегда разные — это не делает их не-дублями.
+    const isExactDuplicate = data.assets.some((a) =>
+      a.id !== asset.id &&
+      a.status === 'active' &&
+      a.instrumentId === asset.instrumentId &&
+      a.amount === asset.amount &&
+      a.currency === asset.currency &&
+      a.rate === asset.rate &&
+      (a.capitalization ?? 'none') === (asset.capitalization ?? 'none') &&
+      (a.payoutPeriod ?? null) === (asset.payoutPeriod ?? null),
+    );
+    if (isExactDuplicate) {
+      appAlert(
+        'Такой актив уже есть',
+        'Актив с точно такими же продуктом, суммой и ставкой уже существует. Измените что-нибудь перед сохранением.',
+        [{ text: 'Понятно' }],
+      );
+      return;
+    }
+
     if (editing && !organization && !instrument) await updateAsset(asset);
     else await createAssetBundle({ organization, instrument, asset });
     successBuzz();
@@ -269,7 +313,9 @@ export default function AssetFormScreen() {
             <Pressable onPress={() => router.back()} hitSlop={12}>
               <MaterialIcons name="close" size={26} color={tokens.text.primary} />
             </Pressable>
-            <Text style={styles.headerTitle}>{editing ? 'Редактировать актив' : 'Новый актив'}</Text>
+            <Text style={styles.headerTitle}>
+              {editing ? 'Редактировать актив' : duplicateSource ? 'Дублировать актив' : 'Новый актив'}
+            </Text>
             <View style={{ width: 26 }} />
           </View>
 

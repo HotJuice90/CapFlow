@@ -55,6 +55,18 @@ export interface FinancialInstrument {
 
 export type AssetStatus = 'active' | 'closed' | 'archived';
 
+/**
+ * Пополнение/снятие по счёту — реальная жизнь накопительного счёта: деньги
+ * туда-обратно двигаются. Хранит АБСОЛЮТНЫЙ баланс на дату, не дельту —
+ * так однозначнее и для капитализации, и для расчёта на минимальный остаток.
+ */
+export interface BalanceAdjustment {
+  id: string;
+  date: string; // ISO 'YYYY-MM-DD' — баланс становится таким начиная с этой даты
+  amount: number; // новый баланс целиком (не «сколько добавили»)
+  comment?: string;
+}
+
 /** Конкретный инструмент, открытый пользователем. Хранятся только первичные данные. */
 export interface Asset {
   id: string;
@@ -73,6 +85,8 @@ export interface Asset {
   comment?: string;
   status: AssetStatus;
   isDemo?: boolean;
+  /** история пополнений/снятий, отсортирована по дате не обязательно — движок сам сортирует */
+  balanceAdjustments?: BalanceAdjustment[];
 }
 
 /** Параметры расчёта (хранятся; результаты вычислений — нет). */
@@ -84,6 +98,8 @@ export interface CalcParams {
 
 /** Производные значения. Никогда не сохраняются — считаются на лету. */
 export interface DerivedValues {
+  /** текущий баланс (тело) на «сейчас» — с учётом капитализации и корректировок баланса */
+  balanceNow: number;
   incomePerDay: number;
   incomePerMonth: number;
   incomeTotalTerm?: number; // для срочных

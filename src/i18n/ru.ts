@@ -32,7 +32,7 @@ export const ru = {
     termProgress: 'Прогресс срока',
     earnedSoFar: 'Уже заработано',
     remainingToEarn: 'Осталось заработать',
-    toKeyRate: 'к ключевой',
+    toKeyRate: 'к КС',
     forecast: 'Если ничего не менять',
     forecastMonth: 'Доход за следующий месяц',
     forecastYear: 'Доход за следующий год',

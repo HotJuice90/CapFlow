@@ -23,19 +23,82 @@ export function periodsPerYear(period: PayoutPeriod | undefined): number {
   }
 }
 
-/** Эффективная база актива на момент `now` с учётом капитализации. */
+interface BalancePoint {
+  date: string; // ISO 'YYYY-MM-DD'
+  amount: number;
+}
+
+/**
+ * Точки изменения баланса (открытие + пополнения/снятия), отсортированные по дате.
+ * Открытие — всегда первая точка, даже если корректировок нет.
+ */
+function balanceTimeline(asset: Asset): BalancePoint[] {
+  const points: BalancePoint[] = [
+    { date: asset.openDate, amount: asset.amount },
+    ...(asset.balanceAdjustments ?? []).map((a) => ({ date: a.date, amount: a.amount })),
+  ];
+  return points.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Последняя точка баланса на дату `now` или раньше — «якорь», от которого считаем дальше. */
+function anchorAt(timeline: BalancePoint[], now: string | Date): BalancePoint {
+  let anchor = timeline[0];
+  for (const p of timeline) {
+    if (diffDays(p.date, now) >= 0) anchor = p;
+    else break;
+  }
+  return anchor;
+}
+
+/** Эффективная база актива на момент `now` — от ПОСЛЕДНЕЙ известной точки баланса. */
 function currentBalance(
-  asset: Asset,
+  timeline: BalancePoint[],
   mode: CapitalizationMode,
   payout: PayoutPeriod | undefined,
+  rate: number,
   now: string | Date,
 ): number {
-  if (mode !== 'capitalize') return asset.amount;
+  const anchor = anchorAt(timeline, now);
+  if (mode !== 'capitalize') return anchor.amount;
   const ppy = periodsPerYear(payout);
-  const elapsedDays = Math.max(0, diffDays(asset.openDate, now));
+  const elapsedDays = Math.max(0, diffDays(anchor.date, now));
   const elapsedPeriods = Math.floor((elapsedDays * ppy) / 365);
-  const periodRate = asset.rate / 100 / ppy;
-  return asset.amount * Math.pow(1 + periodRate, elapsedPeriods);
+  const periodRate = rate / 100 / ppy;
+  return anchor.amount * Math.pow(1 + periodRate, elapsedPeriods);
+}
+
+/**
+ * Сколько всего заработано (проценты, не тело) от открытия до `now` — посегментно
+ * между корректировками баланса. Капитализация — рост баланса внутри сегмента
+ * (пополнение само по себе не «доход»); простой процент — плоско по каждому сегменту.
+ */
+function accruedInterest(
+  timeline: BalancePoint[],
+  mode: CapitalizationMode,
+  payout: PayoutPeriod | undefined,
+  rate: number,
+  now: string | Date,
+): number {
+  let total = 0;
+  for (let i = 0; i < timeline.length; i++) {
+    const point = timeline[i];
+    const daysToNow = diffDays(point.date, now);
+    if (daysToNow <= 0) continue;
+    const next = timeline[i + 1];
+    const daysToNext = next ? diffDays(point.date, next.date) : Infinity;
+    const segmentDays = Math.min(daysToNow, daysToNext);
+    if (segmentDays <= 0) continue;
+
+    if (mode === 'capitalize') {
+      const ppy = periodsPerYear(payout);
+      const elapsedPeriods = Math.floor((segmentDays * ppy) / 365);
+      const periodRate = rate / 100 / ppy;
+      total += point.amount * (Math.pow(1 + periodRate, elapsedPeriods) - 1);
+    } else {
+      total += point.amount * (rate / 100) * (segmentDays / 365);
+    }
+  }
+  return total;
 }
 
 /**
@@ -54,8 +117,9 @@ export function calculate(
   const mode: CapitalizationMode =
     asset.capitalization ?? instrument.capitalization ?? 'none';
   const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
+  const timeline = balanceTimeline(asset);
 
-  const balanceNow = currentBalance(asset, mode, payout, now);
+  const balanceNow = currentBalance(timeline, mode, payout, asset.rate, now);
   const incomePerDay = (balanceNow * annualRate) / daysInYear(now);
   // Прогноз вперёд (месяц/год) — от ТЕКУЩЕГО баланса, а не от суммы открытия:
   // при капитализации проценты уже легли на баланс и сами приносят доход.
@@ -80,7 +144,9 @@ export function calculate(
 
     // Простой процент (по умолчанию): доход линеен по дням.
     const incomeTotalTerm = asset.amount * annualRate * (termDays / 365);
-    const earnedSoFar = asset.amount * annualRate * (elapsedDays / 365);
+    // «Уже заработано» — посегментно, чтобы честно учитывать пополнения/снятия.
+    const accrualNow = diffDays(asset.openDate, now) > termDays ? asset.endDate : now;
+    const earnedSoFar = accruedInterest(timeline, mode, payout, asset.rate, accrualNow);
     const remainingToEarn = Math.max(0, incomeTotalTerm - earnedSoFar);
 
     // Налог считается на доход всего срока (проценты по вкладу облагаются в год выплаты).
@@ -89,6 +155,7 @@ export function calculate(
     const finalAmount = asset.amount + net;
 
     return {
+      balanceNow,
       incomePerDay,
       incomePerMonth,
       incomeTotalTerm,
@@ -107,12 +174,12 @@ export function calculate(
   }
 
   // Бессрочный (накопительный счёт): нет срока/прогресса.
-  const elapsedDays = Math.max(0, diffDays(asset.openDate, now));
-  const earnedSoFar = asset.amount * annualRate * (elapsedDays / 365);
+  const earnedSoFar = accruedInterest(timeline, mode, payout, asset.rate, now);
   const tax = calcTax(earnedSoFar, params, limitAlreadyUsed);
   const net = earnedSoFar - tax;
 
   return {
+    balanceNow,
     incomePerDay,
     incomePerMonth,
     accrued: earnedSoFar,

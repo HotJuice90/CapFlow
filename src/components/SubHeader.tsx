@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { tokens } from '@/theme';
 
-/** Шапка под-экрана: назад + заголовок. */
-export function SubHeader({ title }: { title: string }) {
+/** Шапка под-экрана: назад + заголовок + опциональное действие справа. */
+export function SubHeader({ title, right }: { title: string; right?: React.ReactNode }) {
   const router = useRouter();
   return (
     <View style={styles.row}>
@@ -13,7 +13,7 @@ export function SubHeader({ title }: { title: string }) {
         <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
       </Pressable>
       <Text style={styles.title}>{title}</Text>
-      <View style={styles.spacer} />
+      {right ?? <View style={styles.spacer} />}
     </View>
   );
 }

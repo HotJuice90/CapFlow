@@ -642,6 +642,42 @@ export function dayContributions(data: AppData, dateIso: string): DayContributio
   });
 }
 
+/**
+ * Дневной баланс ОДНОГО актива от даты открытия до сегодня — для графика роста
+ * на карточке актива. Честно прогоняет движок на каждый день, поэтому
+ * капитализация и корректировки баланса ложатся ровно там, где были.
+ *
+ * Только для накопительных счетов с ежедневной капитализацией — это
+ * единственный случай, когда баланс реально растёт день ото дня. У срочных
+ * вкладов вместо этого прогресс-бар до даты закрытия; у остальных режимов
+ * (простой % или неежедневный период) баланс между событиями не меняется —
+ * график был бы просто плоской линией.
+ */
+export function assetBalanceSeries(data: AppData, assetId: string): number[] {
+  const asset = data.assets.find((a) => a.id === assetId);
+  if (!asset) return [];
+  const instrument = data.instruments.find((i) => i.id === asset.instrumentId);
+  if (!instrument) return [];
+  if (instrument.behavior !== 'perpetual') return [];
+  const mode = asset.capitalization ?? instrument.capitalization ?? 'none';
+  const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
+  if (mode !== 'capitalize' || payout !== 'daily') return [];
+
+  const start = parseLocal(asset.openDate);
+  const today = new Date();
+  const end = asset.endDate ? parseLocal(asset.endDate) : null;
+  const last = end && end < today ? end : today;
+
+  const totalDays = Math.max(0, diffDays(start, last));
+  const series: number[] = [];
+  for (let k = 0; k <= totalDays; k++) {
+    const day = new Date(start);
+    day.setDate(day.getDate() + k);
+    series.push(calculate(asset, instrument, data.params, day).balanceNow);
+  }
+  return series;
+}
+
 /** Реконструкция капитала по дням за последние N дней (для графика в аналитике). */
 export function capitalSeries(data: AppData, days = 30): number[] {
   const today = new Date();

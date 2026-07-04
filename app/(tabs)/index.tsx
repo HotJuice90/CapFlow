@@ -100,6 +100,7 @@ export default function HomeScreen() {
   }
 
   const hasAssets = views.length > 0;
+  const hasArchived = data.assets.some((a) => a.status !== 'active');
   const cur = data.settings.defaultCurrency;
   const topType = grouped.groups[0];
   const capitalDeltaPct = comp.capitalPrev > 0 ? ((comp.capitalNow - comp.capitalPrev) / comp.capitalPrev) * 100 : undefined;
@@ -207,6 +208,15 @@ export default function HomeScreen() {
                     <AssetRow view={v} />
                   </View>
                 ))}
+                {hasArchived ? (
+                  <>
+                    <View style={styles.divider} />
+                    <Pressable style={styles.archiveLink} onPress={() => router.push('/archive')} hitSlop={8}>
+                      <MaterialCommunityIcons name="archive-outline" size={15} color={tokens.text.tertiary} />
+                      <Text style={styles.archiveLinkText}>Архив</Text>
+                    </Pressable>
+                  </>
+                ) : null}
               </View>
             </Card>
           </>
@@ -250,6 +260,8 @@ const styles = StyleSheet.create({
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
   listInner: { paddingHorizontal: tokens.spacing.lg },
   divider: { height: 1, backgroundColor: tokens.surface.hairline },
+  archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: tokens.spacing.md },
+  archiveLinkText: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, fontWeight: '500' },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md },
   eventName: { fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.primary },
   eventSub: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { appAlert } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,8 +7,9 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
+import { GrowthBars } from '@/components/GrowthBars';
 import { useData } from '@/state/DataContext';
-import { buildAssetViews } from '@/state/selectors';
+import { assetBalanceSeries, buildAssetViews } from '@/state/selectors';
 import { findBank } from '@/domain/banks';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
@@ -32,21 +33,26 @@ const PAYOUT_LABEL: Record<string, string> = {
   end: 'В конце срока',
 };
 
+const HERO_GRAPH_WIDTH = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
+
 export default function AssetScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data, duplicateAsset, setAssetStatus, deleteAsset } = useData();
+  const { data, setAssetStatus, deleteAsset } = useData();
 
   const view = useMemo(
     () => buildAssetViews(data).find((v) => v.asset.id === id),
     [data, id],
   );
+  const balanceSeries = useMemo(() => assetBalanceSeries(data, id), [data, id]);
 
-  const onDuplicate = async () => {
+  const onDuplicate = () => {
     if (!id) return;
-    const newId = await duplicateAsset(id);
-    if (newId) router.replace(`/asset/${newId}`);
+    appAlert('Дублировать актив?', 'Откроется копия с этими же параметрами — поменяйте что нужно перед сохранением.', [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Дублировать', onPress: () => router.push(`/asset/form?duplicateFrom=${id}`) },
+    ]);
   };
   const onClose = () => {
     if (!id) return;
@@ -86,6 +92,8 @@ export default function AssetScreen() {
   const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
   const progress = Math.round((derived.termProgress ?? 0) * 100);
   const bankUrl = findBank(organization.logo)?.url;
+  // Накопительные счета — всегда живые деньги; срочные — только если явно разрешено пополнение/снятие.
+  const canAdjustBalance = !isTerm || instrument.allowTopUp || instrument.allowPartialWithdraw;
 
   return (
     <ScreenBackground>
@@ -134,17 +142,28 @@ export default function AssetScreen() {
         {/* Hero: сумма + ставка, прогресс срока — здесь же */}
         <Card style={styles.hero}>
           <View style={styles.heroTop}>
-            <View style={{ flex: 1 }}>
+            <Pressable
+              style={{ flex: 1 }}
+              disabled={!canAdjustBalance}
+              onPress={() => router.push(`/asset/balance-adjust?id=${asset.id}`)}
+            >
               <Text style={styles.heroLabel}>{isTerm ? 'Сумма вклада' : 'На счёте'}</Text>
               <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(asset.amount, { currency: cur, kopecks: 'hide' })}
+                {formatMoney(isTerm ? asset.amount : derived.balanceNow, { currency: cur, kopecks: 'hide' })}
               </Text>
-            </View>
+            </Pressable>
             <View style={styles.rateBadge}>
               <Text style={styles.rateValue}>{formatPercent(asset.rate)}</Text>
-              <Text style={styles.ratePremium}>
-                {formatPercentSigned(derived.premiumToKeyRate)} {t.asset.toKeyRate}
-              </Text>
+              <View style={styles.ratePremiumRow}>
+                <MaterialCommunityIcons
+                  name={derived.premiumToKeyRate >= 0 ? 'arrow-up' : 'arrow-down'}
+                  size={11}
+                  color={derived.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
+                />
+                <Text style={styles.ratePremium}>
+                  {formatPercentSigned(derived.premiumToKeyRate)} {t.asset.toKeyRate}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -170,6 +189,12 @@ export default function AssetScreen() {
               +{formatMoney(derived.incomePerDay, { currency: cur })}
             </Text>
           </View>
+
+          {balanceSeries.length >= 2 ? (
+            <View style={styles.heroGraphWrap}>
+              <GrowthBars data={balanceSeries} baseline={asset.amount} width={HERO_GRAPH_WIDTH} height={56} color="#009933" />
+            </View>
+          ) : null}
         </Card>
 
         {/* Финансовый результат — один собранный блок с иконками */}
@@ -256,6 +281,9 @@ export default function AssetScreen() {
 
         {/* Действия — в самом низу, иконки одного сета (MCI outline) */}
         <View style={styles.actionsRow}>
+          {canAdjustBalance ? (
+            <ActionItem icon="cash-plus" label="Баланс" onPress={() => router.push(`/asset/balance-adjust?id=${asset.id}`)} />
+          ) : null}
           <ActionItem icon="content-copy" label="Дублировать" onPress={onDuplicate} />
           {isTerm ? (
             <ActionItem icon="autorenew" label="Продлить" onPress={() => router.push(`/asset/form?id=${asset.id}`)} />
@@ -370,7 +398,8 @@ const styles = StyleSheet.create({
   heroAmount: { fontSize: 32, lineHeight: 34, fontWeight: '600', color: '#212121', letterSpacing: -0.64, marginTop: 8 },
   rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
   rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: '#586692' },
-  ratePremium: { fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.4)', marginTop: 4 },
+  ratePremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
+  ratePremium: { fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.4)' },
 
   progressWrap: { marginTop: tokens.spacing.lg },
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: '#F0F3FA', overflow: 'hidden' },
@@ -390,6 +419,7 @@ const styles = StyleSheet.create({
   },
   heroIncomeLabel: { fontSize: 14, color: tokens.text.tertiary, letterSpacing: -0.28 },
   heroIncomeValue: { fontSize: 17, fontWeight: '600', color: '#009933', letterSpacing: -0.17 },
+  heroGraphWrap: { marginTop: tokens.spacing.lg },
 
   finCard: { marginBottom: tokens.spacing.lg, ...boxShadow(SOFT_SHADOW) },
   finTitle: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: '#212121', letterSpacing: -0.36, marginBottom: tokens.spacing.lg },

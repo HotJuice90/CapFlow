@@ -7,6 +7,7 @@ import type {
   Snapshot,
 } from '@/domain/types';
 import type { KopecksMode } from '@/format/money';
+import { KEY_RATE_HISTORY, type KeyRatePoint } from '@/domain/keyRateHistory';
 
 export interface AppSettings {
   defaultCurrency: CurrencyCode;
@@ -30,6 +31,9 @@ export interface AppData {
   ratesUpdatedAt: string | null;
   /** история курсов по дням (для графика «курс за период») */
   ratesHistory: RateSnapshot[];
+  /** история ключевой ставки ЦБ (точки изменений, новые сверху) — не меняется задним числом,
+   *  поэтому храним и при «Обновить» только домердживаем свежие записи, не тянем всё заново */
+  keyRateHistory: KeyRatePoint[];
   /** демо уже посеяно (чтобы не сеять повторно после удаления) */
   seededDemo: boolean;
 }
@@ -81,6 +85,7 @@ export function emptyAppData(): AppData {
     rates: { ...DEFAULT_RATES },
     ratesUpdatedAt: null,
     ratesHistory: [],
+    keyRateHistory: [...KEY_RATE_HISTORY],
     seededDemo: false,
   };
 }

@@ -147,3 +147,46 @@ describe('накопительный счёт (бессрочный)', () => {
     expect(d.forecastNextYear).toBeGreaterThan(500_000 * 0.16);
   });
 });
+
+describe('корректировки баланса (пополнения/снятия)', () => {
+  const asset: Asset = {
+    id: 'a4',
+    instrumentId: 'i2',
+    amount: 500_000,
+    currency: 'RUB',
+    rate: 12,
+    openDate: '2026-01-01',
+    status: 'active',
+    balanceAdjustments: [{ id: 'b1', date: '2026-04-01', amount: 800_000 }],
+  };
+
+  test('простой процент: заработанное считается по сегментам, каждый — от своего баланса', () => {
+    const d = calculate(asset, savingsInstrument, params, '2026-07-01');
+    const seg1Days = diffDays('2026-01-01', '2026-04-01'); // 90
+    const seg2Days = diffDays('2026-04-01', '2026-07-01'); // 91
+    const expected =
+      500_000 * 0.12 * (seg1Days / 365) +
+      800_000 * 0.12 * (seg2Days / 365);
+    expect(d.earnedSoFar).toBeCloseTo(expected, 2);
+  });
+
+  test('до даты корректировки баланс — старый, после — новый (без «эха» из будущего)', () => {
+    const before = calculate(asset, savingsInstrument, params, '2026-02-01');
+    expect(before.earnedSoFar).toBeCloseTo(500_000 * 0.12 * (diffDays('2026-01-01', '2026-02-01') / 365), 2);
+  });
+
+  test('капитализация после пополнения считается от НОВОГО баланса на дату корректировки, не от суммы открытия', () => {
+    const capitalizing: Asset = {
+      ...asset,
+      capitalization: 'capitalize',
+      payoutPeriod: 'daily',
+    };
+    const d = calculate(capitalizing, savingsInstrument, params, '2026-07-01');
+    const daysSinceAdjustment = diffDays('2026-04-01', '2026-07-01'); // 91
+    const expectedBalance = 800_000 * Math.pow(1 + 0.12 / 365, daysSinceAdjustment);
+    expect(d.forecastNextYear).toBeCloseTo(expectedBalance * 0.12, 2);
+    // Контроль: это НЕ то же самое, что если бы 500k капитализировались с открытия все 181 день.
+    const naive = 500_000 * Math.pow(1 + 0.12 / 365, diffDays('2026-01-01', '2026-07-01'));
+    expect(d.forecastNextYear).not.toBeCloseTo(naive * 0.12, 2);
+  });
+});

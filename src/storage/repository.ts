@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type AppData, DEFAULT_RATES, emptyAppData, SCHEMA_VERSION } from './types';
+import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
+import { mergeKeyRateHistory } from '@/rates/keyRate';
 
 /**
  * Абстракция хранилища (решение #14). Весь UI работает ТОЛЬКО через этот интерфейс —
@@ -19,6 +21,10 @@ function migrate(data: AppData): AppData {
   // мерж с дефолтами — добавляет валюты, появившиеся позже (напр. CNY)
   next.rates = { ...DEFAULT_RATES, ...data.rates };
   if (!next.ratesHistory) next.ratesHistory = [];
+  // Самовосстанавливающийся мердж, не только «если пусто» — если сохранённая
+  // история где-то обрезалась (напр. неудачный live-фетч), старый бэйзлайн
+  // с 2013 года всё равно домердживается на каждой загрузке, не только один раз.
+  next.keyRateHistory = mergeKeyRateHistory(KEY_RATE_HISTORY, next.keyRateHistory ?? []);
   if (next.schemaVersion < SCHEMA_VERSION) next.schemaVersion = SCHEMA_VERSION;
   return next;
 }

@@ -76,6 +76,8 @@ export default function SettingsScreen() {
           <Divider />
           <SettingsRow icon="layers" color="#21A038" label="Фин. инструменты" onPress={() => router.push('/catalog/instruments')} />
           <Divider />
+          <SettingsRow icon="archive" color="#62709C" label="Архив активов" onPress={() => router.push('/archive')} />
+          <Divider />
           <SettingsRow icon="currency-exchange" color="#F2A900" label="Валюты и курсы" value="ЦБ РФ" onPress={() => router.push('/settings/rates')} />
           <Divider />
           <SettingsRow icon="notifications-none" color="#7C4DD6" label="Уведомления" onPress={() => router.push('/settings/notifications')} />

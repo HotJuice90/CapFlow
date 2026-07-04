@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ScreenTitle } from '@/components/ScreenTitle';
@@ -65,6 +65,15 @@ export default function CalendarScreen() {
   const todayIso = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
   const [view, setView] = useState({ year: now.getFullYear(), month: now.getMonth() });
   const [selected, setSelected] = useState<string>(todayIso);
+
+  // Возвращаемся на таб — сбрасываем на сегодня, а не на то, что листали в прошлый раз.
+  useFocusEffect(
+    useCallback(() => {
+      const n = new Date();
+      setView({ year: n.getFullYear(), month: n.getMonth() });
+      setSelected(`${n.getFullYear()}-${pad2(n.getMonth() + 1)}-${pad2(n.getDate())}`);
+    }, []),
+  );
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const viewsById = useMemo(() => new Map(views.map((v) => [v.asset.id, v])), [views]);

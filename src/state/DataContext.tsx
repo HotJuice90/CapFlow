@@ -18,6 +18,8 @@ import { type AppData, type RateSnapshot, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
 import { findBankByName } from '@/domain/banks';
 import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
+import { fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
+import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import { calculate, ENGINE_VERSION } from '@/calc';
 import { uid } from '@/utils/id';
 
@@ -43,7 +45,6 @@ interface DataContextValue {
   updateAsset: (asset: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   setAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
-  duplicateAsset: (id: string) => Promise<string | null>;
   // каталоги
   addOrganization: (org: Organization) => Promise<void>;
   updateOrganization: (org: Organization) => Promise<void>;
@@ -57,6 +58,7 @@ interface DataContextValue {
   refreshRates: () => Promise<void>;
   backfillRateHistory: () => Promise<void>;
   resetRateHistory: () => Promise<void>;
+  refreshKeyRate: () => Promise<void>;
   updateSettings: (patch: Partial<AppData['settings']>) => Promise<void>;
   replaceAll: (incoming: AppData) => Promise<void>;
 }
@@ -216,22 +218,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [data, persist],
   );
 
-  const duplicateAsset = useCallback(
-    async (id: string) => {
-      const src = data.assets.find((a) => a.id === id);
-      if (!src) return null;
-      const copy: Asset = {
-        ...src,
-        id: uid('as-'),
-        isDemo: false,
-        status: 'active',
-      };
-      await persist({ ...data, assets: [...data.assets, copy] });
-      return copy.id;
-    },
-    [data, persist],
-  );
-
   // --- Каталоги ---
   const addOrganization = useCallback(
     async (org: Organization) => {
@@ -345,6 +331,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
   }, [data, persist]);
 
+  const refreshKeyRate = useCallback(async () => {
+    const stored = data.keyRateHistory.length > 0 ? data.keyRateHistory : KEY_RATE_HISTORY;
+    const fromDate = stored[0]?.date ?? EARLIEST_DATE;
+    const fetched = await fetchKeyRateHistory(fromDate);
+    const merged = mergeKeyRateHistory(stored, fetched);
+    await persist({
+      ...data,
+      keyRateHistory: merged,
+      params: { ...data.params, keyRate: merged[0].rate },
+    });
+  }, [data, persist]);
+
   const updateSettings = useCallback(
     async (patch: Partial<AppData['settings']>) => {
       await persist({ ...data, settings: { ...data.settings, ...patch } });
@@ -381,7 +379,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateAsset,
       deleteAsset,
       setAssetStatus,
-      duplicateAsset,
       addOrganization,
       updateOrganization,
       addInstrument,
@@ -393,6 +390,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       refreshRates,
       backfillRateHistory,
       resetRateHistory,
+      refreshKeyRate,
       updateSettings,
       replaceAll,
     }),
@@ -406,7 +404,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateAsset,
       deleteAsset,
       setAssetStatus,
-      duplicateAsset,
       addOrganization,
       updateOrganization,
       addInstrument,
@@ -418,6 +415,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       refreshRates,
       backfillRateHistory,
       resetRateHistory,
+      refreshKeyRate,
       updateSettings,
       replaceAll,
     ],
