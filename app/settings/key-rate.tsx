@@ -128,7 +128,7 @@ export default function KeyRateScreen() {
           </View>
           <Pressable onPress={onRefresh} hitSlop={12} style={styles.refreshBtn} disabled={loading}>
             <View style={loading ? { opacity: 0.4 } : undefined}>
-              <RefreshIcon size={18} color={tokens.text.primary} />
+              <RefreshIcon size={18} color={tokens.accent.base} />
             </View>
           </Pressable>
         </View>
@@ -136,18 +136,18 @@ export default function KeyRateScreen() {
         {/* Крупная ставка градиентом по центру — мягкое размытое свечение позади,
             «%» приподнят и бледный, почти вплотную к верху цифр (как в макете). */}
         <View style={styles.hero}>
-          <Svg width={480} height={480} style={styles.glow} pointerEvents="none">
+          <Svg width={600} height={600} style={styles.glow} pointerEvents="none">
             <Defs>
               <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-                <Stop offset="0" stopColor="#ECD0FF" stopOpacity={0.22} />
-                <Stop offset="0.2" stopColor="#ECD0FF" stopOpacity={0.17} />
-                <Stop offset="0.4" stopColor="#ECD0FF" stopOpacity={0.11} />
-                <Stop offset="0.6" stopColor="#ECD0FF" stopOpacity={0.06} />
+                <Stop offset="0" stopColor="#ECD0FF" stopOpacity={0.16} />
+                <Stop offset="0.2" stopColor="#ECD0FF" stopOpacity={0.13} />
+                <Stop offset="0.4" stopColor="#ECD0FF" stopOpacity={0.09} />
+                <Stop offset="0.6" stopColor="#ECD0FF" stopOpacity={0.05} />
                 <Stop offset="0.8" stopColor="#ECD0FF" stopOpacity={0.02} />
                 <Stop offset="1" stopColor="#ECD0FF" stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Circle cx="240" cy="240" r="240" fill="url(#glow)" />
+            <Circle cx="300" cy="300" r="300" fill="url(#glow)" />
           </Svg>
 
           <View style={styles.valueRow}>
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   },
 
   hero: { alignItems: 'center', justifyContent: 'center', paddingVertical: tokens.spacing.xl },
-  glow: { position: 'absolute' },
+  glow: { position: 'absolute', top: 60 },
   valueRow: { flexDirection: 'row', alignItems: 'flex-start' },
   percent: {
     fontFamily: font.semibold,
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 12,
     paddingVertical: 10,
-    backgroundColor: 'rgba(249,250,255,0.5)',
+    backgroundColor: 'rgba(249,250,255,0.55)',
     ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
   },
 
