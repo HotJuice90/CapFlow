@@ -17,10 +17,20 @@ const CURRENCY_COLOR: Record<string, string> = {
   ARS: '#74ACDF',
 };
 
+/** Действующий курс валюты: ручной override приоритетнее автокурса ЦБ. */
+export function effectiveRate(data: AppData, code: CurrencyCode): number {
+  return data.manualRates[code] ?? data.rates[code] ?? 1;
+}
+
+/** Курс code относительно base (сколько base за 1 единицу code) — кросс-курс через ₽. */
+export function crossRate(data: AppData, code: CurrencyCode, base: CurrencyCode): number {
+  return effectiveRate(data, code) / effectiveRate(data, base);
+}
+
 /** Пересчёт суммы из валюты актива в основную валюту приложения (по последним курсам). */
 function convert(amount: number, from: CurrencyCode, data: AppData): number {
-  const inRub = amount * (data.rates[from] ?? 1);
-  return inRub / (data.rates[data.settings.defaultCurrency] ?? 1);
+  const inRub = amount * effectiveRate(data, from);
+  return inRub / effectiveRate(data, data.settings.defaultCurrency);
 }
 
 /** Активы в статусе active, развёрнутые в AssetView с расчётами. */

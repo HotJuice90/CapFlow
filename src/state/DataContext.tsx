@@ -9,6 +9,7 @@ import React, {
 import type {
   Asset,
   AssetStatus,
+  CurrencyCode,
   FinancialInstrument,
   Organization,
   Snapshot,
@@ -54,7 +55,7 @@ interface DataContextValue {
   deleteDemoData: () => Promise<void>;
   reseedDemo: () => Promise<void>;
   updateParams: (patch: Partial<AppData['params']>) => Promise<void>;
-  updateRates: (patch: Partial<AppData['rates']>) => Promise<void>;
+  setManualRate: (code: CurrencyCode, value: number | undefined) => Promise<void>;
   refreshRates: () => Promise<void>;
   backfillRateHistory: () => Promise<void>;
   resetRateHistory: () => Promise<void>;
@@ -283,9 +284,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [data, persist],
   );
 
-  const updateRates = useCallback(
-    async (patch: Partial<AppData['rates']>) => {
-      await persist({ ...data, rates: { ...data.rates, ...patch } });
+  const setManualRate = useCallback(
+    async (code: CurrencyCode, value: number | undefined) => {
+      const manualRates = { ...data.manualRates };
+      if (value === undefined) delete manualRates[code];
+      else manualRates[code] = value;
+      await persist({ ...data, manualRates });
     },
     [data, persist],
   );
@@ -386,7 +390,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteDemoData,
       reseedDemo,
       updateParams,
-      updateRates,
+      setManualRate,
       refreshRates,
       backfillRateHistory,
       resetRateHistory,
@@ -411,7 +415,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteDemoData,
       reseedDemo,
       updateParams,
-      updateRates,
+      setManualRate,
       refreshRates,
       backfillRateHistory,
       resetRateHistory,

@@ -27,6 +27,10 @@ export interface AppData {
   settings: AppSettings;
   /** курсы: сколько ₽ за 1 единицу валюты (RUB = 1). Источник — API ЦБ РФ. */
   rates: Record<CurrencyCode, number>;
+  /** ручной override курса ЦБ (решение пользователя) — приоритетнее rates,
+   *  если задан. rates при этом продолжает обновляться с ЦБ в фоне, чтобы
+   *  можно было показать «курс ЦБ: X» рядом с ручным значением. */
+  manualRates: Partial<Record<CurrencyCode, number>>;
   /** когда курсы обновлялись последний раз (ISO), null — ещё ни разу */
   ratesUpdatedAt: string | null;
   /** история курсов по дням (для графика «курс за период») */
@@ -83,6 +87,7 @@ export function emptyAppData(): AppData {
     params: { ...DEFAULT_PARAMS },
     settings: { ...DEFAULT_SETTINGS },
     rates: { ...DEFAULT_RATES },
+    manualRates: {},
     ratesUpdatedAt: null,
     ratesHistory: [],
     keyRateHistory: [...KEY_RATE_HISTORY],

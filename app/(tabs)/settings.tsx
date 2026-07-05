@@ -78,15 +78,15 @@ export default function SettingsScreen() {
           <Divider />
           <SettingsRow icon="archive" color="#62709C" label="Архив активов" onPress={() => router.push('/archive')} />
           <Divider />
-          <SettingsRow icon="currency-exchange" color="#F2A900" label="Валюты и курсы" value="ЦБ РФ" onPress={() => router.push('/settings/rates')} />
-          <Divider />
           <SettingsRow icon="notifications-none" color="#7C4DD6" label="Уведомления" onPress={() => router.push('/settings/notifications')} />
         </Group>
 
         <Group title="Расчёты">
-          <SettingsRow icon="account-balance" color="#3E63DD" label="Ключевая ставка ЦБ" value={formatPercent(data.params.keyRate)} onPress={() => router.push('/settings/key-rate')} />
+          <SettingsRow icon="currency-exchange" color="#F2A900" label="Валюты и курсы" value="ЦБ РФ" onPress={() => router.push('/settings/rates')} />
           <Divider />
           <SettingsRow icon="payments" color="#21A038" label="Валюта по умолчанию" value={data.settings.defaultCurrency} onPress={openCurrency} />
+          <Divider />
+          <SettingsRow icon="account-balance" color="#3E63DD" label="Ключевая ставка ЦБ" value={formatPercent(data.params.keyRate)} onPress={() => router.push('/settings/key-rate')} />
           <Divider />
           <SettingsRow icon="description" color="#FF5C00" label="Налоговые параметры" onPress={() => router.push('/settings/tax')} />
         </Group>

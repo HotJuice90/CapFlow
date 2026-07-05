@@ -1,22 +1,78 @@
-import React from 'react';
-import { ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
-import { SubHeader } from '@/components/SubHeader';
 import { RatesSection } from '@/components/RatesSection';
-import { tokens } from '@/theme';
+import { useData } from '@/state/DataContext';
+import { tokens, font } from '@/theme';
 
 export default function RatesScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { refreshRates } = useData();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshRates();
+    } catch {
+      // офлайн
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <ScreenBackground>
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + tokens.spacing.sm, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <SubHeader title="Валюты и курсы" />
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+              <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Валюты и курсы</Text>
+          </View>
+          <View style={styles.headerActions}>
+            <Pressable onPress={() => router.push('/settings/manual-rates')} hitSlop={12} style={styles.refreshBtn}>
+              <MaterialIcons name="edit" size={20} color={tokens.accent.base} />
+            </Pressable>
+            <Pressable onPress={onRefresh} hitSlop={12} style={styles.refreshBtn} disabled={refreshing}>
+              {refreshing ? (
+                <ActivityIndicator size="small" color={tokens.accent.base} />
+              ) : (
+                <MaterialIcons name="refresh" size={20} color={tokens.accent.base} />
+              )}
+            </Pressable>
+          </View>
+        </View>
+
         <RatesSection />
       </ScrollView>
     </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.xl },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
+  backBtn: { width: 24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  refreshBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

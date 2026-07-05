@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -34,7 +35,6 @@ import { ScreenTitle } from '@/components/ScreenTitle';
 
 // Порядок строго как в макете Figma (node 255-2981)
 const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
-const HIST_TABS: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'KZT'];
 
 const CURRENCY_NAME: Record<CurrencyCode, string> = {
   RUB: 'Российский рубль',
@@ -196,14 +196,16 @@ function AreaChart({ data, width, height }: { data: number[]; width: number; hei
 
 // ─── Currency pill (flag + code + chevron) ────────────────────────────────────
 
-function CurrencyPill({ currency, large = false, onPress }: {
-  currency: CurrencyCode; large?: boolean; onPress?: () => void;
+function CurrencyPill({ currency, large = false, editable = true, onPress }: {
+  currency: CurrencyCode; large?: boolean; editable?: boolean; onPress?: () => void;
 }) {
   return (
-    <Pressable style={[s.pill, large && s.pillLg]} onPress={onPress} hitSlop={8}>
+    <Pressable style={[s.pill, large && s.pillLg]} onPress={editable ? onPress : undefined} hitSlop={8}>
       <Flag code={currency} size={large ? 32 : 28} />
       <Text style={[s.pillCode, large && s.pillCodeLg]}>{currency}</Text>
-      <MaterialIcons name="keyboard-arrow-down" size={large ? 14 : 12} color="rgba(33,33,33,0.45)" />
+      {editable ? (
+        <MaterialIcons name="keyboard-arrow-down" size={large ? 14 : 12} color="rgba(33,33,33,0.45)" />
+      ) : null}
     </Pressable>
   );
 }
@@ -218,7 +220,9 @@ export default function ConverterScreen() {
   const { width: screenW } = useWindowDimensions();
   const { data, refreshRates, backfillRateHistory } = useData();
 
-  const [slots, setSlots] = useState<Slots>(DEFAULT_SLOTS);
+  const [slots, setSlots] = useState<Slots>(() =>
+    resolveDuplicates([data.settings.defaultCurrency, DEFAULT_SLOTS[1], DEFAULT_SLOTS[2]], 0),
+  );
   const [activeIdx, setActiveIdx] = useState(0);
   const [amountText, setAmountText] = useState(''); // текст в активном поле; '' = плейсхолдер
   const [histTab, setHistTab] = useState<CurrencyCode>('USD');
@@ -230,13 +234,21 @@ export default function ConverterScreen() {
 
   const refs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
   const rates = data.rates as Record<CurrencyCode, number>;
+  const base = data.settings.defaultCurrency;
+  // Основную валюту из табов не показываем — курс «сам к себе» не нужен;
+  // порядок как везде — из общего списка валют.
+  const histTabs = useMemo(() => ALL_CURRENCIES.filter((c) => c !== base), [base]);
 
   useEffect(() => {
     AsyncStorage.getItem(SLOTS_KEY).then((raw) => {
       if (!raw) return;
       try {
         const saved = JSON.parse(raw) as Slots;
-        if (Array.isArray(saved) && saved.length === 3) setSlots(saved);
+        // Первый слот не восстанавливаем из сохранённого — он всегда привязан
+        // к основной валюте из настроек, а не к тому, что было выбрано раньше.
+        if (Array.isArray(saved) && saved.length === 3) {
+          setSlots(resolveDuplicates([data.settings.defaultCurrency, saved[1], saved[2]], 0));
+        }
       } catch {}
     });
   }, []);
@@ -245,10 +257,24 @@ export default function ConverterScreen() {
     AsyncStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
   }, [slots]);
 
+  // Держим первый слот синхронным с основной валютой — если её меняют в
+  // настройках (в т.ч. с экрана «Валюты и курсы»), верхнее поле следует за ней.
+  useEffect(() => {
+    setSlots((prev) => {
+      if (prev[0] === data.settings.defaultCurrency) return prev;
+      return resolveDuplicates([data.settings.defaultCurrency, prev[1], prev[2]], 0);
+    });
+  }, [data.settings.defaultCurrency]);
+
   // Период истории курса не запоминаем — при каждом возврате на вкладку
   // (не только при первом монтировании — таб-экраны не размонтируются)
   // сбрасываем на «День».
   useFocusEffect(useCallback(() => { setHistPeriod('day'); }, []));
+
+  // Выбранный таб совпал с основной валютой (её сменили в настройках) — переключаем на первый доступный.
+  useEffect(() => {
+    if (histTab === base) setHistTab(histTabs[0]);
+  }, [base, histTab, histTabs]);
 
   const activeAmount = useMemo(() => parseRaw(amountText), [amountText]);
   const isEmpty = activeAmount === 0;
@@ -313,7 +339,9 @@ export default function ConverterScreen() {
     start.setMonth(start.getMonth() - 1);
     const startIso = toIso(start);
 
-    const allSnaps = data.ratesHistory.filter((s) => typeof s.rates[histTab] === 'number');
+    const allSnaps = data.ratesHistory.filter(
+      (s) => typeof s.rates[histTab] === 'number' && typeof s.rates[base] === 'number',
+    );
     const inWindow = allSnaps.filter((s) => s.date >= startIso);
     // последняя точка ДО окна = курс «на дату старта» (пятница перед выходными)
     const baseBefore = [...allSnaps].reverse().find((s) => s.date < startIso);
@@ -323,15 +351,19 @@ export default function ConverterScreen() {
         : inWindow;
 
     return { histSnaps: snaps, all: allSnaps };
-  }, [data.ratesHistory, histTab]);
+  }, [data.ratesHistory, histTab, base]);
 
-  const histSeries = histSnaps.map((snap) => snap.rates[histTab] as number);
+  // Кросс-курс через ₽: histTab к базовой валюте, а не всегда к рублю.
+  const crossOf = (snap: { rates: Partial<Record<CurrencyCode, number>> }): number =>
+    (snap.rates[histTab] as number) / (snap.rates[base] as number);
+
+  const histSeries = histSnaps.map(crossOf);
   const hasHistory = histSeries.length >= 2;
 
   // Бейдж изменения — переключается тапом по иконке слева между «за сутки»
   // (последнее обновление ЦБ vs предыдущее) и «за месяц» (весь видимый график).
-  const dayPrev = all[all.length - 2]?.rates[histTab];
-  const dayLast = all[all.length - 1]?.rates[histTab];
+  const dayPrev = all.length > 1 ? crossOf(all[all.length - 2]) : undefined;
+  const dayLast = all.length > 0 ? crossOf(all[all.length - 1]) : undefined;
   const monthFirst = histSeries[0];
   const monthLast = histSeries[histSeries.length - 1];
 
@@ -387,7 +419,7 @@ export default function ConverterScreen() {
               <Text style={s.topLabel}>{CURRENCY_NAME[slots[0]]}</Text>
               {AmountInput(0, true)}
             </View>
-            <CurrencyPill currency={slots[0]} large onPress={() => openPicker(0)} />
+            <CurrencyPill currency={slots[0]} large editable={false} />
           </Pressable>
 
           {/* Нижние два поля */}
@@ -429,18 +461,20 @@ export default function ConverterScreen() {
           <Text style={s.histTitle}>Динамика курса</Text>
 
           <View style={s.histHeaderRow}>
-            <View style={s.tabBar}>
-              {HIST_TABS.map((c) => (
-                <Pressable
-                  key={c}
-                  style={[s.tab, histTab === c && s.tabActive]}
-                  onPress={() => { tapBuzz(); setHistTab(c); }}
-                >
-                  <Text style={[s.tabText, histTab === c && s.tabTextActive]}>{c}</Text>
-                </Pressable>
-              ))}
+            <View style={s.tabBarClip}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabBar}>
+                {histTabs.map((c) => (
+                  <Pressable
+                    key={c}
+                    style={[s.tab, histTab === c && s.tabActive]}
+                    onPress={() => { tapBuzz(); setHistTab(c); }}
+                  >
+                    <Text style={[s.tabText, histTab === c && s.tabTextActive]}>{c}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
-            <Text style={s.bigRate}>{displayAmount(rates[histTab] ?? 0)} {CURRENCY_SYMBOL.RUB}</Text>
+            <Text style={s.bigRate}>{displayAmount((rates[histTab] ?? 0) / (rates[base] ?? 1))} {CURRENCY_SYMBOL[base]}</Text>
           </View>
 
           {hasHistory && (
@@ -455,7 +489,7 @@ export default function ConverterScreen() {
               </Pressable>
               <View style={[s.badge, { backgroundColor: histRubbleUp ? D.badgePosBg : D.badgeNegBg }]}>
                 <Text style={[s.badgeText, { color: histRubbleUp ? D.badgePos : D.badgeNeg }]}>
-                  {histRateUp ? '▲' : '▼'} {displayAmount(Math.abs(histDelta))} {CURRENCY_SYMBOL.RUB} · {Math.abs(histPct).toFixed(1).replace('.', ',')}%
+                  {histRateUp ? '▲' : '▼'} {displayAmount(Math.abs(histDelta))} {CURRENCY_SYMBOL[base]} · {Math.abs(histPct).toFixed(1).replace('.', ',')}%
                 </Text>
               </View>
             </View>
@@ -555,7 +589,11 @@ const s = StyleSheet.create({
   subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   periodToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 10, paddingVertical: 4 },
   periodToggleText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: D.updated, letterSpacing: -0.26 },
-  tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: 35, padding: 1 },
+  // Пилюля — тот же размер, что раньше вмещал ровно 4 валюты; остальные скроллятся внутри неё.
+  // overflow:hidden именно на этой обёртке — иначе скролл обрезает контент прямоугольно,
+  // а не по скруглению пилюли.
+  tabBarClip: { width: 204, borderRadius: 35, overflow: 'hidden' },
+  tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, padding: 1 },
   tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 35 },
   tabActive: { backgroundColor: D.tabActiveBg },
   tabText: {
@@ -563,7 +601,7 @@ const s = StyleSheet.create({
     letterSpacing: -0.56, color: 'rgba(33,33,33,0.5)',
   },
   tabTextActive: { color: '#FFFFFF' },
-  bigRate: { fontSize: 24, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate },
+  bigRate: { fontSize: 24, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate, flexShrink: 0 },
   badge: {
     borderRadius: 35, padding: 8, gap: 10,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

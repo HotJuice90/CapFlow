@@ -21,7 +21,7 @@ applyGlobalFont();
  * встретится с системными иконками — иконки остаются читаемыми, кашу не видно.
  * Цвет = верхний стоп фонового градиента (#F2F4F9).
  */
-const SHEET_ROUTES = ['/currency-picker', '/option-picker', '/date-picker'];
+const SHEET_ROUTES = ['/currency-picker', '/option-picker', '/date-picker', '/settings/manual-rates'];
 
 function StatusBarMask() {
   const insets = useSafeAreaInsets();
@@ -80,6 +80,17 @@ export default function RootLayout() {
             />
             <Stack.Screen
               name="option-picker"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: 'fitToContents',
+                sheetCornerRadius: 24,
+                sheetGrabberVisible: false,
+                gestureEnabled: true,
+                animation: 'none',
+              }}
+            />
+            <Stack.Screen
+              name="settings/manual-rates"
               options={{
                 presentation: 'formSheet',
                 sheetAllowedDetents: 'fitToContents',

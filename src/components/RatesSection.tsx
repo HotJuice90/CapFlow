@@ -1,36 +1,45 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Card } from './Card';
-import { NumberField } from './form/fields';
+import { Flag } from './Flag';
 import { useData } from '@/state/DataContext';
+import { crossRate } from '@/state/selectors';
+import { openCurrencyPicker } from '@/lib/currencyPicker';
+import { tapBuzz } from '@/lib/haptics';
 import type { CurrencyCode } from '@/domain/types';
-import { tokens } from '@/theme';
+import { tokens, font } from '@/theme';
+import { boxShadow } from '@/theme/shadow';
+import { CURRENCY_SYMBOL } from '@/format/money';
 import { timeAgo } from '@/format/date';
 
-const MANUAL: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'CNY'];
-const NAME: Record<string, string> = {
+export const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
+export const CURRENCY_NAME: Record<CurrencyCode, string> = {
+  RUB: 'Российский рубль',
   USD: 'Доллар США',
   EUR: 'Евро',
   TRY: 'Турецкая лира',
+  KZT: 'Казахстанский тенге',
+  BYN: 'Белорусский рубль',
   CNY: 'Китайский юань',
+  INR: 'Индийская рупия',
+  AED: 'Дирхам ОАЭ',
+  BRL: 'Бразильский реал',
+  ARS: 'Аргентинское песо',
 };
 
-export function RatesSection() {
-  const { data, updateRates, refreshRates, resetRateHistory } = useData();
-  const [refreshing, setRefreshing] = useState(false);
-  const [rebuilding, setRebuilding] = useState(false);
+/** Курсы 91,23 привычны, но кросс-курс к недолларовой базе может быть < 1 —
+ *  тогда 2 знака после запятой округлят всё в «0,00». Даём больше точности
+ *  только для таких мелких значений. */
+function formatRate(value: number, base: CurrencyCode): string {
+  const decimals = Math.abs(value) < 1 ? 4 : 2;
+  return `${value.toFixed(decimals).replace('.', ',')} ${CURRENCY_SYMBOL[base]}`;
+}
 
-  const doRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refreshRates();
-    } catch {
-      // офлайн
-    } finally {
-      setRefreshing(false);
-    }
-  };
+export function RatesSection() {
+  const { data, updateSettings, resetRateHistory } = useData();
+  const [rebuilding, setRebuilding] = useState(false);
+  const base = data.settings.defaultCurrency;
+  const currencies = ALL_CURRENCIES.filter((c) => c !== base);
 
   const doRebuildHistory = async () => {
     setRebuilding(true);
@@ -43,68 +52,111 @@ export function RatesSection() {
     }
   };
 
+  const changeBaseCurrency = () => {
+    tapBuzz();
+    openCurrencyPicker((code) => { void updateSettings({ defaultCurrency: code }); }, base);
+  };
+
   return (
     <>
-      <Text style={styles.section}>Курсы валют</Text>
-      <Card>
-        <View style={styles.row}>
-          <Text style={styles.label}>Источник</Text>
-          <Text style={styles.value}>ЦБ РФ</Text>
+      <Pressable style={styles.baseRow} onPress={changeBaseCurrency}>
+        <View style={styles.rowLeft}>
+          <Flag code={base} size={36} />
+          <View>
+            <Text style={styles.rowCode}>{base}</Text>
+            <Text style={styles.rowName}>{CURRENCY_NAME[base]}</Text>
+          </View>
         </View>
-        <View style={styles.divider} />
-        <View style={styles.row}>
-          <Text style={styles.label}>Обновлено</Text>
-          <Text style={styles.muted}>{timeAgo(data.ratesUpdatedAt)}</Text>
-        </View>
-        <View style={styles.divider} />
-        <Pressable style={styles.refreshBtn} onPress={doRefresh} disabled={refreshing}>
-          {refreshing ? (
-            <ActivityIndicator size="small" color={tokens.accent.base} />
-          ) : (
-            <MaterialIcons name="refresh" size={20} color={tokens.accent.base} />
-          )}
-          <Text style={styles.refreshText}>{refreshing ? 'Обновляю…' : 'Обновить с ЦБ'}</Text>
-        </Pressable>
-        <View style={styles.divider} />
-        <Pressable style={styles.refreshBtn} onPress={doRebuildHistory} disabled={rebuilding}>
-          {rebuilding ? (
-            <ActivityIndicator size="small" color={tokens.accent.base} />
-          ) : (
-            <MaterialIcons name="history" size={20} color={tokens.accent.base} />
-          )}
-          <Text style={styles.refreshText}>{rebuilding ? 'Пересобираю…' : 'Пересобрать историю курсов'}</Text>
-        </Pressable>
-        <Text style={styles.manualHint}>Полностью перезагружает график истории с нуля — на случай, если он выглядит криво.</Text>
+        <Text style={styles.baseChange}>Изменить</Text>
+      </Pressable>
 
-        <Text style={[styles.manualHint, { marginTop: tokens.spacing.lg }]}>Или задать вручную (₽ за 1 единицу):</Text>
-        {MANUAL.map((c) => (
-          <NumberField
-            key={c}
-            label={`${c} — ${NAME[c]}`}
-            value={data.rates[c]}
-            onChange={(v) => void updateRates({ [c]: v ?? 0 })}
-            suffix="₽"
-          />
-        ))}
-      </Card>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>Курс ЦБ РФ</Text>
+        <Text style={styles.cardSubtitle}>Обновлено {timeAgo(data.ratesUpdatedAt)}</Text>
+      </View>
+      <View style={styles.list}>
+        {currencies.map((code) => {
+          const shownCross = crossRate(data, code, base);
+          const cbrCross = (data.rates[code] ?? 1) / (data.rates[base] ?? 1);
+          const overridden = Math.abs(shownCross - cbrCross) > 1e-9;
+          return (
+            <View key={code} style={styles.row}>
+              <View style={styles.rowLeft}>
+                <Flag code={code} size={36} />
+                <View>
+                  <Text style={styles.rowCode}>{code}</Text>
+                  <Text style={styles.rowName}>{CURRENCY_NAME[code]}</Text>
+                </View>
+              </View>
+              <View style={styles.rowRight}>
+                <Text style={styles.rowRate}>{formatRate(shownCross, base)}</Text>
+                {overridden ? (
+                  <View style={styles.cbrPill}>
+                    <Text style={styles.cbrText}>ЦБ {formatRate(cbrCross, base)}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      <Pressable style={styles.rebuildBtn} onPress={doRebuildHistory} disabled={rebuilding}>
+        {rebuilding ? (
+          <ActivityIndicator size="small" color={tokens.text.tertiary} />
+        ) : (
+          <MaterialIcons name="history" size={16} color={tokens.text.tertiary} />
+        )}
+        <Text style={styles.rebuildText}>{rebuilding ? 'Пересобираю…' : 'Пересобрать историю курсов'}</Text>
+      </Pressable>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  section: {
-    fontSize: tokens.typography.title,
-    fontWeight: '600',
-    color: tokens.text.primary,
-    marginTop: tokens.spacing.xl,
+  baseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 69,
+    borderRadius: 20,
+    paddingLeft: 8,
+    paddingRight: 12,
+    paddingVertical: 10,
+    backgroundColor: tokens.surface.white,
+    marginBottom: tokens.spacing.xl,
+    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+  },
+  baseChange: { fontFamily: font.medium, fontSize: 14, color: tokens.accent.base },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
     marginBottom: tokens.spacing.md,
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: tokens.spacing.sm },
-  label: { fontSize: tokens.typography.label, color: tokens.text.secondary },
-  value: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
-  muted: { fontSize: tokens.typography.label, color: tokens.text.tertiary },
-  divider: { height: 1, backgroundColor: tokens.surface.hairline },
-  refreshBtn: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, paddingVertical: tokens.spacing.md },
-  refreshText: { fontSize: tokens.typography.body, color: tokens.accent.base, fontWeight: '600' },
-  manualHint: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: tokens.spacing.sm, marginBottom: tokens.spacing.md },
+  cardTitle: { fontFamily: font.semibold, fontSize: 20, color: '#212121', letterSpacing: -0.2 },
+  cardSubtitle: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24 },
+  list: { gap: 4, marginBottom: tokens.spacing.xl },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 69,
+    borderRadius: 20,
+    paddingLeft: 8,
+    paddingRight: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(249,250,255,0.55)',
+    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+  },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowCode: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  rowName: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.4)', marginTop: 1 },
+  rowRight: { alignItems: 'flex-end', gap: 2 },
+  rowRate: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  cbrPill: { backgroundColor: '#f9faff', borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 6 },
+  cbrText: { fontFamily: font.medium, fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.8)' },
+  rebuildBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', paddingVertical: tokens.spacing.md },
+  rebuildText: { fontFamily: font.medium, fontSize: 13, color: tokens.text.tertiary },
 });
