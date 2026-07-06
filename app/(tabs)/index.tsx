@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   link: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
-  listInner: { paddingHorizontal: tokens.spacing.lg },
+  listInner: { paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.xs },
   divider: { height: 1, backgroundColor: tokens.surface.hairline },
   archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: tokens.spacing.md },
   archiveLinkText: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, fontWeight: '500' },

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Image, View, Text, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 // Цветные
 import Alfa from '../../assets/banks/alfa.svg';
@@ -65,29 +66,64 @@ export function BankLogo({ bankId, name = '', size = 24, variant = 'color', fall
 }
 
 /**
- * Единый бейдж организации. Ровно ДВА канонических варианта (договорённость):
+ * Единый бейдж организации. Три варианта:
  *  - tint (по умолчанию) — ЦВЕТНАЯ иконка на белой подложке с тонкой обводкой;
- *  - solid — БЕЛАЯ иконка на фирменном цвете банка.
+ *  - solid — БЕЛАЯ иконка на фирменном цвете банка;
+ *  - bare — сама иконка без подложки/обводки (для мест, где рядом уже есть
+ *    карточка-подложка другого элемента и своя плашка банка была бы лишней).
  * Используется ВЕЗДЕ, где показываем организацию, чтобы привязка лого↔банк была сквозной.
  */
 export function OrgLogo({
-  color, logo, size = 36, radius, variant = 'tint',
+  color, logo, imageUri, size = 36, radius, variant = 'tint', iconScale, bordered = true, fallbackIcon,
 }: {
-  color: string; logo?: string; size?: number; radius?: number;
-  variant?: 'tint' | 'solid';
+  color: string; logo?: string; imageUri?: string; size?: number; radius?: number;
+  variant?: 'tint' | 'solid' | 'bare';
+  /** доля площадки, которую занимает сама иконка внутри подложки (канон:
+   *  0.6 — tint (цвет на белом), 0.7 — solid (белый на цвете, оптически «съёживается» сильнее). */
+  iconScale?: number;
+  /** волосяная рамка у белой подложки tint (канон — есть). Выключить там, где
+   *  подложка и так лежит на белом фоне — отдельная рамка там избыточна. */
+  bordered?: boolean;
+  /** иконка на случай, если нет ни лого из каталога, ни своего фото — например,
+   *  дефолт по типу площадки (Банк/Брокер/…), а не просто закрашенный квадрат. */
+  fallbackIcon?: keyof typeof MaterialCommunityIcons.glyphMap;
 }) {
   const br = radius ?? Math.round(size / 4);
+  const scale = iconScale ?? (variant === 'solid' ? 0.7 : 0.6);
+  if (imageUri) {
+    return (
+      <Image
+        source={{ uri: imageUri }}
+        style={{ width: size, height: size, borderRadius: variant === 'bare' ? 0 : br }}
+        resizeMode="cover"
+      />
+    );
+  }
   if (hasBankLogo(logo)) {
     if (variant === 'solid') {
       return (
         <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: color }]}>
-          <BankLogo bankId={logo} size={Math.round(size * 0.78)} variant="white" />
+          <BankLogo bankId={logo} size={Math.round(size * scale)} variant="white" />
+        </View>
+      );
+    }
+    if (variant === 'bare') {
+      return (
+        <View style={[styles.orgBox, { width: size, height: size }]}>
+          <BankLogo bankId={logo} size={size} variant="color" />
         </View>
       );
     }
     return (
-      <View style={[styles.orgBox, styles.orgBoxLight, { width: size, height: size, borderRadius: br }]}>
-        <BankLogo bankId={logo} size={Math.round(size * 0.78)} variant="color" />
+      <View style={[styles.orgBox, styles.orgBoxLight, !bordered && styles.orgBoxNoBorder, { width: size, height: size, borderRadius: br }]}>
+        <BankLogo bankId={logo} size={Math.round(size * scale)} variant="color" />
+      </View>
+    );
+  }
+  if (fallbackIcon) {
+    return (
+      <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: color }]}>
+        <MaterialCommunityIcons name={fallbackIcon} size={Math.round(size * 0.55)} color="#FFFFFF" />
       </View>
     );
   }
@@ -98,4 +134,5 @@ const styles = StyleSheet.create({
   fallback: { justifyContent: 'center', alignItems: 'center' },
   orgBox: { alignItems: 'center', justifyContent: 'center' },
   orgBoxLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAF2F9' },
+  orgBoxNoBorder: { borderWidth: 0 },
 });

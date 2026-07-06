@@ -1,9 +1,12 @@
 /**
- * Реестр банков из нашего SVG-набора (id → название + фирменный цвет).
+ * Реестр организаций из нашего SVG-набора (id → название + фирменный цвет).
  * id совпадает с именем файла в assets/banks/<id>.svg (+ <id>-w.svg для белого варианта).
- * Используется при выборе организации: подставляет имя, цвет и лого автоматически.
+ * Сейчас тут только банки, но поле type задел на будущее — когда добавим сюда
+ * агрегаторов/брокеров/ЦФА-площадки со своими лого, тип организации при выборе
+ * из каталога подхватится сам, без правок формы (см. app/catalog/organization.tsx).
+ * Используется при выборе организации: подставляет имя, цвет, тип и лого автоматически.
  */
-export const BANKS: { id: string; name: string; color: string; url: string }[] = [
+export const BANKS: { id: string; name: string; color: string; url: string; type?: string }[] = [
   { id: 'alfa',        name: 'Альфа-Банк',  color: '#EF3124', url: 'https://alfabank.ru' },
   { id: 'sber',        name: 'Сбербанк',    color: '#21A038', url: 'https://www.sberbank.ru' },
   { id: 'tbank',       name: 'Т-Банк',      color: '#1D1D1B', url: 'https://www.tbank.ru' },

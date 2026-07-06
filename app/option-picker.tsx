@@ -1,20 +1,35 @@
-import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, StatusBar } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { OrgLogo } from '@/components/BankLogo';
 import { getPickerConfig, pickOptionValue, pickCreateNew } from '@/lib/optionPicker';
 import { tapBuzz } from '@/lib/haptics';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
+
+const ALL = 'Все';
 
 /** Универсальный шит выбора (организация, инструмент, период …) — стиль как currency-picker. */
 export default function OptionPickerSheet() {
   const cfg = getPickerConfig();
+  const [query, setQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState(ALL);
 
   // Конфиг потерян (например, перезагрузка в dev) — просто закрываемся.
   useEffect(() => {
     if (!cfg) router.back();
   }, [cfg]);
+
+  const filtered = useMemo(() => {
+    if (!cfg) return [];
+    const q = query.trim().toLowerCase();
+    return cfg.options.filter(
+      (o) =>
+        (activeFilter === ALL || o.filterValue === activeFilter) &&
+        (!q || o.label.toLowerCase().includes(q)),
+    );
+  }, [cfg, query, activeFilter]);
+
   if (!cfg) return null;
 
   const choose = (value: string) => {
@@ -35,24 +50,75 @@ export default function OptionPickerSheet() {
       <StatusBar barStyle="dark-content" />
       <View style={s.grabber} />
       <Text style={s.title}>{cfg.title}</Text>
+
+      {cfg.searchable ? (
+        <View style={s.searchRow}>
+          <MaterialIcons name="search" size={20} color={tokens.text.tertiary} />
+          <TextInput
+            style={s.searchInput}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Поиск"
+            placeholderTextColor={tokens.text.tertiary}
+          />
+          {query.length > 0 ? (
+            <Pressable onPress={() => setQuery('')} hitSlop={8}>
+              <MaterialIcons name="close" size={18} color={tokens.text.tertiary} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {cfg.filters ? (
+        <View style={s.filterWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterBar}>
+            {[{ label: ALL, icon: 'view-grid-outline', color: tokens.accent.base }, ...cfg.filters].map((f) => {
+              const active = f.label === activeFilter;
+              return (
+                <Pressable
+                  key={f.label}
+                  style={[s.filterChip, active && { backgroundColor: f.color }]}
+                  onPress={() => setActiveFilter(f.label)}
+                >
+                  <MaterialCommunityIcons
+                    name={f.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                    size={16}
+                    color={active ? '#FFFFFF' : f.color}
+                  />
+                  <Text style={[s.filterChipText, active ? { color: '#FFFFFF', fontFamily: font.semibold } : { color: f.color }]}>
+                    {f.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
       <ScrollView style={s.list} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-        {cfg.options.map((o, i) => {
+        {filtered.map((o, i) => {
           const active = cfg.current === o.value;
           return (
             <TouchableOpacity
               key={o.value}
-              style={[s.row, i < cfg.options.length - 1 && !active && s.rowDivider, active && s.rowActive]}
+              style={[s.row, i < filtered.length - 1 && s.rowDivider]}
               activeOpacity={0.6}
               onPress={() => choose(o.value)}
             >
               {o.color ? (
-                <OrgLogo color={o.color} logo={o.logo} size={40} radius={14} />
+                <OrgLogo color={o.color} logo={o.logo} imageUri={o.imageUri} size={40} radius={14} />
               ) : o.icon ? (
-                <View style={[s.iconBox, active && s.iconBoxActive]}>
+                <View
+                  style={[
+                    s.iconBox,
+                    { backgroundColor: hexToRgba(o.iconColor ?? tokens.accent.base, 0.12) },
+                    active && { backgroundColor: o.iconColor ?? tokens.accent.base },
+                  ]}
+                >
                   <MaterialCommunityIcons
                     name={o.icon as keyof typeof MaterialCommunityIcons.glyphMap}
                     size={19}
-                    color={active ? '#FFFFFF' : tokens.accent.base}
+                    color={active ? '#FFFFFF' : (o.iconColor ?? tokens.accent.base)}
                   />
                 </View>
               ) : null}
@@ -61,15 +127,15 @@ export default function OptionPickerSheet() {
                 {o.subtitle ? <Text style={s.sub} numberOfLines={1}>{o.subtitle}</Text> : null}
               </View>
               {active ? (
-                <MaterialIcons name="check-circle" size={22} color={tokens.accent.base} />
+                <MaterialIcons name="check" size={20} color={tokens.accent.base} />
               ) : o.icon ? (
                 <View style={s.radioOff} />
               ) : null}
             </TouchableOpacity>
           );
         })}
-        {cfg.options.length === 0 ? (
-          <Text style={s.empty}>Пока пусто — создайте первую запись</Text>
+        {filtered.length === 0 ? (
+          <Text style={s.empty}>{cfg.options.length === 0 ? 'Пока пусто — создайте первую запись' : 'Ничего не нашлось'}</Text>
         ) : null}
       </ScrollView>
       {cfg.onCreateNew ? (
@@ -86,16 +152,41 @@ const s = StyleSheet.create({
   sheet: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
   title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: '#212121', marginBottom: 10 },
-  list: { maxHeight: 460 },
+
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.sm,
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: tokens.radius.pill,
+    backgroundColor: tokens.surface.neutral,
+    marginBottom: 10,
+  },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: '#212121' },
+
+  // Скролл бleedит до края шита (минус паддинг шита компенсирован тут же).
+  filterWrap: { marginHorizontal: -20, marginBottom: 10 },
+  filterBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 20 },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(215,226,235,0.5)',
+  },
+  filterChipText: { fontFamily: font.medium, fontSize: 13 },
+
+  list: { maxHeight: 400 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderRadius: tokens.radius.sm, paddingHorizontal: 4 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
-  rowActive: { backgroundColor: tokens.accent.soft },
   iconBox: {
     width: 36, height: 36, borderRadius: 12,
     backgroundColor: tokens.accent.soft,
     alignItems: 'center', justifyContent: 'center',
   },
-  iconBoxActive: { backgroundColor: tokens.accent.base },
   radioOff: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#D8DFE9', marginRight: 1 },
   label: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
   labelActive: { color: tokens.accent.base },

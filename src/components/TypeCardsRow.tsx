@@ -11,6 +11,7 @@ import type { TypeGroup } from '@/state/selectors';
 const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
   deposit: 'bank-outline',
   savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
   dfa: 'chart-line',
 };
 
@@ -18,6 +19,7 @@ function pluralItems(typeId: string, n: number): string {
   const word =
     typeId === 'deposit' ? ['вклад', 'вклада', 'вкладов'] :
     typeId === 'savings' ? ['счёт', 'счёта', 'счетов'] :
+    typeId === 'bond' ? ['облигация', 'облигации', 'облигаций'] :
     ['актив', 'актива', 'активов'];
   const abs = n % 100;
   const last = abs % 10;

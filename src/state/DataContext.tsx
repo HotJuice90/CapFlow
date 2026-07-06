@@ -49,8 +49,10 @@ interface DataContextValue {
   // каталоги
   addOrganization: (org: Organization) => Promise<void>;
   updateOrganization: (org: Organization) => Promise<void>;
+  deleteOrganization: (id: string) => Promise<void>;
   addInstrument: (instrument: FinancialInstrument) => Promise<void>;
   updateInstrument: (instrument: FinancialInstrument) => Promise<void>;
+  deleteInstrument: (id: string) => Promise<void>;
   // настройки/демо
   deleteDemoData: () => Promise<void>;
   reseedDemo: () => Promise<void>;
@@ -237,6 +239,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [data, persist],
   );
 
+  const deleteOrganization = useCallback(
+    async (id: string) => {
+      await persist({ ...data, organizations: data.organizations.filter((o) => o.id !== id) });
+    },
+    [data, persist],
+  );
+
   const addInstrument = useCallback(
     async (instrument: FinancialInstrument) => {
       await persist({ ...data, instruments: [...data.instruments, instrument] });
@@ -252,6 +261,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           i.id === instrument.id ? instrument : i,
         ),
       });
+    },
+    [data, persist],
+  );
+
+  const deleteInstrument = useCallback(
+    async (id: string) => {
+      await persist({ ...data, instruments: data.instruments.filter((i) => i.id !== id) });
     },
     [data, persist],
   );
@@ -385,8 +401,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setAssetStatus,
       addOrganization,
       updateOrganization,
+      deleteOrganization,
       addInstrument,
       updateInstrument,
+      deleteInstrument,
       deleteDemoData,
       reseedDemo,
       updateParams,
@@ -410,8 +428,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setAssetStatus,
       addOrganization,
       updateOrganization,
+      deleteOrganization,
       addInstrument,
       updateInstrument,
+      deleteInstrument,
       deleteDemoData,
       reseedDemo,
       updateParams,

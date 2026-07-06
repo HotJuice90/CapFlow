@@ -126,7 +126,7 @@ function ArchiveRow({
 
   const row = (
     <View style={[styles.row, !isLast && styles.rowDivider]}>
-      <OrgLogo color={organization.color} logo={organization.logo} size={44} radius={16} />
+      <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={44} radius={16} />
       <View style={{ flex: 1 }}>
         <Text style={styles.rowName} numberOfLines={1}>{instrument.name}</Text>
         <Text style={styles.rowSub} numberOfLines={1}>

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Defs, LinearGradient, RadialGradient, Stop, Text as SvgText, Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -80,6 +80,41 @@ function RefreshIcon({ size = 18, color = '#212121' }: { size?: number; color?: 
   );
 }
 
+interface HistoryRowData {
+  date: string;
+  rate: number;
+  delta?: number;
+  isMax: boolean;
+  isMin: boolean;
+}
+
+const HistoryRow = React.memo(function HistoryRow({ row }: { row: HistoryRowData }) {
+  const dir = row.delta === undefined ? 0 : Math.sign(row.delta);
+  // Для ключевой ставки принято обратное биржевому: снижение — «хорошо» (зелёное),
+  // повышение — «плохо» (красное) — так подаёт сам ЦБ и финансовые СМИ.
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowLeft}>
+        <View style={[styles.iconBox, iconTint(dir)]}>
+          <TrendIcon dir={dir} size={22} />
+        </View>
+        <Text style={styles.rowDate}>{formatDateFull(row.date)}</Text>
+      </View>
+      <View style={styles.rowRight}>
+        <View style={styles.rateRow}>
+          <Text style={styles.rowRate}>{formatRate(row.rate)}%</Text>
+          {row.isMax ? <RecordMark kind="max" /> : row.isMin ? <RecordMark kind="min" /> : null}
+        </View>
+        {row.delta !== undefined ? (
+          <View style={styles.deltaPill}>
+            <Text style={styles.deltaText}>{formatDelta(row.delta)}</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+});
+
 export default function KeyRateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -91,8 +126,20 @@ export default function KeyRateScreen() {
   const history = data.keyRateHistory;
   const latest = history[0];
   const oldestYear = new Date(history[history.length - 1].date).getFullYear();
-  const maxRate = Math.max(...history.map((p) => p.rate));
-  const minRate = Math.min(...history.map((p) => p.rate));
+
+  // Считаем один раз на изменение истории (она статична между обновлениями),
+  // а не заново на каждый ререндер экрана — раньше пересчитывалось и на простое
+  // открытие «Обновить», и список из 65 SVG-плашек рендерился весь целиком.
+  const rows = useMemo<HistoryRowData[]>(() => {
+    const rates = history.map((p) => p.rate);
+    const maxRate = Math.max(...rates);
+    const minRate = Math.min(...rates);
+    return history.map((point, i) => {
+      const prev = history[i + 1];
+      const delta = prev ? point.rate - prev.rate : undefined;
+      return { date: point.date, rate: point.rate, delta, isMax: point.rate === maxRate, isMin: point.rate === minRate };
+    });
+  }, [history]);
 
   // Ширина SVG под цифры — впритык к их числу символов (эмпирически ~44px/символ
   // при fontSize 76 и letterSpacing -2), чтобы «%» рядом не гулял по экрану.
@@ -113,107 +160,86 @@ export default function KeyRateScreen() {
     }
   };
 
+  const ListHeader = (
+    <>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Ключевая ставка ЦБ</Text>
+        </View>
+        <Pressable onPress={onRefresh} hitSlop={12} style={styles.refreshBtn} disabled={loading}>
+          <View style={loading ? { opacity: 0.4 } : undefined}>
+            <RefreshIcon size={18} color={tokens.accent.base} />
+          </View>
+        </Pressable>
+      </View>
+
+      {/* Крупная ставка градиентом по центру — мягкое размытое свечение позади,
+          «%» приподнят и бледный, почти вплотную к верху цифр (как в макете). */}
+      <View style={styles.hero}>
+        <Svg width={600} height={600} style={styles.glow} pointerEvents="none">
+          <Defs>
+            <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor="#ECD0FF" stopOpacity={0.16} />
+              <Stop offset="0.2" stopColor="#ECD0FF" stopOpacity={0.13} />
+              <Stop offset="0.4" stopColor="#ECD0FF" stopOpacity={0.09} />
+              <Stop offset="0.6" stopColor="#ECD0FF" stopOpacity={0.05} />
+              <Stop offset="0.8" stopColor="#ECD0FF" stopOpacity={0.02} />
+              <Stop offset="1" stopColor="#ECD0FF" stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Circle cx="300" cy="300" r="300" fill="url(#glow)" />
+        </Svg>
+
+        <View style={styles.valueRow}>
+          <Svg width={numberW} height={84}>
+            <Defs>
+              <LinearGradient id="rateGrad" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor={tokens.accent.light} />
+                <Stop offset="1" stopColor={tokens.accent.base} />
+              </LinearGradient>
+            </Defs>
+            <SvgText
+              x="100%"
+              y="66"
+              textAnchor="end"
+              fontSize="76"
+              fontFamily={font.semibold}
+              letterSpacing="-2"
+              fill="url(#rateGrad)"
+            >
+              {rateStr}
+            </SvgText>
+          </Svg>
+          <Text style={styles.percent}>%</Text>
+        </View>
+      </View>
+
+      {/* «Динамика» — без общего белого бенто: заголовок и плашки лежат прямо
+          на фоне экрана, у каждой плашки своя полупрозрачная заливка. */}
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>Динамика</Text>
+        <Text style={styles.cardSubtitle}>{history.length} изменений с {oldestYear}</Text>
+      </View>
+    </>
+  );
+
   return (
     <ScreenBackground>
-      <ScrollView
+      <FlatList
+        data={rows}
+        keyExtractor={(row) => row.date}
+        renderItem={({ item }) => <HistoryRow row={item} />}
+        ItemSeparatorComponent={() => <View style={{ height: 4 }} />}
+        ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
         showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-              <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
-            </Pressable>
-            <Text style={styles.headerTitle}>Ключевая ставка ЦБ</Text>
-          </View>
-          <Pressable onPress={onRefresh} hitSlop={12} style={styles.refreshBtn} disabled={loading}>
-            <View style={loading ? { opacity: 0.4 } : undefined}>
-              <RefreshIcon size={18} color={tokens.accent.base} />
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Крупная ставка градиентом по центру — мягкое размытое свечение позади,
-            «%» приподнят и бледный, почти вплотную к верху цифр (как в макете). */}
-        <View style={styles.hero}>
-          <Svg width={600} height={600} style={styles.glow} pointerEvents="none">
-            <Defs>
-              <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-                <Stop offset="0" stopColor="#ECD0FF" stopOpacity={0.16} />
-                <Stop offset="0.2" stopColor="#ECD0FF" stopOpacity={0.13} />
-                <Stop offset="0.4" stopColor="#ECD0FF" stopOpacity={0.09} />
-                <Stop offset="0.6" stopColor="#ECD0FF" stopOpacity={0.05} />
-                <Stop offset="0.8" stopColor="#ECD0FF" stopOpacity={0.02} />
-                <Stop offset="1" stopColor="#ECD0FF" stopOpacity={0} />
-              </RadialGradient>
-            </Defs>
-            <Circle cx="300" cy="300" r="300" fill="url(#glow)" />
-          </Svg>
-
-          <View style={styles.valueRow}>
-            <Svg width={numberW} height={84}>
-              <Defs>
-                <LinearGradient id="rateGrad" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0" stopColor={tokens.accent.light} />
-                  <Stop offset="1" stopColor={tokens.accent.base} />
-                </LinearGradient>
-              </Defs>
-              <SvgText
-                x="100%"
-                y="66"
-                textAnchor="end"
-                fontSize="76"
-                fontFamily={font.semibold}
-                letterSpacing="-2"
-                fill="url(#rateGrad)"
-              >
-                {rateStr}
-              </SvgText>
-            </Svg>
-            <Text style={styles.percent}>%</Text>
-          </View>
-        </View>
-
-        {/* «Динамика» — без общего белого бенто: заголовок и плашки лежат прямо
-            на фоне экрана, у каждой плашки своя полупрозрачная заливка. */}
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Динамика</Text>
-          <Text style={styles.cardSubtitle}>{history.length} изменений с {oldestYear}</Text>
-        </View>
-
-        <View style={styles.list}>
-          {history.map((point, i) => {
-            const prev = history[i + 1];
-            const delta = prev ? point.rate - prev.rate : undefined;
-            const dir = delta === undefined ? 0 : Math.sign(delta);
-            const isMax = point.rate === maxRate;
-            const isMin = point.rate === minRate;
-            // Для ключевой ставки принято обратное биржевому: снижение — «хорошо» (зелёное),
-            // повышение — «плохо» (красное) — так подаёт сам ЦБ и финансовые СМИ.
-            return (
-              <View key={point.date} style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <View style={[styles.iconBox, iconTint(dir)]}>
-                    <TrendIcon dir={dir} size={22} />
-                  </View>
-                  <Text style={styles.rowDate}>{formatDateFull(point.date)}</Text>
-                </View>
-                <View style={styles.rowRight}>
-                  <View style={styles.rateRow}>
-                    <Text style={styles.rowRate}>{formatRate(point.rate)}%</Text>
-                    {isMax ? <RecordMark kind="max" /> : isMin ? <RecordMark kind="min" /> : null}
-                  </View>
-                  {delta !== undefined ? (
-                    <View style={styles.deltaPill}>
-                      <Text style={styles.deltaText}>{formatDelta(delta)}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
+        // История редко превышает пару экранов — держим окно шире дефолта,
+        // чтобы скролл не «мигал» пустыми плашками при быстрой прокрутке.
+        windowSize={7}
+      />
     </ScreenBackground>
   );
 }
@@ -267,7 +293,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: font.semibold, fontSize: 20, color: '#212121', letterSpacing: -0.2 },
   cardSubtitle: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24 },
 
-  list: { gap: 4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

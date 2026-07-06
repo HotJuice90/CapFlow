@@ -12,6 +12,7 @@ import { t } from '@/i18n';
 const ICON_BY_TYPE = {
   deposit: 'bank-outline',
   savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
   dfa: 'chart-line',
 } as const;
 
@@ -27,7 +28,7 @@ export function AssetRow({ view }: { view: AssetView }) {
       onPress={() => router.push(`/asset/${asset.id}`)}
     >
       {hasBankLogo(organization.logo) ? (
-        <OrgLogo color={organization.color} logo={organization.logo} size={44} radius={tokens.radius.sm} />
+        <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={44} radius={tokens.radius.sm} />
       ) : (
         <View style={[styles.iconBox, { backgroundColor: organization.color }]}>
           <MaterialCommunityIcons name={iconName} size={22} color="#FFFFFF" />

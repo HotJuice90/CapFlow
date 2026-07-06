@@ -39,6 +39,7 @@ const hero = {
 const category: Record<string, string> = {
   deposit: '#3E63DD', // Вклады — синий
   savings: '#1FA971', // Накопительные — зелёный
+  bond: '#C98A2C', // Облигации — золото
   dfa: '#9A6DD7', // ЦФА — фиолетовый
   cash: '#F2A900', // Наличные/валюта — янтарь (после MVP)
 };

@@ -67,6 +67,7 @@ const D = {
   tabActiveBg: '#A8B6E2',
   badgeNeg: '#C11818', badgeNegBg: 'rgba(229,139,139,0.1)',
   badgePos: '#1A8A1A', badgePosBg: 'rgba(139,229,139,0.1)',
+  badgeNeutral: '#7A828E', badgeNeutralBg: 'rgba(122,130,142,0.1)',
 };
 
 type Slots = [CurrencyCode, CurrencyCode, CurrencyCode];
@@ -371,6 +372,11 @@ export default function ConverterScreen() {
   const histLast = (histPeriod === 'day' ? dayLast : monthLast) ?? 0;
   const histDelta = histLast - histFirst;
   const histPct = histFirst > 0 ? (histDelta / histFirst) * 100 : 0;
+  // ЦБ не публикует новый курс в выходные — курс, заданный в пятницу, держится
+  // и в субботу-воскресенье-понедельник, поэтому «дневная» дельта иногда честно
+  // нулевая. Красная стрелка «вниз» в этом случае выглядит как ошибка — показываем
+  // нейтральное «без изменений» вместо направления.
+  const histFlat = histDelta === 0;
   const histRateUp = histLast > histFirst; // курс валюты вырос — стрелка ▲, вне зависимости от смысла для рубля
   const histRubbleUp = histLast < histFirst; // рубль крепнет, когда валюта дешевеет — определяет ТОЛЬКО цвет
 
@@ -487,9 +493,9 @@ export default function ConverterScreen() {
                 <MaterialIcons name="swap-horiz" size={16} color={D.updated} />
                 <Text style={s.periodToggleText}>{histPeriod === 'day' ? 'День' : 'Месяц'}</Text>
               </Pressable>
-              <View style={[s.badge, { backgroundColor: histRubbleUp ? D.badgePosBg : D.badgeNegBg }]}>
-                <Text style={[s.badgeText, { color: histRubbleUp ? D.badgePos : D.badgeNeg }]}>
-                  {histRateUp ? '▲' : '▼'} {displayAmount(Math.abs(histDelta))} {CURRENCY_SYMBOL[base]} · {Math.abs(histPct).toFixed(1).replace('.', ',')}%
+              <View style={[s.badge, { backgroundColor: histFlat ? D.badgeNeutralBg : histRubbleUp ? D.badgePosBg : D.badgeNegBg }]}>
+                <Text style={[s.badgeText, { color: histFlat ? D.badgeNeutral : histRubbleUp ? D.badgePos : D.badgeNeg }]}>
+                  {histFlat ? '–' : histRateUp ? '▲' : '▼'} {displayAmount(Math.abs(histDelta))} {CURRENCY_SYMBOL[base]} · {Math.abs(histPct).toFixed(1).replace('.', ',')}%
                 </Text>
               </View>
             </View>

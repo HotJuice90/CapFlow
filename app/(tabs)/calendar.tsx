@@ -40,6 +40,7 @@ function pluralInstruments(n: number): string {
 const TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклад',
   savings: 'Накопительный счёт',
+  bond: 'Облигация',
   dfa: 'ЦФА',
 };
 
@@ -279,7 +280,7 @@ function InstrumentRow({
     <Pressable onPress={onPress} style={({ pressed }) => [styles.rowWrap, !isLast && styles.rowDivider, pressed && { opacity: 0.6 }]}>
       <View style={styles.row}>
         {org ? (
-          <OrgLogo color={org.color} logo={org.logo} size={44} radius={16} variant="solid" />
+          <OrgLogo color={org.color} logo={org.logo} imageUri={org.customImageUri} size={44} radius={16} variant="solid" />
         ) : (
           <View style={[styles.iconFallback, { backgroundColor: c.color }]} />
         )}

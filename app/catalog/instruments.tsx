@@ -1,85 +1,244 @@
-import React from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
-import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
-import { tokens } from '@/theme';
+import { appAlert } from '@/lib/dialog';
+import { tapBuzz, warnBuzz } from '@/lib/haptics';
+import type { FinancialInstrument, InstrumentTypeId, Organization } from '@/domain/types';
+import { tokens, font, hexToRgba } from '@/theme';
+import { boxShadow } from '@/theme/shadow';
 
-function typeLabel(typeId: string): string {
-  return typeId === 'deposit' ? 'Вклад' : typeId === 'savings' ? 'Накопительный счёт' : 'ЦФА';
+type TabFilter = 'all' | InstrumentTypeId;
+
+const TABS: { id: TabFilter; label: string }[] = [
+  { id: 'all', label: 'Все' },
+  { id: 'deposit', label: 'Вклад' },
+  { id: 'savings', label: 'НС' },
+  { id: 'bond', label: 'Облигации' },
+  { id: 'dfa', label: 'ЦФА' },
+];
+
+export const TYPE_ICON: Record<InstrumentTypeId, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
+  dfa: 'chart-line',
+};
+
+export const PAYOUT_LABEL: Record<string, string> = {
+  daily: 'Ежедневно',
+  monthly: 'Ежемесячно',
+  quarterly: 'Ежеквартально',
+  semiannual: 'Раз в полгода',
+  annual: 'Ежегодно',
+  end: 'В конце срока',
+};
+
+/** Комментарий пользователя — в приоритете. Иначе автоописание: у облигации/ЦФА
+ *  «Простой %» показывать незачем — там это всегда так, не выбор, не информация. */
+function instrumentSubtitle(it: FinancialInstrument): string | undefined {
+  if (it.comment?.trim()) return it.comment.trim();
+  const showCapitalization = it.typeId === 'deposit' || it.typeId === 'savings';
+  const cap = showCapitalization ? (it.capitalization === 'capitalize' ? 'Капитализация' : 'Простой %') : null;
+  const payout = it.payoutPeriod ? PAYOUT_LABEL[it.payoutPeriod] : null;
+  if (cap && payout) return `${cap} · ${payout}`;
+  return cap ?? payout ?? undefined;
+}
+
+const EMPTY_HINT: Record<InstrumentTypeId, string> = {
+  deposit: 'Добавьте шаблон вклада — банк, ставка по умолчанию, период выплаты.',
+  savings: 'Добавьте накопительный счёт — обычно с ежедневной капитализацией. Сюда же годятся фонды денежного рынка (LQDT и аналоги).',
+  bond: 'Добавьте облигацию с фиксированным купоном — ОФЗ или корпоративную.',
+  dfa: 'Добавьте цифровой финансовый актив.',
+};
+
+interface OrgGroup {
+  org: Organization;
+  items: FinancialInstrument[];
 }
 
 export default function InstrumentsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data } = useData();
+  const { data, deleteInstrument } = useData();
+  const [activeTab, setActiveTab] = useState<TabFilter>('all');
 
-  const orgs = data.organizations.filter((o) => !o.archived);
+  const groups = useMemo<OrgGroup[]>(() => {
+    const orgById = new Map(data.organizations.map((o) => [o.id, o]));
+    const map = new Map<string, OrgGroup>();
+    for (const it of data.instruments) {
+      if (activeTab !== 'all' && it.typeId !== activeTab) continue;
+      const org = orgById.get(it.organizationId);
+      if (!org) continue;
+      const g = map.get(org.id) ?? { org, items: [] };
+      g.items.push(it);
+      map.set(org.id, g);
+    }
+    return [...map.values()].sort((a, b) => a.org.name.localeCompare(b.org.name));
+  }, [data.organizations, data.instruments, activeTab]);
+
+  const handleDelete = (it: FinancialInstrument) => {
+    const count = data.assets.filter((a) => a.instrumentId === it.id).length;
+    if (count > 0) {
+      appAlert('Нельзя удалить', `На «${it.name}» открыто ${count} актив(ов). Сначала закройте или перенесите их.`);
+      return;
+    }
+    appAlert('Удалить инструмент?', 'Действие необратимо.', [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Удалить', style: 'destructive', onPress: () => void deleteInstrument(it.id) },
+    ]);
+  };
 
   return (
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + tokens.spacing.sm,
+          paddingTop: 80,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + tokens.spacing.xxl,
         }}
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
-          </Pressable>
-          <Text style={styles.title}>Инструменты</Text>
-          <Pressable onPress={() => router.push('/catalog/instrument')} hitSlop={12}>
-            <MaterialIcons name="add" size={26} color={tokens.accent.base} />
+          <View style={styles.headerLeft}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+              <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Инструменты</Text>
+          </View>
+          <Pressable
+            onPress={() => router.push({
+              pathname: '/catalog/instrument',
+              params: activeTab === 'all' ? {} : { type: activeTab },
+            })}
+            hitSlop={12}
+            style={styles.addBtn}
+          >
+            <MaterialIcons name="add" size={22} color={tokens.accent.base} />
           </Pressable>
         </View>
 
-        {data.instruments.length === 0 ? (
-          <Card style={styles.empty}>
-            <MaterialIcons name="savings" size={36} color={tokens.accent.base} />
-            <Text style={styles.emptyTitle}>Нет инструментов</Text>
-            <Text style={styles.emptyHint}>Добавьте шаблон продукта — вклад, накопительный счёт.</Text>
-          </Card>
+        <View style={styles.tabWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
+            {TABS.map((tab) => {
+              const active = tab.id === activeTab;
+              return (
+                <Pressable
+                  key={tab.id}
+                  style={[styles.tabChip, active && styles.tabChipActive]}
+                  onPress={() => setActiveTab(tab.id)}
+                >
+                  <MaterialCommunityIcons
+                    name={tab.id === 'all' ? 'view-grid-outline' : TYPE_ICON[tab.id]}
+                    size={16}
+                    color={active ? '#FFFFFF' : tab.id === 'all' ? tokens.accent.base : tokens.category[tab.id]}
+                  />
+                  <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {groups.length === 0 ? (
+          <View style={styles.empty}>
+            <MaterialIcons name="layers" size={32} color={tokens.text.tertiary} />
+            <Text style={styles.emptyTitle}>{activeTab === 'all' ? 'Нет инструментов' : 'Нет инструментов этого типа'}</Text>
+            <Text style={styles.emptyHint}>
+              {activeTab === 'all' ? 'Добавьте первый шаблон кнопкой «+» сверху.' : EMPTY_HINT[activeTab]}
+            </Text>
+          </View>
         ) : (
-          orgs.map((o) => {
-            const items = data.instruments.filter((i) => i.organizationId === o.id);
-            if (items.length === 0) return null;
-            return (
-              <View key={o.id} style={{ marginBottom: tokens.spacing.lg }}>
-                <View style={styles.groupHeader}>
-                  <OrgLogo color={o.color} logo={o.logo} size={20} radius={6} />
-                  <Text style={styles.groupName}>{o.name}</Text>
+          groups.map((g) => (
+            <View key={g.org.id} style={styles.group}>
+              <View style={styles.groupHeader}>
+                <View style={styles.groupLeft}>
+                  <OrgLogo color={g.org.color} logo={g.org.logo} imageUri={g.org.customImageUri} size={24} variant="bare" />
+                  <Text style={styles.groupName}>{g.org.name}</Text>
                 </View>
-                <Card padded={false}>
-                  <View style={{ paddingHorizontal: tokens.spacing.lg }}>
-                    {items.map((it, i) => (
-                      <View key={it.id}>
-                        {i > 0 && <View style={styles.divider} />}
-                        <Pressable
-                          style={styles.row}
-                          onPress={() => router.push(`/catalog/instrument?id=${it.id}`)}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.name}>{it.name}</Text>
-                            <Text style={styles.sub}>{typeLabel(it.typeId)}</Text>
-                          </View>
-                          <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                </Card>
+                <Text style={styles.groupCount}>{g.items.length} инстр.</Text>
               </View>
-            );
-          })
+              <View style={styles.list}>
+                {g.items.map((it) => (
+                  <InstrumentRow
+                    key={it.id}
+                    instrument={it}
+                    onOpen={() => router.push(`/catalog/instrument-detail?id=${it.id}`)}
+                    onEdit={() => router.push(`/catalog/instrument?id=${it.id}`)}
+                    onDelete={() => handleDelete(it)}
+                  />
+                ))}
+              </View>
+            </View>
+          ))
         )}
       </ScrollView>
     </ScreenBackground>
+  );
+}
+
+function InstrumentRow({
+  instrument,
+  onOpen,
+  onEdit,
+  onDelete,
+}: {
+  instrument: FinancialInstrument;
+  onOpen: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const swipeRef = useRef<Swipeable>(null);
+  const subtitle = instrumentSubtitle(instrument);
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      overshootLeft={false}
+      overshootRight={false}
+      friction={1.7}
+      leftThreshold={72}
+      rightThreshold={72}
+      // Довели свайп до конца — действие сразу: вправо — редактировать, влево — удалить.
+      onSwipeableWillOpen={(direction) => {
+        swipeRef.current?.close();
+        if (direction === 'left') { tapBuzz(); onEdit(); }
+        else { warnBuzz(); onDelete(); }
+      }}
+      renderLeftActions={() => (
+        <View style={styles.swipeHint}>
+          <View style={[styles.swipeHintBox, { backgroundColor: hexToRgba(tokens.accent.base, 0.14) }]}>
+            <MaterialCommunityIcons name="pencil-outline" size={20} color={tokens.accent.base} />
+          </View>
+        </View>
+      )}
+      renderRightActions={() => (
+        <View style={styles.swipeHint}>
+          <View style={[styles.swipeHintBox, { backgroundColor: hexToRgba(tokens.semantic.negative, 0.14) }]}>
+            <MaterialCommunityIcons name="trash-can-outline" size={20} color={tokens.semantic.negative} />
+          </View>
+        </View>
+      )}
+    >
+      <Pressable style={styles.row} onPress={onOpen}>
+        <View style={[styles.typeIcon, { backgroundColor: hexToRgba(tokens.category[instrument.typeId] ?? tokens.accent.base, 0.06) }]}>
+          <MaterialCommunityIcons
+            name={TYPE_ICON[instrument.typeId]}
+            size={22}
+            color={tokens.category[instrument.typeId] ?? tokens.accent.base}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowName} numberOfLines={1}>{instrument.name}</Text>
+          {subtitle ? <Text style={styles.rowSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
+        </View>
+      </Pressable>
+    </Swipeable>
   );
 }
 
@@ -88,17 +247,70 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: tokens.spacing.lg,
+    marginBottom: tokens.spacing.xl,
   },
-  title: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary },
-  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.sm },
-  dot: { width: 16, height: 16, borderRadius: 5 },
-  groupName: { fontSize: tokens.typography.label, fontWeight: '600', color: tokens.text.secondary },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: tokens.spacing.md },
-  name: { fontSize: tokens.typography.body, fontWeight: '500', color: tokens.text.primary },
-  sub: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 2 },
-  divider: { height: 1, backgroundColor: tokens.surface.hairline },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
+  backBtn: { width: 24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  addBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Скролл бleedит до настоящего края экрана (минус горизонтальный паддинг
+  // страницы компенсирован тут же), а не обрывается по внутреннему отступу.
+  tabWrap: { marginHorizontal: -tokens.spacing.screenH, marginBottom: tokens.spacing.xl },
+  tabBar: { flexDirection: 'row', gap: 8, paddingHorizontal: tokens.spacing.screenH },
+  tabChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(215,226,235,0.5)',
+  },
+  tabChipActive: { backgroundColor: tokens.accent.light },
+  tabChipText: { fontFamily: font.medium, fontSize: 14, color: 'rgba(33,33,33,0.6)' },
+  tabChipTextActive: { fontFamily: font.semibold, color: '#FFFFFF' },
+
+  group: { marginBottom: 28 },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 10,
+  },
+  groupLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  groupName: { fontFamily: font.semibold, fontSize: 15, color: '#212121' },
+  groupCount: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.35)' },
+
+  list: { gap: 4 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    height: 69,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    backgroundColor: tokens.surface.white,
+    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+  },
+  typeIcon: { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  rowName: { fontFamily: font.medium, fontSize: 16, color: '#212121' },
+  rowSubtitle: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.4)', marginTop: 2 },
+
+  swipeHint: { width: 88, alignItems: 'center', justifyContent: 'center' },
+  swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl, gap: tokens.spacing.sm },
-  emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary },
-  emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center' },
+  emptyTitle: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  emptyHint: { fontFamily: font.regular, fontSize: 13, color: tokens.text.secondary, textAlign: 'center', paddingHorizontal: tokens.spacing.xl },
 });

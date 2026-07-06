@@ -11,8 +11,9 @@ export type CurrencyCode =
 export type InstrumentBehavior = 'term' | 'perpetual'; // Срочный | Бессрочный
 // после MVP: 'market' (Рыночный) | 'cash' (Денежный)
 
-/** Тип инструмента (пользовательский уровень). */
-export type InstrumentTypeId = 'deposit' | 'savings' | 'dfa'; // Вклад | Накопительный | ЦФА(после MVP)
+/** Тип инструмента (пользовательский уровень). Только прогнозируемая доходность —
+ *  см. «Философия» в CLAUDE.md: фикс./почти фикс. ставка, никакого рыночного дохода. */
+export type InstrumentTypeId = 'deposit' | 'savings' | 'bond' | 'dfa'; // Вклад | Накопительный | Облигация | ЦФА
 
 /** Период выплаты/начисления процентов. */
 export type PayoutPeriod =
@@ -26,6 +27,9 @@ export type PayoutPeriod =
 /** Обработка начисленных процентов (решение #3). По умолчанию — простой процент. */
 export type CapitalizationMode = 'none' | 'capitalize';
 
+/** Типы организаций — единый список для формы создания и табов каталога. */
+export const ORG_TYPES = ['Банк', 'Агрегатор', 'Платформа ЦФА', 'Брокер', 'Другое'] as const;
+
 export interface Organization {
   id: string;
   name: string;
@@ -33,8 +37,10 @@ export interface Organization {
   type: string;
   /** фирменный цвет бренда (hex) — используется ВЕЗДЕ одинаково для этой сущности */
   color: string;
-  /** ключ/идентификатор лого (опц.) */
+  /** ключ/идентификатор лого из каталога банков (опц.) */
   logo?: string;
+  /** локальный путь к загруженной пользователем картинке лого — приоритетнее logo/color */
+  customImageUri?: string;
   archived?: boolean;
   isDemo?: boolean;
 }
@@ -51,6 +57,8 @@ export interface FinancialInstrument {
   payoutPeriod?: PayoutPeriod;
   comment?: string;
   isDemo?: boolean;
+  /** когда шаблон добавлен в каталог (ISO), не дата открытия конкретного вклада */
+  createdAt?: string;
 }
 
 export type AssetStatus = 'active' | 'closed' | 'archived';

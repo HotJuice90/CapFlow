@@ -72,7 +72,7 @@ export default function SettingsScreen() {
         <ScreenTitle>{t.settings.title}</ScreenTitle>
 
         <Group title="Данные">
-          <SettingsRow icon="account-balance" color="#9A6DD7" label="Организации" onPress={() => router.push('/catalog/organizations')} />
+          <SettingsRow icon="account-balance" color="#9A6DD7" label="Площадки" onPress={() => router.push('/catalog/organizations')} />
           <Divider />
           <SettingsRow icon="layers" color="#21A038" label="Фин. инструменты" onPress={() => router.push('/catalog/instruments')} />
           <Divider />
@@ -122,7 +122,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
     <>
       <Text style={styles.group}>{title}</Text>
       <Card padded={false} style={{ marginBottom: tokens.spacing.lg }}>
-        <View style={{ paddingHorizontal: tokens.spacing.lg }}>{children}</View>
+        <View style={{ paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.xs }}>{children}</View>
       </Card>
     </>
   );

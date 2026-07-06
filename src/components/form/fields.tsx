@@ -140,8 +140,11 @@ export interface Option {
   value: string;
   color?: string;
   logo?: string;
+  imageUri?: string;
   icon?: string;
+  iconColor?: string;
   subtitle?: string;
+  filterValue?: string;
 }
 
 export function SelectField({
@@ -154,6 +157,8 @@ export function SelectField({
   onCreateNew,
   createLabel = 'Создать новую',
   disabled,
+  searchable,
+  filters,
 }: {
   label: string;
   value: string | undefined;
@@ -164,6 +169,8 @@ export function SelectField({
   onCreateNew?: () => void;
   createLabel?: string;
   disabled?: boolean;
+  searchable?: boolean;
+  filters?: { label: string; icon: string; color: string }[];
 }) {
   const selected = options.find((o) => o.value === value);
 
@@ -176,6 +183,8 @@ export function SelectField({
       onPick: onChange,
       onCreateNew,
       createLabel,
+      searchable,
+      filters,
     });
   };
 
@@ -186,7 +195,7 @@ export function SelectField({
         onPress={open}
       >
         {selected?.color ? (
-          <OrgLogo color={selected.color} logo={selected.logo} size={24} radius={8} />
+          <OrgLogo color={selected.color} logo={selected.logo} imageUri={selected.imageUri} size={24} radius={8} />
         ) : null}
         <Text style={[styles.selectText, !selected && styles.placeholder]} numberOfLines={1}>
           {selected ? selected.label : placeholder}
@@ -286,6 +295,11 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.spacing.md,
     fontSize: tokens.typography.body,
     color: tokens.text.primary,
+    // Android + кастомный шрифт (Onest) добавляет паддинг над глифами
+    // (includeFontPadding), из-за чего текст в однострочном поле уезжает
+    // выше визуального центра — отключаем его и центрируем явно.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   inputRow: { flexDirection: 'row', alignItems: 'center' },
   inputFlex: { flex: 1 },

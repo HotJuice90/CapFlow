@@ -172,8 +172,8 @@ export default function AnalyticsScreen() {
               </View>
             </Card>
 
-            {/* По организациям — бары */}
-            <Text style={styles.section}>По организациям</Text>
+            {/* По площадкам — бары */}
+            <Text style={styles.section}>По площадкам</Text>
             <Card>
               {byOrg.groups.map((g, i) => (
                 <View key={g.key} style={i > 0 ? styles.orgGap : undefined}>

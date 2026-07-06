@@ -57,7 +57,7 @@ export default function SearchScreen() {
             style={styles.input}
             value={q}
             onChangeText={setQ}
-            placeholder="Активы, организации, инструменты"
+            placeholder="Активы, площадки, инструменты"
             placeholderTextColor={tokens.text.tertiary}
             autoFocus
             returnKeyType="search"
@@ -79,7 +79,7 @@ export default function SearchScreen() {
                     <View key={a.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/asset/${a.id}`)}>
-                        <OrgLogo color={org?.color ?? tokens.accent.base} logo={org?.logo} size={32} />
+                        <OrgLogo color={org?.color ?? tokens.accent.base} logo={org?.logo} imageUri={org?.customImageUri} size={32} />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.rowTitle} numberOfLines={1}>{instr?.name ?? 'Актив'}</Text>
                           <Text style={styles.rowSub} numberOfLines={1}>{a.title ?? org?.name ?? ''}</Text>
@@ -95,14 +95,14 @@ export default function SearchScreen() {
 
           {orgs.length > 0 ? (
             <>
-              <Text style={styles.group}>Организации</Text>
+              <Text style={styles.group}>Площадки</Text>
               <Card padded={false}>
                 <View style={styles.list}>
                   {orgs.map((o, i) => (
                     <View key={o.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/catalog/organization?id=${o.id}`)}>
-                        <OrgLogo color={o.color} logo={o.logo} size={32} />
+                        <OrgLogo color={o.color} logo={o.logo} imageUri={o.customImageUri} size={32} />
                         <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>{o.name}</Text>
                         <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
                       </Pressable>
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: tokens.spacing.sm,
     backgroundColor: tokens.surface.white,
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.pill,
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
     marginBottom: tokens.spacing.lg,

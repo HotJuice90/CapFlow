@@ -120,7 +120,7 @@ export default function AssetScreen() {
 
         {/* Название с иконкой банка */}
         <View style={styles.titleRow}>
-          <OrgLogo color={organization.color} logo={organization.logo} size={44} radius={16} variant="solid" />
+          <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={44} radius={16} variant="solid" />
           <View style={{ flex: 1 }}>
             <Text style={styles.name} numberOfLines={1}>{instrument.name}</Text>
             <Text style={styles.subtitle} numberOfLines={1}>
@@ -265,7 +265,7 @@ export default function AssetScreen() {
           <Pressable onPress={() => Linking.openURL(bankUrl).catch(() => {})} style={({ pressed }) => pressed && { opacity: 0.7 }}>
             <Card style={styles.bankCard}>
               <View style={styles.bankRow}>
-                <OrgLogo color={organization.color} logo={organization.logo} size={36} radius={12} />
+                <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={36} radius={12} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.bankName} numberOfLines={1}>{organization.name}</Text>
                   <Text style={styles.bankHint} numberOfLines={1}>Приложение банка</Text>
