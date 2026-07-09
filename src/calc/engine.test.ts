@@ -190,3 +190,132 @@ describe('корректировки баланса (пополнения/сня
     expect(d.forecastNextYear).not.toBeCloseTo(naive * 0.12, 2);
   });
 });
+
+describe('currentValue — честная «стоимость сейчас» без двойного счёта', () => {
+  const base: Asset = {
+    id: 'a7',
+    instrumentId: 'i2',
+    amount: 1_000_000,
+    currency: 'RUB',
+    rate: 12,
+    openDate: '2026-01-01',
+    status: 'active',
+  };
+
+  test('простой %: стоимость = тело + начисленное (проценты лежат рядом с телом)', () => {
+    const d = calculate(base, savingsInstrument, params, '2026-07-01');
+    expect(d.currentValue).toBeCloseTo(d.balanceNow + d.accrued, 6);
+    expect(d.balanceNow).toBe(1_000_000); // тело при простом % не растёт само
+  });
+
+  test('капитализация: стоимость = тело (начисленное уже в нём, не считаем дважды)', () => {
+    const capitalizing: Asset = { ...base, capitalization: 'capitalize', payoutPeriod: 'daily' };
+    const d = calculate(capitalizing, savingsInstrument, params, '2026-07-01');
+    expect(d.currentValue).toBeCloseTo(d.balanceNow, 6);
+    expect(d.balanceNow).toBeGreaterThan(1_000_000);
+  });
+});
+
+describe('исправление баланса под факт банка (isCorrection)', () => {
+  // Кейс МТС: модель за 90 дней насчитала бы сильно больше, чем банк реально
+  // начислил (ставка/капитализация в модели разошлись с реальностью) — юзер
+  // ставит isCorrection, и «заработано» должно взять факт, а не формулу.
+  const asset: Asset = {
+    id: 'a6',
+    instrumentId: 'i2',
+    amount: 3_000_000,
+    currency: 'RUB',
+    rate: 15,
+    openDate: '2026-01-01',
+    capitalization: 'capitalize',
+    payoutPeriod: 'daily',
+    status: 'active',
+    balanceAdjustments: [{ id: 'b1', date: '2026-04-01', amount: 3_008_322, isCorrection: true }],
+  };
+
+  test('заработано за отрезок до исправления = факт (новое тело − старое), а не модельная формула', () => {
+    const d = calculate(asset, savingsInstrument, params, '2026-04-01');
+    expect(d.earnedSoFar).toBeCloseTo(8_322, 2);
+    // Контроль: по модели (капитализация 15% за 90 дней) вышло бы в разы больше.
+    const modelGrowth = 3_000_000 * (Math.pow(1 + 0.15 / 365, 90) - 1);
+    expect(d.earnedSoFar).not.toBeCloseTo(modelGrowth, 0);
+  });
+
+  test('тело после исправления = ровно исправленная сумма, дальше растёт от нее', () => {
+    const d = calculate(asset, savingsInstrument, params, '2026-04-02');
+    const oneDayGrowth = 3_008_322 * (Math.pow(1 + 0.15 / 365, 1) - 1);
+    expect(d.balanceNow).toBeCloseTo(3_008_322 + oneDayGrowth, 2);
+    expect(d.earnedSoFar).toBeCloseTo(8_322 + oneDayGrowth, 2);
+  });
+
+  test('без флага isCorrection та же цифра трактуется как реальное пополнение — доход считается по формуле (регрессия)', () => {
+    const notCorrection: Asset = {
+      ...asset,
+      balanceAdjustments: [{ id: 'b1', date: '2026-04-01', amount: 3_008_322 }],
+    };
+    const d = calculate(notCorrection, savingsInstrument, params, '2026-04-01');
+    const modelGrowth = 3_000_000 * (Math.pow(1 + 0.15 / 365, 90) - 1);
+    expect(d.earnedSoFar).toBeCloseTo(modelGrowth, 2);
+  });
+});
+
+describe('изменения ставки (rateAdjustments)', () => {
+  const asset: Asset = {
+    id: 'a5',
+    instrumentId: 'i2',
+    amount: 500_000,
+    currency: 'RUB',
+    rate: 12,
+    openDate: '2026-01-01',
+    status: 'active',
+    rateAdjustments: [{ id: 'r1', date: '2026-04-01', rate: 15 }],
+  };
+
+  test('простой процент: заработанное считается по сегментам, каждый — по своей ставке', () => {
+    const d = calculate(asset, savingsInstrument, params, '2026-07-01');
+    const seg1Days = diffDays('2026-01-01', '2026-04-01'); // 90
+    const seg2Days = diffDays('2026-04-01', '2026-07-01'); // 91
+    const expected = 500_000 * 0.12 * (seg1Days / 365) + 500_000 * 0.15 * (seg2Days / 365);
+    expect(d.earnedSoFar).toBeCloseTo(expected, 2);
+  });
+
+  test('до даты смены ставки — считается по старой (без «эха» из будущего)', () => {
+    const before = calculate(asset, savingsInstrument, params, '2026-02-01');
+    expect(before.earnedSoFar).toBeCloseTo(500_000 * 0.12 * (diffDays('2026-01-01', '2026-02-01') / 365), 2);
+    expect(before.currentRate).toBe(12);
+  });
+
+  test('прогноз вперёд считается по НОВОЙ (актуальной) ставке', () => {
+    const d = calculate(asset, savingsInstrument, params, '2026-07-01');
+    expect(d.currentRate).toBe(15);
+    expect(d.forecastNextYear).toBeCloseTo(500_000 * 0.15, 2);
+    expect(d.premiumToKeyRate).toBeCloseTo(15 - 16, 6);
+  });
+
+  test('капитализация продолжает расти через смену ставки, не сбрасывается', () => {
+    const capitalizing: Asset = { ...asset, capitalization: 'capitalize', payoutPeriod: 'daily' };
+    const d = calculate(capitalizing, savingsInstrument, params, '2026-07-01');
+    const seg1Days = diffDays('2026-01-01', '2026-04-01');
+    const afterSeg1 = 500_000 * Math.pow(1 + 0.12 / 365, seg1Days);
+    const seg2Days = diffDays('2026-04-01', '2026-07-01');
+    const expectedBalance = afterSeg1 * Math.pow(1 + 0.15 / 365, seg2Days);
+    expect(d.balanceNow).toBeCloseTo(expectedBalance, 2);
+    expect(d.forecastNextYear).toBeCloseTo(expectedBalance * 0.15, 2);
+  });
+
+  test('баланс и ставка меняются в разные даты — сегменты режутся по обеим границам сразу', () => {
+    const both: Asset = {
+      ...asset,
+      balanceAdjustments: [{ id: 'b1', date: '2026-05-01', amount: 900_000 }],
+    };
+    const d = calculate(both, savingsInstrument, params, '2026-07-01');
+    const seg1Days = diffDays('2026-01-01', '2026-04-01'); // ставка 12, баланс 500k
+    const seg2Days = diffDays('2026-04-01', '2026-05-01'); // ставка сменилась на 15, баланс ещё 500k
+    const seg3Days = diffDays('2026-05-01', '2026-07-01'); // ставка 15, баланс уже 900k
+    const expected =
+      500_000 * 0.12 * (seg1Days / 365) +
+      500_000 * 0.15 * (seg2Days / 365) +
+      900_000 * 0.15 * (seg3Days / 365);
+    expect(d.earnedSoFar).toBeCloseTo(expected, 2);
+  });
+});

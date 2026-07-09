@@ -7,7 +7,8 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
-import { tokens } from '@/theme';
+import { tokens, font } from '@/theme';
+import { boxShadow } from '@/theme/shadow';
 
 function norm(s: string): string {
   return s.toLowerCase().trim();
@@ -50,7 +51,7 @@ export default function SearchScreen() {
 
   return (
     <ScreenBackground>
-      <View style={{ paddingTop: insets.top + tokens.spacing.sm, paddingHorizontal: tokens.spacing.screenH, flex: 1 }}>
+      <View style={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, flex: 1 }}>
         <View style={styles.searchBar}>
           <MaterialIcons name="search" size={22} color={tokens.text.tertiary} />
           <TextInput
@@ -143,13 +144,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: tokens.spacing.sm,
-    backgroundColor: tokens.surface.white,
+    paddingHorizontal: 16,
+    height: 48,
     borderRadius: tokens.radius.pill,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    backgroundColor: 'rgba(249,250,255,0.55)',
     marginBottom: tokens.spacing.lg,
+    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
   },
-  input: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary, padding: 0 },
+  input: { flex: 1, fontFamily: font.regular, fontSize: 15, color: '#212121', padding: 0 },
   cancel: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   empty: { textAlign: 'center', color: tokens.text.tertiary, marginTop: tokens.spacing.xxl },
   group: { fontSize: tokens.typography.label, fontWeight: '600', color: tokens.text.secondary, marginBottom: tokens.spacing.sm, marginTop: tokens.spacing.md },

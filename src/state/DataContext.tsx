@@ -13,6 +13,7 @@ import type {
   FinancialInstrument,
   Organization,
   Snapshot,
+  TaxYearRecord,
 } from '@/domain/types';
 import { repository } from '@/storage/repository';
 import { type AppData, type RateSnapshot, emptyAppData } from '@/storage/types';
@@ -22,6 +23,7 @@ import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
 import { fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
 import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import { calculate, ENGINE_VERSION } from '@/calc';
+import { computeTaxYearRecord } from './selectors';
 import { uid } from '@/utils/id';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
@@ -97,6 +99,26 @@ function withDemo(base: AppData): AppData {
   };
 }
 
+/**
+ * Дозаполняет taxYearRecords за уже ЗАКОНЧИВШИЕСЯ годы, которых там ещё нет
+ * (текущий год никогда не трогаем — он фиксируется только на следующий год).
+ * Чистая функция: если добавлять нечего — возвращает ТОТ ЖЕ объект (по ссылке),
+ * это используется как признак «ничего не изменилось» и в reload(), и в эффекте.
+ */
+function ensureTaxYearRecords(data: AppData): AppData {
+  const currentYear = new Date().getFullYear();
+  const realAssets = data.assets.filter((a) => !a.isDemo);
+  if (realAssets.length === 0) return data;
+  const existingYears = new Set(data.taxYearRecords.map((r) => r.year));
+  const earliestYear = Math.min(...realAssets.map((a) => parseInt(a.openDate.slice(0, 4), 10)));
+  const newRecords: TaxYearRecord[] = [];
+  for (let y = earliestYear; y < currentYear; y++) {
+    if (!existingYears.has(y)) newRecords.push(computeTaxYearRecord(data, y));
+  }
+  if (newRecords.length === 0) return data;
+  return { ...data, taxYearRecords: [...data.taxYearRecords, ...newRecords] };
+}
+
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<AppData>(emptyAppData());
   const [loading, setLoading] = useState(true);
@@ -118,6 +140,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { orgs: linkedOrgs, changed: logosChanged } = linkBankLogos(loaded.organizations);
     if (logosChanged) {
       loaded = { ...loaded, organizations: linkedOrgs };
+      await repository.save(loaded);
+    }
+    // фиксируем налоговую статистику за уже законченные годы, если её ещё нет
+    const withTaxYears = ensureTaxYearRecords(loaded);
+    if (withTaxYears !== loaded) {
+      loaded = withTaxYears;
       await repository.save(loaded);
     }
     setData(loaded);
@@ -150,6 +178,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Догоняем годовую налоговую статистику реактивно (не только при полном
+  // перезапуске приложения) — иначе актив, добавленный задним числом в уже
+  // запущенном приложении, «повиснет» без записи до следующего рестарта.
+  useEffect(() => {
+    if (loading) return;
+    const next = ensureTaxYearRecords(data);
+    if (next !== data) void persist(next);
+  }, [data, loading, persist]);
 
   // --- Активы ---
   const addAsset = useCallback(

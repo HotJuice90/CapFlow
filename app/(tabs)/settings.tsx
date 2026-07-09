@@ -27,7 +27,7 @@ const CUR_NAME: Record<CurrencyCode, string> = {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data, updateSettings, replaceAll } = useData();
+  const { data, updateSettings, replaceAll, hasDemo, deleteDemoData, reseedDemo } = useData();
   const version = Constants.expoConfig?.version ?? '—';
 
   const openCurrency = () => {
@@ -41,6 +41,14 @@ export default function SettingsScreen() {
     } catch {
       appAlert('Ошибка', 'Не удалось экспортировать данные.');
     }
+  };
+
+  const onToggleDemo = (v: boolean) => {
+    if (v) { void reseedDemo(); return; }
+    appAlert(t.settings.deleteDemo, t.settings.deleteDemoHint, [
+      { text: t.common.cancel, style: 'cancel' },
+      { text: t.common.delete, style: 'destructive', onPress: () => void deleteDemoData() },
+    ]);
   };
 
   const doImport = () => {
@@ -77,8 +85,7 @@ export default function SettingsScreen() {
           <SettingsRow icon="layers" color="#21A038" label="Фин. инструменты" onPress={() => router.push('/catalog/instruments')} />
           <Divider />
           <SettingsRow icon="archive" color="#62709C" label="Архив активов" onPress={() => router.push('/archive')} />
-          <Divider />
-          <SettingsRow icon="notifications-none" color="#7C4DD6" label="Уведомления" onPress={() => router.push('/settings/notifications')} />
+          {/* Уведомления — временно скрыты, экран не готов. Не удалять роут/строку, просто не рендерим. */}
         </Group>
 
         <Group title="Расчёты">
@@ -96,17 +103,23 @@ export default function SettingsScreen() {
           <Divider />
           <SettingsRow icon="file-upload" color="#3E63DD" label="Импорт данных" chevron={false} onPress={doImport} />
           <Divider />
-          <SettingsRow icon="science" color="#F2A900" label="Тестовые данные" onPress={() => router.push('/settings/demo')} />
+          <SettingsRow
+            icon="science"
+            color="#F2A900"
+            label="Тестовые данные"
+            toggle={{ value: hasDemo, onChange: onToggleDemo }}
+          />
           <Divider />
           <SettingsRow
             icon="dark-mode"
             color="#2C3654"
             label="Тёмный навбар"
-            value={data.settings.navBar === 'dark' ? 'Вкл' : 'Выкл'}
-            onPress={() => updateSettings({ navBar: data.settings.navBar === 'dark' ? 'light' : 'dark' })}
+            toggle={{
+              value: data.settings.navBar === 'dark',
+              onChange: (v) => updateSettings({ navBar: v ? 'dark' : 'light' }),
+            }}
           />
-          <Divider />
-          <SettingsRow icon="palette" color="#62709C" label="Тема" value="Светлая" chevron={false} />
+          {/* Тема — временно скрыта, готова только светлая. Не удалять, просто не рендерим. */}
         </Group>
 
         <Group title="Справка">

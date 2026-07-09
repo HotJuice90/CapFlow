@@ -5,6 +5,7 @@ import type {
   FinancialInstrument,
   Organization,
   Snapshot,
+  TaxYearRecord,
 } from '@/domain/types';
 import type { KopecksMode } from '@/format/money';
 import { KEY_RATE_HISTORY, type KeyRatePoint } from '@/domain/keyRateHistory';
@@ -40,6 +41,9 @@ export interface AppData {
   keyRateHistory: KeyRatePoint[];
   /** демо уже посеяно (чтобы не сеять повторно после удаления) */
   seededDemo: boolean;
+  /** зафиксированная налоговая статистика по прошлым годам (решение — фиксируем
+   *  год только когда он уже закончился, задним числом не пересчитываем) */
+  taxYearRecords: TaxYearRecord[];
 }
 
 export interface RateSnapshot {
@@ -92,5 +96,6 @@ export function emptyAppData(): AppData {
     ratesHistory: [],
     keyRateHistory: [...KEY_RATE_HISTORY],
     seededDemo: false,
+    taxYearRecords: [],
   };
 }

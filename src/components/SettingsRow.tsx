@@ -1,9 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Toggle } from '@/components/Toggle';
 import { tokens } from '@/theme';
 
-/** Строка списка настроек: цветная иконка + название + значение + шеврон. */
+/** Строка списка настроек: цветная иконка + название + значение/свитч + шеврон. */
 export function SettingsRow({
   icon,
   color = tokens.accent.base,
@@ -12,6 +13,7 @@ export function SettingsRow({
   onPress,
   chevron = true,
   danger,
+  toggle,
 }: {
   icon: keyof typeof MaterialIcons.glyphMap;
   color?: string;
@@ -20,16 +22,25 @@ export function SettingsRow({
   onPress?: () => void;
   chevron?: boolean;
   danger?: boolean;
+  /** Строка-свитч вместо значения+шеврона — тап по всей строке тоже переключает. */
+  toggle?: { value: boolean; onChange: (v: boolean) => void };
 }) {
   const tint = danger ? tokens.semantic.negative : color;
+  const rowOnPress = toggle ? () => toggle.onChange(!toggle.value) : onPress;
   return (
-    <Pressable style={({ pressed }) => [styles.row, pressed && onPress && styles.pressed]} onPress={onPress} disabled={!onPress}>
+    <Pressable style={({ pressed }) => [styles.row, pressed && rowOnPress && styles.pressed]} onPress={rowOnPress} disabled={!rowOnPress}>
       <View style={[styles.iconBox, { backgroundColor: `${tint}1A` }]}>
         <MaterialIcons name={icon} size={20} color={tint} />
       </View>
       <Text style={[styles.label, danger && { color: tokens.semantic.negative }]} numberOfLines={1}>{label}</Text>
-      {value ? <Text style={styles.value} numberOfLines={1}>{value}</Text> : null}
-      {chevron && onPress ? <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} style={styles.chev} /> : null}
+      {toggle ? (
+        <Toggle value={toggle.value} onChange={toggle.onChange} />
+      ) : (
+        <>
+          {value ? <Text style={styles.value} numberOfLines={1}>{value}</Text> : null}
+          {chevron && onPress ? <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} style={styles.chev} /> : null}
+        </>
+      )}
     </Pressable>
   );
 }

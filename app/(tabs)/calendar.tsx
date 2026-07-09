@@ -14,6 +14,7 @@ import {
   buildAssetViews,
   dayContributions,
   monthlyIncomeForecast,
+  monthlyTaxForecast,
   type DayContribution,
 } from '@/state/selectors';
 import { diffDays, periodsPerYear } from '@/calc';
@@ -90,6 +91,7 @@ export default function CalendarScreen() {
     (s, f) => s + f.changes.filter((c) => c.kind === 'end').reduce((s2, c) => s2 + c.amountBase, 0),
     0,
   );
+  const monthTaxSum = useMemo(() => monthlyTaxForecast(data, view.year, view.month), [data, view.year, view.month]);
 
   const isCurrentMonth = view.year === now.getFullYear() && view.month === now.getMonth();
   const daysInMonth = new Date(view.year, view.month + 1, 0).getDate();
@@ -190,6 +192,8 @@ export default function CalendarScreen() {
               <View style={styles.statsRow}>
                 <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, abbreviateMillions: true, kopecks: 'hide' })}`} color="#009933" />
                 <View style={styles.statSep} />
+                <Stat label="Налог за месяц" value={`−${formatMoney(monthTaxSum, { currency: cur, abbreviateMillions: true, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
+                <View style={styles.statSep} />
                 <Stat label="Освободится" value={formatMoney(monthReleaseSum, { currency: cur, abbreviateMillions: true, kopecks: 'hide' })} color="#586692" />
                 <View style={styles.statSep} />
                 <Stat label={isCurrentMonth ? 'До конца месяца' : 'Дней в месяце'} value={`${daysLeft}`} />
@@ -269,7 +273,7 @@ function InstrumentRow({
   onPress: () => void;
 }) {
   const org = view?.organization;
-  const rate = view?.asset.rate;
+  const rate = view?.derived.currentRate;
   const payout = view?.asset.payoutPeriod ?? view?.instrument.payoutPeriod;
 
   // Реальная выплата сегодня (не ежедневная рутина): погашение вклада ИЛИ

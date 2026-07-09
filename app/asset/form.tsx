@@ -186,6 +186,7 @@ export default function AssetFormScreen() {
   const [capitalization, setCapitalization] = useState<CapitalizationMode>(src?.capitalization ?? 'none');
   const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | undefined>(src?.payoutPeriod);
   const [comment, setComment] = useState(src?.comment ?? '');
+  const [taxWithheldByBank, setTaxWithheldByBank] = useState(src?.taxWithheldByBank ?? false);
 
   // Снимок состояния сразу после загрузки экрана — с ним сравниваем текущие
   // значения, чтобы понять, начал ли пользователь что-то менять (для
@@ -427,6 +428,10 @@ export default function AssetFormScreen() {
       comment: comment.trim() || undefined,
       status: editing?.status ?? 'active',
       isDemo: editing?.isDemo,
+      taxWithheldByBank,
+      // При редактировании updateAsset ЗАМЕНЯЕТ весь объект — не теряем историю.
+      balanceAdjustments: editing?.balanceAdjustments,
+      rateAdjustments: editing?.rateAdjustments,
     };
 
     // Нельзя сохранить актив 1в1 как уже существующий (тот же продукт, сумма,
@@ -794,6 +799,7 @@ export default function AssetFormScreen() {
                   onChange={(v) => setPayoutPeriod(v as PayoutPeriod)}
                   hint={needsPayout ? 'Нужен для капитализации — без него не посчитать начисление' : undefined}
                 />
+                <ToggleRow label="Налог удерживает банк сам" value={taxWithheldByBank} onChange={setTaxWithheldByBank} />
                 <TextField
                   label="Название актива (необязательно)"
                   value={title}

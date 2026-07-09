@@ -22,6 +22,7 @@ function migrate(data: AppData): AppData {
   next.rates = { ...DEFAULT_RATES, ...data.rates };
   if (!next.ratesHistory) next.ratesHistory = [];
   if (!next.manualRates) next.manualRates = {};
+  if (!next.taxYearRecords) next.taxYearRecords = [];
   // Самовосстанавливающийся мердж, не только «если пусто» — если сохранённая
   // история где-то обрезалась (напр. неудачный live-фетч), старый бэйзлайн
   // с 2013 года всё равно домердживается на каждой загрузке, не только один раз.

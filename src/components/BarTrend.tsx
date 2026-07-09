@@ -8,9 +8,17 @@ export interface BarPoint {
 }
 
 /** Простой бар-чарт тренда: последний столбец подсвечен акцентом. */
-export function BarTrend({ points, height = 120 }: { points: BarPoint[]; height?: number }) {
+export function BarTrend({
+  points,
+  height = 120,
+  scale = 'range',
+}: {
+  points: BarPoint[];
+  height?: number;
+  scale?: 'range' | 'zero';
+}) {
   const max = Math.max(...points.map((p) => p.value), 1);
-  const min = Math.min(...points.map((p) => p.value), 0);
+  const min = scale === 'zero' ? 0 : Math.min(...points.map((p) => p.value), 0);
   const span = max - min || 1;
 
   return (

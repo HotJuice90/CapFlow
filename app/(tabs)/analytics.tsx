@@ -17,6 +17,7 @@ import {
   distributionByOrg,
   capitalSeries,
   monthComparison,
+  incomeRunRateSeries,
 } from '@/state/selectors';
 import { tokens } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
@@ -56,8 +57,10 @@ export default function AnalyticsScreen() {
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const capSeries = useMemo(() => capitalSeries(data, 30), [data]);
+  const incomeSeries = useMemo(() => incomeRunRateSeries(data, 31), [data]);
   const comp = useMemo(() => monthComparison(data), [data]);
   const trendBars = useMemo(() => bucketSeries(capSeries, 5), [capSeries]);
+  const incomeBars = useMemo(() => bucketSeries(incomeSeries, 6), [incomeSeries]);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -66,6 +69,10 @@ export default function AnalyticsScreen() {
   const lastCap = capSeries[capSeries.length - 1] ?? 0;
   const deltaAbs = lastCap - first;
   const deltaPct = first > 0 ? (deltaAbs / first) * 100 : 0;
+  const incomeStart = incomeSeries[0] ?? 0;
+  const incomeNow = incomeSeries[incomeSeries.length - 1] ?? 0;
+  const incomeDeltaAbs = incomeNow - incomeStart;
+  const incomeDeltaPct = incomeStart > 0 ? (incomeDeltaAbs / incomeStart) * 100 : 0;
   const topType = byType.groups[0];
 
   // НДФЛ
@@ -126,6 +133,50 @@ export default function AnalyticsScreen() {
                 </View>
               </View>
             ) : null}
+
+            {/* Темп дохода */}
+            <Text style={styles.section}>Темп дохода</Text>
+            <Card>
+              <View style={styles.incomePaceTop}>
+                <View style={styles.incomePaceMain}>
+                  <Text style={styles.incomePaceLabel}>Сейчас в день</Text>
+                  <Text style={styles.incomePaceValue} numberOfLines={1} adjustsFontSizeToFit>
+                    +{formatMoney(incomeNow, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                </View>
+                <View style={[styles.incomePacePill, { backgroundColor: incomeDeltaAbs >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
+                  <MaterialIcons
+                    name={incomeDeltaAbs >= 0 ? 'trending-up' : 'trending-down'}
+                    size={16}
+                    color={incomeDeltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
+                  />
+                  <Text style={[styles.incomePacePillText, { color: incomeDeltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {incomeDeltaAbs >= 0 ? '+' : '−'}{formatMoney(Math.abs(incomeDeltaAbs), { currency: cur, kopecks: 'hide' })}/д
+                  </Text>
+                </View>
+              </View>
+              <BarTrend points={incomeBars} height={92} scale="zero" />
+              <View style={styles.incomePaceMeta}>
+                <View style={styles.incomePaceMetaCell}>
+                  <Text style={styles.incomePaceMetaLabel}>30 дней назад</Text>
+                  <Text style={styles.incomePaceMetaValue}>
+                    +{formatMoney(incomeStart, { currency: cur, kopecks: 'hide' })}/д
+                  </Text>
+                </View>
+                <View style={styles.incomePaceMetaCell}>
+                  <Text style={styles.incomePaceMetaLabel}>Сейчас в месяц</Text>
+                  <Text style={styles.incomePaceMetaValue}>
+                    +{formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                </View>
+                <View style={styles.incomePaceMetaCell}>
+                  <Text style={styles.incomePaceMetaLabel}>Изменение</Text>
+                  <Text style={[styles.incomePaceMetaValue, { color: incomeDeltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {formatPercentSigned(incomeDeltaPct)}
+                  </Text>
+                </View>
+              </View>
+            </Card>
 
             {/* Тренд капитала */}
             <Text style={styles.section}>Тренд капитала</Text>
@@ -221,7 +272,7 @@ export default function AnalyticsScreen() {
             <Card>
               <Row label="Средняя ставка портфеля" value={formatPercent(summary.avgRate)} />
               <Sep />
-              <Row label="Премия к ключевой" value={formatPercentSigned(summary.premium)} accent={summary.premium >= 0} />
+              <Row label="Премия к ключевой" value={formatPercentSigned(summary.premiumToKeyRate)} accent={summary.premiumToKeyRate >= 0} />
               <Sep />
               <Row label="Доход на 1 млн (год)" value={formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' })} />
               {summary.topInstrument ? (
@@ -296,6 +347,23 @@ const styles = StyleSheet.create({
   insightTitle: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
   insightText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 3, lineHeight: 18 },
   section: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
+  incomePaceTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: tokens.spacing.md, marginBottom: tokens.spacing.lg },
+  incomePaceMain: { flex: 1, minWidth: 0 },
+  incomePaceLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
+  incomePaceValue: { fontSize: tokens.typography.metric, fontWeight: '800', color: tokens.text.primary, marginTop: 2 },
+  incomePacePill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  incomePacePillText: { fontSize: tokens.typography.caption, fontWeight: '800' },
+  incomePaceMeta: {
+    flexDirection: 'row',
+    gap: tokens.spacing.sm,
+    marginTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: tokens.surface.hairline,
+  },
+  incomePaceMetaCell: { flex: 1, minWidth: 0 },
+  incomePaceMetaLabel: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
+  incomePaceMetaValue: { fontSize: tokens.typography.caption, fontWeight: '700', color: tokens.text.primary, marginTop: 2 },
   trendTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.lg },
   trendDelta: { fontSize: tokens.typography.title, fontWeight: '800', color: tokens.text.primary },
   trendPill: { borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 5 },

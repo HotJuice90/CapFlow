@@ -1,7 +1,9 @@
-import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Organization } from '@/domain/types';
-import { calculate, calcPortfolioTax, daysInYear, diffDays, parseLocal, periodsPerYear } from '@/calc';
+import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Organization, TaxYearRecord } from '@/domain/types';
+import { calculate, calcAssetTax, calcPortfolioTax, calcTax, daysInYear, diffDays, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
+import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
+import { uid } from '@/utils/id';
 
 const CURRENCY_COLOR: Record<string, string> = {
   RUB: '#62709C',
@@ -33,6 +35,20 @@ function convert(amount: number, from: CurrencyCode, data: AppData): number {
   return inRub / effectiveRate(data, data.settings.defaultCurrency);
 }
 
+/**
+ * Просрочен (срок вышел, но актив ещё не закрыт/архивирован руками) И это
+ * случилось в ПРОШЛОМ календарном году — на текущих экранах такое не
+ * показываем вообще, только в истории/архиве. В ТЕКУЩЕМ году просроченный
+ * актив продолжает жить как обычно (с пометкой «нужно решение» в UI).
+ */
+export function isPastYearMatured(asset: Asset, instrument: FinancialInstrument, now: Date = new Date()): boolean {
+  if (instrument.behavior !== 'term' || asset.status !== 'active' || !asset.endDate) return false;
+  const nowIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (diffDays(nowIso, asset.endDate) > 0) return false; // срок ещё не наступил
+  const endYear = parseInt(asset.endDate.slice(0, 4), 10);
+  return endYear < now.getFullYear();
+}
+
 /** Активы в статусе active, развёрнутые в AssetView с расчётами. */
 export function buildAssetViews(data: AppData, now: Date = new Date()): AssetView[] {
   const orgById = new Map(data.organizations.map((o) => [o.id, o]));
@@ -43,15 +59,19 @@ export function buildAssetViews(data: AppData, now: Date = new Date()): AssetVie
     if (asset.status !== 'active') continue;
     const instrument = instrById.get(asset.instrumentId);
     if (!instrument) continue;
+    if (isPastYearMatured(asset, instrument, now)) continue;
     const organization = orgById.get(instrument.organizationId);
     if (!organization) continue;
     active.push({ asset, instrument, organization });
   }
 
-  // Необлагаемый лимит — один на весь портфель, а не на каждый актив отдельно.
-  // Активы, открытые раньше, «расходуют» его первыми (детерминированный порядок) —
-  // так сумма налога по карточкам сходится с портфельным (см. analyticsSummary).
-  const byOpenDate = [...active].sort((a, b) => {
+  // Необлагаемый лимит (ст. 214.2 НК) — льгота на процентный доход, который
+  // человек декларирует и платит САМ. Активы с taxWithheldByBank (площадка
+  // удерживает налог сама, свой правовой режим) в этом дележе не участвуют
+  // вообще — ни занимают лимит своим доходом, ни получают долю от него
+  // (см. calcAssetTax — для них считается плоско, без лимита в принципе).
+  const selfReported = active.filter(({ asset }) => !asset.taxWithheldByBank);
+  const byOpenDate = [...selfReported].sort((a, b) => {
     const d = a.asset.openDate.localeCompare(b.asset.openDate);
     return d !== 0 ? d : a.asset.id.localeCompare(b.asset.id);
   });
@@ -68,6 +88,25 @@ export function buildAssetViews(data: AppData, now: Date = new Date()): AssetVie
     organization,
     derived: calculate(asset, instrument, data.params, now, limitUsedById.get(asset.id) ?? 0),
   }));
+}
+
+/**
+ * Найти AssetView конкретного актива по id НАПРЯМУЮ, в обход фильтров
+ * buildAssetViews (активный/просрочен-прошлый-год) — чтобы страница актива
+ * всегда открывалась, даже если в списках/сводках он сейчас не показывается
+ * (закрыт, архивный, или просрочен и «спрятан» с прошлого года).
+ */
+export function findAssetView(data: AppData, id: string | undefined, now: Date = new Date()): AssetView | undefined {
+  if (!id) return undefined;
+  const fromCurrent = buildAssetViews(data, now).find((v) => v.asset.id === id);
+  if (fromCurrent) return fromCurrent;
+  const asset = data.assets.find((a) => a.id === id);
+  if (!asset) return undefined;
+  const instrument = data.instruments.find((i) => i.id === asset.instrumentId);
+  if (!instrument) return undefined;
+  const organization = data.organizations.find((o) => o.id === instrument.organizationId);
+  if (!organization) return undefined;
+  return { asset, instrument, organization, derived: calculate(asset, instrument, data.params, now, 0) };
 }
 
 export interface PortfolioSummary {
@@ -88,11 +127,13 @@ export function portfolioSummary(data: AppData, now: Date = new Date()): Portfol
 
   for (const v of views) {
     const c = v.asset.currency;
-    const cap = convert(v.asset.amount, c, data);
+    // Честная стоимость (тело с корректировками + начисленное), не сумма открытия —
+    // капитал на главной должен расти день ото дня вместе с доходом.
+    const cap = convert(v.derived.currentValue, c, data);
     workingCapital += cap;
     incomePerDay += convert(v.derived.incomePerDay, c, data);
     incomePerMonth += convert(v.derived.incomePerMonth, c, data);
-    weightedRate += v.asset.rate * cap;
+    weightedRate += v.derived.currentRate * cap;
   }
 
   const avgRate = workingCapital > 0 ? weightedRate / workingCapital : 0;
@@ -134,7 +175,8 @@ export function groupByInstrumentType(
   let total = 0;
   for (const v of views) {
     const c = v.asset.currency;
-    total += convert(v.asset.amount, c, data);
+    const cap = convert(v.derived.currentValue, c, data);
+    total += cap;
     const typeId = v.instrument.typeId;
     const g =
       map.get(typeId) ??
@@ -147,7 +189,7 @@ export function groupByInstrumentType(
         share: 0,
         count: 0,
       };
-    g.capital += convert(v.asset.amount, c, data);
+    g.capital += cap;
     g.incomePerMonth += convert(v.derived.incomePerMonth, c, data);
     g.count += 1;
     map.set(typeId, g);
@@ -183,7 +225,7 @@ function distribution(
   let total = 0;
   for (const v of views) {
     const c = v.asset.currency;
-    const cap = convert(v.asset.amount, c, data);
+    const cap = convert(v.derived.currentValue, c, data);
     total += cap;
     const key = keyFn(v);
     const g =
@@ -203,7 +245,7 @@ function distribution(
     g.capital += cap;
     g.incomePerDay += convert(v.derived.incomePerDay, c, data);
     g.incomePerMonth += convert(v.derived.incomePerMonth, c, data);
-    g.weightedRate += v.asset.rate * cap;
+    g.weightedRate += v.derived.currentRate * cap;
     g.count += 1;
     map.set(key, g);
   }
@@ -256,11 +298,27 @@ export interface AnalyticsSummary {
   incomePerMonth: number;
   incomePerYear: number;
   accrued: number;
+  /** Из accrued — только активы БЕЗ taxWithheldByBank: именно они делят необлагаемый
+   *  лимит (льгота — для тех, кто платит сам, см. calcAssetTax). */
+  selfAccrued: number;
   taxYear: number;
+  /** Налог на уже накопленный (не прогнозный) доход сверх лимита — на сегодня. */
+  taxAccrued: number;
+  /** Из taxAccrued — доля активов с флагом «удержит банк сам», уже на сегодня. */
+  taxAccruedWithheld: number;
+  /** Из taxAccrued — доля активов БЕЗ флага: доплатить самому, уже на сегодня. */
+  taxAccruedSelf: number;
+  /** Из taxYear — доля активов с флагом «удержит банк сам». */
+  taxYearWithheld: number;
+  /** Из taxYear — доля активов БЕЗ флага: это придётся доплатить самому. */
+  taxYearSelf: number;
+  /** Реально удержанный банками налог (BalanceAdjustment.taxWithheld) — по ВСЕМ
+   *  активам, включая закрытые/архивные: факт, не оценка. */
+  taxPaidTotal: number;
   netYear: number;
   avgRate: number;
   keyRate: number;
-  premium: number;
+  premiumToKeyRate: number;
   incomePerMillionYear: number;
   topInstrument?: { name: string; org: string; incomePerDay: number };
   topOrganization?: { name: string; incomePerDay: number };
@@ -274,23 +332,36 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   let incomePerYear = 0;
   let accrued = 0;
   let weightedRate = 0;
-  const annualPerAsset: number[] = [];
+  // Доход по группам «удержит банк сам» / «доплатить самому» — это 2 разных
+  // правовых режима (см. calcAssetTax), общий необлагаемый лимит делят между
+  // собой только активы «доплатить самому»; «удержит банк» считается отдельно,
+  // плоско, без лимита вообще — не пропорциональная прикидка, а честный расчёт.
+  const selfAnnualPerAsset: number[] = [];
+  const selfAccruedPerAsset: number[] = [];
+  let withheldAnnual = 0;
+  let withheldAccrued = 0;
 
   let topInstrument: AnalyticsSummary['topInstrument'];
   const orgIncome = new Map<string, { name: string; income: number }>();
 
   for (const v of views) {
     const c = v.asset.currency;
-    const cap = convert(v.asset.amount, c, data);
+    const cap = convert(v.derived.currentValue, c, data);
     const incDay = convert(v.derived.incomePerDay, c, data);
     totalCapital += cap;
     incomePerDay += incDay;
     incomePerMonth += convert(v.derived.incomePerMonth, c, data);
-    accrued += convert(v.derived.accrued, c, data);
-    weightedRate += v.asset.rate * cap;
-    const annual = convert((v.asset.amount * v.asset.rate) / 100, c, data);
+    const acc = convert(v.derived.accrued, c, data);
+    accrued += acc;
+    if (v.asset.taxWithheldByBank) withheldAccrued += acc;
+    else selfAccruedPerAsset.push(acc);
+    weightedRate += v.derived.currentRate * cap;
+    // Годовой прогноз — от текущего ТЕЛА по текущей ставке (не от суммы открытия
+    // по ставке открытия): корректировки баланса и смены ставки должны влиять.
+    const annual = convert((v.derived.balanceNow * v.derived.currentRate) / 100, c, data);
     incomePerYear += annual;
-    annualPerAsset.push(annual);
+    if (v.asset.taxWithheldByBank) withheldAnnual += annual;
+    else selfAnnualPerAsset.push(annual);
 
     if (!topInstrument || incDay > topInstrument.incomePerDay) {
       topInstrument = {
@@ -305,7 +376,19 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   }
 
   const avgRate = totalCapital > 0 ? weightedRate / totalCapital : 0;
-  const taxYear = calcPortfolioTax(annualPerAsset, data.params);
+  const selfAccrued = selfAccruedPerAsset.reduce((sum, v) => sum + v, 0);
+  // Факт уплаченного — по ВСЕМ активам (даже закрытым/архивным), не только текущим
+  // видам: деньги реально ушли независимо от того, жив ли актив сейчас.
+  const taxPaidTotal = data.assets.reduce((sum, a) => {
+    const paid = (a.balanceAdjustments ?? []).reduce((s, adj) => s + (adj.taxWithheld ?? 0), 0);
+    return sum + convert(paid, a.currency, data);
+  }, 0);
+  const taxYearSelf = calcPortfolioTax(selfAnnualPerAsset, data.params);
+  const taxYearWithheld = calcAssetTax(withheldAnnual, data.params, 0, true);
+  const taxYear = taxYearSelf + taxYearWithheld;
+  const taxAccruedSelf = calcPortfolioTax(selfAccruedPerAsset, data.params);
+  const taxAccruedWithheld = calcAssetTax(withheldAccrued, data.params, 0, true);
+  const taxAccrued = taxAccruedSelf + taxAccruedWithheld;
   let topOrganization: AnalyticsSummary['topOrganization'];
   for (const oi of orgIncome.values()) {
     if (!topOrganization || oi.income > topOrganization.incomePerDay) {
@@ -319,11 +402,18 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     incomePerMonth,
     incomePerYear,
     accrued,
+    selfAccrued,
     taxYear,
+    taxAccrued,
+    taxAccruedWithheld,
+    taxAccruedSelf,
+    taxYearWithheld,
+    taxYearSelf,
+    taxPaidTotal,
     netYear: incomePerYear - taxYear,
     avgRate,
     keyRate: data.params.keyRate,
-    premium: avgRate - data.params.keyRate,
+    premiumToKeyRate: avgRate - data.params.keyRate,
     incomePerMillionYear: totalCapital > 0 ? (incomePerYear / totalCapital) * 1_000_000 : 0,
     topInstrument,
     topOrganization,
@@ -356,17 +446,17 @@ export function insights(data: AppData, now: Date = new Date()): Insight[] {
   // 2. средняя ставка vs ключевая
   const s = analyticsSummary(data, now);
   if (views.length > 0) {
-    if (s.premium >= 0) {
+    if (s.premiumToKeyRate >= 0) {
       out.push({
         icon: 'trending-up',
         title: 'Портфель обгоняет ключевую',
-        text: `Средняя ставка ${s.avgRate.toFixed(1).replace('.', ',')}% — это +${s.premium.toFixed(1).replace('.', ',')}% к ключевой ставке ЦБ.`,
+        text: `Средняя ставка ${s.avgRate.toFixed(1).replace('.', ',')}% — это +${s.premiumToKeyRate.toFixed(1).replace('.', ',')}% к ключевой ставке ЦБ.`,
       });
     } else {
       out.push({
         icon: 'trending-down',
         title: 'Доходность ниже ключевой',
-        text: `Средняя ставка портфеля ниже ключевой на ${Math.abs(s.premium).toFixed(1).replace('.', ',')}%. Возможно, стоит пересмотреть инструменты.`,
+        text: `Средняя ставка портфеля ниже ключевой на ${Math.abs(s.premiumToKeyRate).toFixed(1).replace('.', ',')}%. Возможно, стоит пересмотреть инструменты.`,
       });
     }
   }
@@ -574,6 +664,39 @@ export function monthlyIncomeForecast(data: AppData, year: number, month: number
   return out;
 }
 
+/**
+ * Примерный налог за месяц (не факт, тот же дух, что и monthlyIncomeForecast) —
+ * доход месяца по каждому активу, поделённый на «доплатить самому»/«удержит банк»
+ * (см. calcAssetTax), лимит на самостоятельную группу берём «с нуля» (не учитывает,
+ * сколько лимита уже съедено в другие месяцы года) — оценка, не точный расчёт.
+ */
+export function monthlyTaxForecast(data: AppData, year: number, month: number): number {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const instrById = new Map(data.instruments.map((i) => [i.id, i]));
+  const assets = data.assets.filter((a) => a.status === 'active');
+
+  let selfIncome = 0;
+  let withheldIncome = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const day = new Date(year, month, d);
+    for (const asset of assets) {
+      const instrument = instrById.get(asset.instrumentId);
+      if (!instrument) continue;
+      const open = parseLocal(asset.openDate);
+      const end = asset.endDate ? parseLocal(asset.endDate) : null;
+      if (open > day || (end && day > end)) continue;
+
+      const derived = calculate(asset, instrument, data.params, day);
+      const incDay = convert(derived.incomePerDay, asset.currency, data);
+      if (asset.taxWithheldByBank) withheldIncome += incDay;
+      else selfIncome += incDay;
+    }
+  }
+
+  return calcTax(selfIncome, data.params, 0) + calcAssetTax(withheldIncome, data.params, 0, true);
+}
+
 export interface DayContribution {
   assetId: string;
   instrumentName: string;
@@ -656,25 +779,22 @@ export function dayContributions(data: AppData, dateIso: string): DayContributio
 }
 
 /**
- * Дневной баланс ОДНОГО актива от даты открытия до сегодня — для графика роста
- * на карточке актива. Честно прогоняет движок на каждый день, поэтому
- * капитализация и корректировки баланса ложатся ровно там, где были.
+ * Состояние счёта по дням — честная сумма (тело + начисленное, см. currentValue),
+ * от открытия до сегодня. В отличие от assetIncomeSeries НЕ монотонна: реальные
+ * снятия видно как провал, пополнения — как скачок вверх, а не сглаженную кривую.
+ * Работает при ЛЮБОМ режиме/периоде (ограничений, как у assetBalanceSeries, нет).
  *
- * Только для накопительных счетов с ежедневной капитализацией — это
- * единственный случай, когда баланс реально растёт день ото дня. У срочных
- * вкладов вместо этого прогресс-бар до даты закрытия; у остальных режимов
- * (простой % или неежедневный период) баланс между событиями не меняется —
- * график был бы просто плоской линией.
+ * Точки — не просто равномерный шаг: даты реальных корректировок баланса ВСЕГДА
+ * попадают в выборку явно (иначе округление шага может «съесть» ровно тот день,
+ * когда был провал/скачок, и график соврёт, показав плато). Между ними — равномерные
+ * точки для гладкости. Общее число ограничено maxPoints — по умолчанию под маленький
+ * виджет (широкий график может передать своё значение).
  */
-export function assetBalanceSeries(data: AppData, assetId: string): number[] {
+export function assetValueSeries(data: AppData, assetId: string, maxPoints = 30): number[] {
   const asset = data.assets.find((a) => a.id === assetId);
   if (!asset) return [];
   const instrument = data.instruments.find((i) => i.id === asset.instrumentId);
   if (!instrument) return [];
-  if (instrument.behavior !== 'perpetual') return [];
-  const mode = asset.capitalization ?? instrument.capitalization ?? 'none';
-  const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
-  if (mode !== 'capitalize' || payout !== 'daily') return [];
 
   const start = parseLocal(asset.openDate);
   const today = new Date();
@@ -682,13 +802,91 @@ export function assetBalanceSeries(data: AppData, assetId: string): number[] {
   const last = end && end < today ? end : today;
 
   const totalDays = Math.max(0, diffDays(start, last));
-  const series: number[] = [];
-  for (let k = 0; k <= totalDays; k++) {
+  const step = Math.max(1, Math.ceil(totalDays / maxPoints));
+
+  const offsets = new Set<number>();
+  for (let k = 0; k <= totalDays; k += step) offsets.add(k);
+  offsets.add(totalDays);
+  // Даты реальных корректировок — гарантированно в выборке, не полагаемся на шаг.
+  for (const adj of asset.balanceAdjustments ?? []) {
+    const k = diffDays(start, parseLocal(adj.date));
+    if (k >= 0 && k <= totalDays) offsets.add(k);
+  }
+
+  const sorted = [...offsets].sort((a, b) => a - b);
+  return sorted.map((k) => {
     const day = new Date(start);
     day.setDate(day.getDate() + k);
-    series.push(calculate(asset, instrument, data.params, day).balanceNow);
+    return calculate(asset, instrument, data.params, day).currentValue;
+  });
+}
+
+export interface AssetTimelineEntry {
+  type: 'open' | 'balance' | 'rate';
+  /** undefined только у 'open' — это не корректировка, а точка открытия */
+  id?: string;
+  date: string;
+  comment?: string;
+  /** для 'open' — сумма/ставка на момент открытия; для 'balance' — сумма после корректировки; для 'rate' — ставка после изменения */
+  amount?: number;
+  rate?: number;
+  /** дельта относительно ПРЕДЫДУЩЕЙ точки ТОГО ЖЕ типа (баланс и ставка — независимые линии) */
+  amountDelta?: number;
+  rateDelta?: number;
+  /** см. BalanceAdjustment.isCorrection — только для 'balance' */
+  isCorrection?: boolean;
+  /** см. BalanceAdjustment.taxWithheld — только для 'balance' (снятие) */
+  taxWithheld?: number;
+}
+
+/**
+ * Объединённая история актива — баланс и ставка меняются независимо друг от
+ * друга (решение: RateAdjustment симметричен BalanceAdjustment), но на детальной
+ * карточке актива их удобнее видеть одной лентой, а не в 2 разных экранах.
+ * Дельта каждой записи считается относительно предыдущей точки СВОЕГО типа,
+ * а не соседней по дате записи другого типа.
+ */
+export function assetTimeline(asset: Asset): AssetTimelineEntry[] {
+  const balancePoints = [
+    { date: asset.openDate, amount: asset.amount },
+    ...(asset.balanceAdjustments ?? []).map((a) => ({ id: a.id, date: a.date, amount: a.amount, comment: a.comment, isCorrection: a.isCorrection, taxWithheld: a.taxWithheld })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  const ratePoints = [
+    { date: asset.openDate, rate: asset.rate },
+    ...(asset.rateAdjustments ?? []).map((r) => ({ id: r.id, date: r.date, rate: r.rate, comment: r.comment })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  const entries: AssetTimelineEntry[] = [
+    { type: 'open', date: asset.openDate, amount: asset.amount, rate: asset.rate },
+  ];
+
+  for (let i = 1; i < balancePoints.length; i++) {
+    const p = balancePoints[i] as (typeof balancePoints)[number] & { id: string; comment?: string; isCorrection?: boolean; taxWithheld?: number };
+    entries.push({
+      type: 'balance',
+      id: p.id,
+      date: p.date,
+      comment: p.comment,
+      amount: p.amount,
+      amountDelta: p.amount - balancePoints[i - 1].amount,
+      isCorrection: p.isCorrection,
+      taxWithheld: p.taxWithheld,
+    });
   }
-  return series;
+  for (let i = 1; i < ratePoints.length; i++) {
+    const p = ratePoints[i] as (typeof ratePoints)[number] & { id: string; comment?: string };
+    entries.push({
+      type: 'rate',
+      id: p.id,
+      date: p.date,
+      comment: p.comment,
+      rate: p.rate,
+      rateDelta: p.rate - ratePoints[i - 1].rate,
+    });
+  }
+
+  return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /** Реконструкция капитала по дням за последние N дней (для графика в аналитике). */
@@ -710,15 +908,31 @@ export function capitalSeries(data: AppData, days = 30): number[] {
   return out;
 }
 
-function incomePerDayOn(data: AppData, day: Date): number {
+function incomeRunRateOn(data: AppData, day: Date): number {
+  const instrById = new Map(data.instruments.map((i) => [i.id, i]));
   let sum = 0;
   for (const a of data.assets) {
     if (a.status !== 'active') continue;
+    const instrument = instrById.get(a.instrumentId);
+    if (!instrument) continue;
+    if (isPastYearMatured(a, instrument, day)) continue;
     if (parseLocal(a.openDate) > day) continue;
     if (a.endDate && parseLocal(a.endDate) < day) continue;
-    sum += convert((a.amount * a.rate) / 100 / daysInYear(day), a.currency, data);
+    const derived = calculate(a, instrument, data.params, day, 0);
+    sum += convert(derived.incomePerDay, a.currency, data);
   }
   return sum;
+}
+
+/** История текущего дневного дохода: учитывает пополнения/снятия и изменения ставок. */
+export function incomeRunRateSeries(data: AppData, days = 30, now: Date = new Date()): number[] {
+  const series: number[] = [];
+  for (let k = days - 1; k >= 0; k--) {
+    const day = new Date(now);
+    day.setDate(day.getDate() - k);
+    series.push(incomeRunRateOn(data, day));
+  }
+  return series;
 }
 
 export interface PeriodComparison {
@@ -736,8 +950,8 @@ export function monthComparison(data: AppData, now: Date = new Date()): PeriodCo
   return {
     capitalNow: cap[cap.length - 1] ?? 0,
     capitalPrev: cap[0] ?? 0,
-    incomeNow: incomePerDayOn(data, now),
-    incomePrev: incomePerDayOn(data, prev),
+    incomeNow: incomeRunRateOn(data, now),
+    incomePrev: incomeRunRateOn(data, prev),
   };
 }
 
@@ -760,4 +974,74 @@ export function incomeSparkline(data: AppData, days = 30): number[] {
     series.push(cumulative);
   }
   return series;
+}
+
+/** Ключевая ставка на дату `at` (последняя точка не позже неё). История — «новые сверху». */
+function keyRateAt(history: KeyRatePoint[], at: string): number {
+  let cur = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].date <= at) cur = history[i].rate;
+    else break;
+  }
+  return cur;
+}
+
+/** Максимальная ключевая ставка на 1-е число любого месяца года `year` — по НК так считается лимит года. */
+function maxKeyRateForYear(history: KeyRatePoint[], year: number): number {
+  const ascending = [...history].sort((a, b) => a.date.localeCompare(b.date));
+  let max = 0;
+  for (let month = 1; month <= 12; month++) {
+    const d = `${year}-${String(month).padStart(2, '0')}-01`;
+    max = Math.max(max, keyRateAt(ascending, d));
+  }
+  return max;
+}
+
+/**
+ * Фиксирует налоговую статистику за календарный ГОД: считаем доход каждого
+ * актива, заработанный именно В ГРАНИЦАХ этого года (не с открытия), делим
+ * на «удержит банк сам» / «доплатить самому» по флагу актива. Лимит — по
+ * максимальной ключевой ставке года (не текущей!), чтобы не «плыл» задним числом.
+ */
+export function computeTaxYearRecord(data: AppData, year: number): TaxYearRecord {
+  const jan1 = `${year}-01-01`;
+  const dec31 = `${year}-12-31`;
+  const yearParams = { ...data.params };
+
+  const instrById = new Map(data.instruments.map((i) => [i.id, i]));
+  let withheldIncome = 0;
+  let selfIncome = 0;
+
+  for (const asset of data.assets) {
+    if (asset.isDemo) continue;
+    const instrument = instrById.get(asset.instrumentId);
+    if (!instrument) continue;
+    const before = calculate(asset, instrument, yearParams, jan1).earnedSoFar;
+    const after = calculate(asset, instrument, yearParams, dec31).earnedSoFar;
+    const income = convert(Math.max(0, after - before), asset.currency, data);
+    if (income <= 0) continue;
+    if (asset.taxWithheldByBank) withheldIncome += income;
+    else selfIncome += income;
+  }
+
+  const keyRateUsed = maxKeyRateForYear(data.keyRateHistory, year);
+  const taxFreeLimit = (1_000_000 * keyRateUsed) / 100;
+  const taxableIncome = withheldIncome + selfIncome;
+  // Лимит года — льгота только для «доплатить самому»; «удержит банк» считается
+  // отдельно и плоско (свой правовой режим, см. calcAssetTax), не пропорцией.
+  const taxToPaySelf = calcTax(selfIncome, { ...yearParams, taxFreeLimit });
+  const taxWithheld = calcAssetTax(withheldIncome, yearParams, 0, true);
+  const taxDue = taxToPaySelf + taxWithheld;
+
+  return {
+    id: uid('taxyr-'),
+    year,
+    createdAt: new Date().toISOString(),
+    keyRateUsed,
+    taxFreeLimit,
+    taxableIncome,
+    taxDue,
+    taxWithheld,
+    taxToPaySelf,
+  };
 }

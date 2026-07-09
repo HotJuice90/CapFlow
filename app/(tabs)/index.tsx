@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
-import { CapitalRingHero } from '@/components/CapitalRingHero';
+import { HomeIncomeHero } from '@/components/HomeIncomeHero';
 import { TypeCardsRow } from '@/components/TypeCardsRow';
 import { Donut } from '@/components/Donut';
 import { AssetRow } from '@/components/AssetRow';
@@ -23,10 +23,11 @@ import {
   groupByInstrumentType,
   incomeSparkline,
   monthComparison,
+  analyticsSummary,
 } from '@/state/selectors';
 import type { AssetView } from '@/domain/types';
-import { tokens } from '@/theme';
-import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
+import { tokens, hexToRgba } from '@/theme';
+import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { t } from '@/i18n';
 
@@ -38,12 +39,6 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'rate', label: 'по ставке' },
   { key: 'end', label: 'по сроку' },
 ];
-
-const SHORT_TYPE_LABEL: Record<string, string> = {
-  deposit: 'Вклады',
-  savings: 'Счета',
-  dfa: 'ЦФА',
-};
 
 function sortViews(views: AssetView[], key: SortKey): AssetView[] {
   const v = [...views];
@@ -78,6 +73,7 @@ export default function HomeScreen() {
   const grouped = useMemo(() => groupByInstrumentType(data), [data]);
   const spark = useMemo(() => incomeSparkline(data, 30), [data]);
   const comp = useMemo(() => monthComparison(data), [data]);
+  const taxSummary = useMemo(() => analyticsSummary(data), [data]);
 
   const upcoming = useMemo(
     () =>
@@ -102,8 +98,21 @@ export default function HomeScreen() {
   const hasAssets = views.length > 0;
   const hasArchived = data.assets.some((a) => a.status !== 'active');
   const cur = data.settings.defaultCurrency;
-  const topType = grouped.groups[0];
   const capitalDeltaPct = comp.capitalPrev > 0 ? ((comp.capitalNow - comp.capitalPrev) / comp.capitalPrev) * 100 : undefined;
+
+  // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
+  // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
+  // те, где банк удерживает налог сам, в этом дележе не участвуют вообще.
+  const taxLimit = data.params.taxFreeLimit;
+  const taxUsed = Math.min(taxSummary.selfAccrued, taxLimit);
+  const taxRemain = Math.max(0, taxLimit - taxSummary.selfAccrued);
+  const taxUsedPct = taxLimit > 0 ? Math.min(100, Math.round((taxUsed / taxLimit) * 100)) : 0;
+  // За вычетом уже уплаченного — та же логика, что и «К доплате при снятии» на
+  // карточке актива: не валовый налог на весь доход, а то, что ЕЩЁ спишут.
+  const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidTotal);
+  // Итог для планирования: с точки зрения кошелька это один и тот же налог —
+  // просто одна часть уйдёт банку автоматически, другая — самому по декларации.
+  const taxRecommendedSetAside = taxSummary.taxAccruedSelf + taxWithheldRemaining;
 
   return (
     <ScreenBackground>
@@ -129,22 +138,75 @@ export default function HomeScreen() {
 
         {hasAssets ? (
           <>
-            <CapitalRingHero
-              label="Капитал сейчас"
-              bigValue={formatMoney(summary.workingCapital, { currency: cur, abbreviateMillions: true })}
-              deltaPct={capitalDeltaPct}
-              ringGroups={grouped.groups.map((g) => ({ value: g.capital, color: g.color }))}
-              ringCenterLabel={topType ? `${Math.round(topType.share * 100)}%` : undefined}
-              ringCenterSub={topType ? SHORT_TYPE_LABEL[topType.typeId] ?? topType.label : undefined}
-              chips={[
-                { icon: 'trending-up', label: 'Доход в день', value: `+${formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}` },
-                { icon: 'percent-outline', label: 'Средняя ставка', value: formatPercent(summary.avgRate), delta: formatPercentSigned(summary.premiumToKeyRate) },
-              ]}
+            <HomeIncomeHero
+              dayValue={formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
+              monthValue={formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
+              capitalValue={formatMoney(summary.workingCapital, { currency: cur, abbreviateMillions: true })}
+              capitalDeltaPct={capitalDeltaPct}
+              avgRate={formatPercent(summary.avgRate)}
+              topInstrument={taxSummary.topInstrument ? {
+                name: taxSummary.topInstrument.name,
+                org: taxSummary.topInstrument.org,
+                value: formatMoney(taxSummary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' }),
+              } : undefined}
               spark={spark}
             />
 
             <Text style={styles.sectionTitle}>Капитал по инструментам</Text>
             <TypeCardsRow groups={grouped.groups} currency={cur} />
+
+            <Text style={styles.sectionTitle}>Налог</Text>
+            <Card>
+              <Text style={styles.taxLabel}>Доплатить самому — на сегодня</Text>
+              <Text style={styles.taxBig} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(taxSummary.taxAccruedSelf, { currency: cur })}
+              </Text>
+
+              <View style={styles.taxDivider} />
+
+              <View style={styles.taxFooterRow}>
+                <Text style={styles.taxFooterLabel}>Свободный лимит использован</Text>
+                <Text style={styles.taxFooterLabel}>{taxUsedPct}%</Text>
+              </View>
+              <View style={styles.taxBarWrap}>
+                <View style={styles.taxTrack}>
+                  <View style={[styles.taxFill, { width: `${taxUsedPct}%` }]} />
+                </View>
+              </View>
+              <View style={styles.taxFooterRow}>
+                <Text style={styles.taxFooterLabel}>Заработано {formatMoney(taxSummary.selfAccrued, { currency: cur, abbreviateMillions: true })}</Text>
+                <Text style={styles.taxFooterLabel}>Остаток {formatMoney(taxRemain, { currency: cur, abbreviateMillions: true })}</Text>
+              </View>
+
+              {taxSummary.taxPaidTotal > 0.5 || taxSummary.taxAccruedWithheld > 0.5 ? (
+                <>
+                  <View style={styles.taxDivider} />
+                  <View style={styles.taxSplitRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.taxFooterLabel}>Уже заплатили</Text>
+                      <Text style={styles.taxSplitValue}>
+                        {formatMoney(taxSummary.taxPaidTotal, { currency: cur, abbreviateMillions: true })}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                      <Text style={styles.taxFooterLabel}>Ещё удержит банк</Text>
+                      <Text style={styles.taxSplitValue}>
+                        {formatMoney(taxWithheldRemaining, { currency: cur, abbreviateMillions: true })}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : null}
+
+              {taxRecommendedSetAside > 0.5 ? (
+                <View style={styles.taxRecommendBox}>
+                  <Text style={styles.taxRecommendLabel}>Рекомендуем отложить — оба способа вместе</Text>
+                  <Text style={styles.taxRecommendValue}>
+                    {formatMoney(taxRecommendedSetAside, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                </View>
+              ) : null}
+            </Card>
 
             {upcoming.length > 0 ? (
               <>
@@ -266,6 +328,29 @@ const styles = StyleSheet.create({
   eventName: { fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.primary },
   eventSub: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },
   eventAmount: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
+  taxLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
+  taxBig: { fontSize: tokens.typography.metric, fontWeight: '800', color: tokens.text.primary, marginTop: 2 },
+  taxBarWrap: { marginTop: tokens.spacing.md },
+  taxTrack: { height: 8, borderRadius: 4, backgroundColor: tokens.surface.neutral, overflow: 'hidden' },
+  taxFill: { height: 8, borderRadius: 4, backgroundColor: '#9A6DD7' },
+  taxDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.md },
+  taxFooterRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  taxFooterLabel: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
+  taxSplitRow: { flexDirection: 'row' },
+  taxSplitValue: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary, marginTop: 2 },
+  taxRecommendBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacing.md,
+    marginTop: tokens.spacing.md,
+    backgroundColor: hexToRgba('#9A6DD7', 0.1),
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: tokens.spacing.md,
+  },
+  taxRecommendLabel: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
+  taxRecommendValue: { fontSize: tokens.typography.label, fontWeight: '800', color: '#9A6DD7' },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },

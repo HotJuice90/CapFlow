@@ -21,7 +21,7 @@ applyGlobalFont();
  * встретится с системными иконками — иконки остаются читаемыми, кашу не видно.
  * Цвет = верхний стоп фонового градиента (#F2F4F9).
  */
-const SHEET_ROUTES = ['/currency-picker', '/option-picker', '/date-picker', '/settings/manual-rates', '/catalog/instrument-detail'];
+const SHEET_ROUTES = ['/currency-picker', '/option-picker', '/date-picker', '/settings/manual-rates', '/catalog/instrument-detail', '/asset/balance-adjust', '/asset/rate-adjust'];
 
 function StatusBarMask() {
   const insets = useSafeAreaInsets();
@@ -105,6 +105,30 @@ export default function RootLayout() {
               options={{
                 presentation: 'formSheet',
                 sheetAllowedDetents: 'fitToContents',
+                sheetCornerRadius: 24,
+                sheetGrabberVisible: false,
+                gestureEnabled: true,
+                animation: 'none',
+              }}
+            />
+            <Stack.Screen
+              name="asset/balance-adjust"
+              options={{
+                presentation: 'formSheet',
+                // Не fitToContents: форма растёт вместе с историей операций и легко
+                // становится выше экрана — нужен гарантированный скролл, а не подгонка.
+                sheetAllowedDetents: [0.92],
+                sheetCornerRadius: 24,
+                sheetGrabberVisible: false,
+                gestureEnabled: true,
+                animation: 'none',
+              }}
+            />
+            <Stack.Screen
+              name="asset/rate-adjust"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.92],
                 sheetCornerRadius: 24,
                 sheetGrabberVisible: false,
                 gestureEnabled: true,

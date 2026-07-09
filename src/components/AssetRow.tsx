@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { AssetView } from '@/domain/types';
-import { tokens } from '@/theme';
+import { tokens, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { pluralDays } from '@/format/date';
 import { OrgLogo, hasBankLogo } from '@/components/BankLogo';
@@ -21,6 +21,9 @@ export function AssetRow({ view }: { view: AssetView }) {
   const router = useRouter();
   const { asset, instrument, organization, derived } = view;
   const iconName = ICON_BY_TYPE[instrument.typeId] ?? 'bank-outline';
+  // Срок вышел, но актив ещё не закрыт/архивирован руками — нужно решение
+  // (продлить/архив/закрыть), см. app/asset/[id].tsx.
+  const isMatured = instrument.behavior === 'term' && (derived.termProgress ?? 0) >= 1;
 
   return (
     <Pressable
@@ -45,7 +48,7 @@ export function AssetRow({ view }: { view: AssetView }) {
           </Text>
         ) : (
           <Text style={styles.subtitle} numberOfLines={1}>
-            {organization.name} · {formatPercent(asset.rate)}
+            {organization.name} · {formatPercent(derived.currentRate)}
           </Text>
         )}
       </View>
@@ -54,7 +57,11 @@ export function AssetRow({ view }: { view: AssetView }) {
         <Text style={styles.income}>
           +{formatMoney(derived.incomePerDay, { currency: asset.currency, kopecks: 'hide' })}
         </Text>
-        {derived.daysRemaining !== undefined ? (
+        {isMatured ? (
+          <View style={styles.maturedBadge}>
+            <Text style={styles.maturedBadgeText}>Истёк срок</Text>
+          </View>
+        ) : derived.daysRemaining !== undefined ? (
           <Text style={styles.meta}>
             {derived.daysRemaining} {pluralDays(derived.daysRemaining)}
           </Text>
@@ -103,5 +110,17 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.micro,
     color: tokens.text.tertiary,
     marginTop: 2,
+  },
+  maturedBadge: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: tokens.radius.pill,
+    backgroundColor: hexToRgba(tokens.semantic.warning, 0.14),
+  },
+  maturedBadgeText: {
+    fontSize: tokens.typography.micro,
+    fontWeight: '700',
+    color: tokens.semantic.warning,
   },
 });

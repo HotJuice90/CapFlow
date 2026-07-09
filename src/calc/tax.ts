@@ -21,3 +21,21 @@ export function calcPortfolioTax(taxableIncomes: number[], params: CalcParams): 
   const total = taxableIncomes.reduce((acc, v) => acc + v, 0);
   return calcTax(total, params);
 }
+
+/**
+ * Налог на доход актива с учётом того, КТО его платит (решение: taxWithheldByBank).
+ * Необлагаемый лимит (1 млн × ключевая ставка, ст. 214.2 НК) — льгота именно на
+ * ПРОЦЕНТНЫЙ доход по вкладам/счетам, который САМ человек декларирует и платит.
+ * Если площадка/брокер удерживает налог сама (брокерский счёт, ЦФА-обёртка) —
+ * это другой правовой режим, лимит к нему не имеет отношения вообще: ни занимать
+ * его чужим доходом, ни получать долю от него. Считаем плоско: ставка × доход.
+ */
+export function calcAssetTax(
+  taxableIncome: number,
+  params: CalcParams,
+  limitAlreadyUsed: number,
+  taxWithheldByBank: boolean | undefined,
+): number {
+  if (taxWithheldByBank) return Math.max(0, taxableIncome) * (params.taxRate / 100);
+  return calcTax(taxableIncome, params, limitAlreadyUsed);
+}
