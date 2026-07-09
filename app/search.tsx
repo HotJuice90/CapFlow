@@ -2,13 +2,20 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
+
+const TYPE_ICON: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
+  dfa: 'chart-line',
+};
 
 function norm(s: string): string {
   return s.toLowerCase().trim();
@@ -58,7 +65,7 @@ export default function SearchScreen() {
             style={styles.input}
             value={q}
             onChangeText={setQ}
-            placeholder="Активы, площадки, инструменты"
+            placeholder="Поиск"
             placeholderTextColor={tokens.text.tertiary}
             autoFocus
             returnKeyType="search"
@@ -80,7 +87,7 @@ export default function SearchScreen() {
                     <View key={a.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/asset/${a.id}`)}>
-                        <OrgLogo color={org?.color ?? tokens.accent.base} logo={org?.logo} imageUri={org?.customImageUri} size={32} />
+                        <OrgLogo color={org?.color ?? tokens.accent.base} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={tokens.radius.sm} />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.rowTitle} numberOfLines={1}>{instr?.name ?? 'Актив'}</Text>
                           <Text style={styles.rowSub} numberOfLines={1}>{a.title ?? org?.name ?? ''}</Text>
@@ -103,7 +110,7 @@ export default function SearchScreen() {
                     <View key={o.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/catalog/organization?id=${o.id}`)}>
-                        <OrgLogo color={o.color} logo={o.logo} imageUri={o.customImageUri} size={32} />
+                        <OrgLogo color={o.color} logo={o.logo} imageUri={o.customImageUri} size={44} radius={tokens.radius.md} bordered={false} />
                         <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>{o.name}</Text>
                         <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
                       </Pressable>
@@ -123,8 +130,14 @@ export default function SearchScreen() {
                     <View key={it.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/catalog/instrument?id=${it.id}`)}>
-                        <MaterialIcons name="savings" size={20} color={tokens.accent.base} />
-                        <Text style={[styles.rowTitle, { flex: 1, marginLeft: tokens.spacing.sm }]} numberOfLines={1}>{it.name}</Text>
+                        <View style={[styles.typeIcon, { backgroundColor: hexToRgba(tokens.category[it.typeId] ?? tokens.accent.base, 0.06) }]}>
+                          <MaterialCommunityIcons
+                            name={TYPE_ICON[it.typeId] ?? 'bank-outline'}
+                            size={22}
+                            color={tokens.category[it.typeId] ?? tokens.accent.base}
+                          />
+                        </View>
+                        <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>{it.name}</Text>
                         <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
                       </Pressable>
                     </View>
@@ -155,9 +168,9 @@ const styles = StyleSheet.create({
   cancel: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   empty: { textAlign: 'center', color: tokens.text.tertiary, marginTop: tokens.spacing.xxl },
   group: { fontSize: tokens.typography.label, fontWeight: '600', color: tokens.text.secondary, marginBottom: tokens.spacing.sm, marginTop: tokens.spacing.md },
-  list: { paddingHorizontal: tokens.spacing.lg },
+  list: { paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.xs },
   row: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md },
-  dot: { width: 32, height: 32, borderRadius: tokens.radius.sm },
+  typeIcon: { width: 44, height: 44, borderRadius: tokens.radius.md, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontSize: tokens.typography.body, fontWeight: '500', color: tokens.text.primary },
   rowSub: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 2 },
   sep: { height: 1, backgroundColor: tokens.surface.hairline },

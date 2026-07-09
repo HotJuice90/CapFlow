@@ -51,10 +51,12 @@ interface DataContextValue {
   // каталоги
   addOrganization: (org: Organization) => Promise<void>;
   updateOrganization: (org: Organization) => Promise<void>;
-  deleteOrganization: (id: string) => Promise<void>;
+  /** false — отказ: на площадку ещё ссылается инструмент (см. реализацию). */
+  deleteOrganization: (id: string) => Promise<boolean>;
   addInstrument: (instrument: FinancialInstrument) => Promise<void>;
   updateInstrument: (instrument: FinancialInstrument) => Promise<void>;
-  deleteInstrument: (id: string) => Promise<void>;
+  /** false — отказ: на инструмент ещё ссылается актив (см. реализацию). */
+  deleteInstrument: (id: string) => Promise<boolean>;
   // настройки/демо
   deleteDemoData: () => Promise<void>;
   reseedDemo: () => Promise<void>;
@@ -278,7 +280,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteOrganization = useCallback(
     async (id: string) => {
+      // Защита на уровне данных, а не только в UI каталога (см. deleteDemoData
+      // выше) — иначе инструмент остаётся без площадки и «висит» так, будто
+      // не существует, но не удаляется нигде.
+      if (data.instruments.some((i) => i.organizationId === id)) return false;
       await persist({ ...data, organizations: data.organizations.filter((o) => o.id !== id) });
+      return true;
     },
     [data, persist],
   );
@@ -304,17 +311,35 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteInstrument = useCallback(
     async (id: string) => {
+      if (data.assets.some((a) => a.instrumentId === id)) return false;
       await persist({ ...data, instruments: data.instruments.filter((i) => i.id !== id) });
+      return true;
     },
     [data, persist],
   );
 
   // --- Демо / настройки ---
   const deleteDemoData = useCallback(async () => {
+    // Демо-организация/инструмент, на который уже ссылается РЕАЛЬНЫЙ (не демо)
+    // инструмент/актив, не должна исчезать — иначе он остаётся без площадки
+    // и перестаёт резолвиться нигде (актив «висит» так, будто не существует).
+    // Вместо удаления такая запись «усыновляется» — снимаем с неё isDemo.
+    const usedInstrumentIds = new Set(
+      data.assets.filter((a) => !a.isDemo).map((a) => a.instrumentId),
+    );
+    const instruments = data.instruments
+      .filter((i) => !i.isDemo || usedInstrumentIds.has(i.id))
+      .map((i) => (usedInstrumentIds.has(i.id) ? { ...i, isDemo: false } : i));
+
+    const usedOrgIds = new Set(instruments.filter((i) => !i.isDemo).map((i) => i.organizationId));
+    const organizations = data.organizations
+      .filter((o) => !o.isDemo || usedOrgIds.has(o.id))
+      .map((o) => (usedOrgIds.has(o.id) ? { ...o, isDemo: false } : o));
+
     await persist({
       ...data,
-      organizations: data.organizations.filter((o) => !o.isDemo),
-      instruments: data.instruments.filter((i) => !i.isDemo),
+      organizations,
+      instruments,
       assets: data.assets.filter((a) => !a.isDemo),
     });
   }, [data, persist]);
