@@ -6,6 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
+import { boxShadow } from '@/theme/shadow';
 import { CapitalRingHero } from '@/components/CapitalRingHero';
 import { Donut } from '@/components/Donut';
 import { CompareDonut } from '@/components/CompareDonut';
@@ -19,7 +20,7 @@ import {
   capitalSeries,
   incomePaceWindows,
 } from '@/state/selectors';
-import { tokens } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned, CURRENCY_SYMBOL } from '@/format';
 import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
@@ -140,39 +141,50 @@ export default function AnalyticsScreen() {
                 числом в центре. Слева/справа — абсолютные цифры периодов.
                 Никакого графика-тренда — он уже есть в хиро выше. */}
             <Text style={styles.section}>Темп дохода</Text>
-            <Card>
-              <View style={styles.paceCornersRow}>
-                <View style={styles.paceCorner}>
-                  <Text style={styles.paceColLabel}>Месяц назад</Text>
-                  <Text style={[styles.paceCornerValue, { color: tokens.text.tertiary }]} numberOfLines={1}>
-                    +{formatMoney(incomeStart, { currency: cur, kopecks: 'hide', withSymbol: false })}
-                  </Text>
-                  <Text style={styles.paceColValueSuffix}>{CURRENCY_SYMBOL[cur]}/день</Text>
+            <View style={styles.paceCard}>
+              <View style={styles.paceRow}>
+                <View style={styles.paceSide}>
+                  <View style={styles.paceChip}>
+                    <Text style={styles.paceChipText}>Месяц назад</Text>
+                  </View>
+                  <View style={styles.paceValueBlock}>
+                    <Text style={styles.paceUnit}>{CURRENCY_SYMBOL[cur]} / день</Text>
+                    <Text style={[styles.paceValue, { color: tokens.text.tertiary }]} numberOfLines={1}>
+                      +{formatMoney(incomeStart, { currency: cur, kopecks: 'hide', withSymbol: false })}
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={[styles.paceCorner, styles.paceCornerRight]}>
-                  <Text style={styles.paceColLabel}>Сегодня</Text>
-                  <Text
-                    style={[styles.paceCornerValue, { color: nowWinsPace ? tokens.semantic.positive : tokens.accent.base }]}
-                    numberOfLines={1}
-                  >
-                    +{formatMoney(incomeNow, { currency: cur, kopecks: 'hide', withSymbol: false })}
-                  </Text>
-                  <Text style={styles.paceColValueSuffix}>{CURRENCY_SYMBOL[cur]}/день</Text>
+                <View style={styles.paceDonutSpacer} />
+
+                <View style={[styles.paceSide, styles.paceSideRight]}>
+                  <View style={styles.paceChip}>
+                    <Text style={styles.paceChipText}>Сегодня</Text>
+                  </View>
+                  <View style={[styles.paceValueBlock, styles.paceValueBlockRight]}>
+                    <Text style={styles.paceUnit}>{CURRENCY_SYMBOL[cur]} / день</Text>
+                    <Text
+                      style={[styles.paceValue, { color: nowWinsPace ? tokens.semantic.positive : tokens.accent.base }]}
+                      numberOfLines={1}
+                    >
+                      +{formatMoney(incomeNow, { currency: cur, kopecks: 'hide', withSymbol: false })}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.paceDonutRow}>
+              <View style={styles.paceDonutOverlay} pointerEvents="none">
                 <CompareDonut
                   prev={incomeStart}
                   now={incomeNow}
-                  size={128}
-                  strokeWidth={18}
+                  size={140}
+                  strokeWidth={21}
+                  gapPx={2}
                   centerLabel={`${incomeDeltaAbs >= 0 ? '+' : '−'}${Math.round(Math.abs(incomeDeltaPct))}%`}
                   centerSub={`${incomeDeltaAbs >= 0 ? '+' : '−'}${formatMoney(Math.abs(incomeDeltaAbs), { currency: cur, kopecks: 'hide' })}/д`}
                 />
               </View>
-            </Card>
+            </View>
 
             {/* Тренд капитала */}
             <Text style={styles.section}>Тренд капитала</Text>
@@ -306,13 +318,32 @@ const styles = StyleSheet.create({
   insightTitle: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
   insightText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 3, lineHeight: 18 },
   section: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
-  paceCornersRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
-  paceCorner: { flexShrink: 1 },
-  paceCornerRight: { alignItems: 'flex-end' },
-  paceColLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  paceCornerValue: { fontSize: tokens.typography.metric, fontWeight: '800', marginTop: 4 },
-  paceColValueSuffix: { fontSize: tokens.typography.caption, fontWeight: '600', color: tokens.text.tertiary, marginTop: 2 },
-  paceDonutRow: { alignItems: 'center', marginTop: tokens.spacing.lg },
+  paceCard: {
+    backgroundColor: '#F9FAFF',
+    borderRadius: 20,
+    padding: 16,
+    position: 'relative',
+    // Высота — не фиксируем: плашка обнимает только текст (паддинг 16 сверху/
+    // снизу + контент), а кольцо (выносной абсолютный слой) центрируется по
+    // фактической высоте плашки и торчит настолько, насколько выйдет само.
+    ...boxShadow(tokens.shadow.card),
+  },
+  paceRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  paceSide: { gap: 13, alignItems: 'flex-start' },
+  paceSideRight: { alignItems: 'flex-end' },
+  paceChip: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  paceChipText: { fontSize: 11, fontFamily: font.medium, color: hexToRgba('#212121', 0.8) },
+  paceValueBlock: { alignItems: 'flex-start' },
+  paceValueBlockRight: { alignItems: 'flex-end' },
+  paceUnit: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba('#212121', 0.3), letterSpacing: -0.24 },
+  paceValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, marginTop: 0 },
+  paceDonutSpacer: { width: 140 },
+  paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   trendTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.lg },
   trendDelta: { fontSize: tokens.typography.title, fontWeight: '800', color: tokens.text.primary },
   trendPill: { borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 5 },

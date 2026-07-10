@@ -1,19 +1,65 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, G } from 'react-native-svg';
-import { tokens } from '@/theme';
+import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { tokens, font, hexToRgba } from '@/theme';
 
 /**
- * «Перетягивание каната»: в отличие от обычного Donut (дуги одна за другой
- * от 12 часов), тут у каждой стороны СВОЙ полюс — «было» всегда на 9 часах,
- * «сейчас» на 3 часах. Доля каждой стороны растёт симметрично от своего
- * полюса к чужому (сверху и снизу поровну), поэтому при равенстве получается
- * ровно вертикальный разрез пополам. База — now/(now+prev): всегда в (0..1),
- * не ломается на любых числах (в отличие от процента роста, который может
- * быть >100% или отрицательным) — но сама по себе слишком сжата (100% роста
- * даёт лишь ~67% кольца, 200% — ~75%). Отклонение от 50% растягиваем в 1.8
- * раза и упираем в потолок ±45%, чтобы 100% роста давало ~80% кольца, а
- * 200%+ — все примерно одинаковые ~95% (сам процент точнее видно в центре).
+ * Кольцевой сектор с рУчным скруглением углов (радиус `corner`, а не
+ * strokeLinecap="round" на всю толщину штриха) — рисуется как заполненный
+ * путь: внешняя дуга → скруглённый угол (квадратичная безье с исходным
+ * острым углом как control point — стандартный приём округления угла без
+ * тяжёлой тригонометрии) → внутренняя дуга → скруглённый угол обратно.
+ * Угол 0° = 3 часа, растёт по часовой (стандартные экранные координаты).
+ */
+function ringSectorPath(cx: number, cy: number, rInner: number, rOuter: number, a0Deg: number, a1Deg: number, corner: number): string {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const pt = (r: number, deg: number) => ({ x: cx + r * Math.cos(toRad(deg)), y: cy + r * Math.sin(toRad(deg)) });
+
+  const dOuter = Math.min((corner / rOuter) * (180 / Math.PI), (a1Deg - a0Deg) / 2);
+  const dInner = Math.min((corner / rInner) * (180 / Math.PI), (a1Deg - a0Deg) / 2);
+  const k = Math.min(corner, (rOuter - rInner) / 2);
+
+  const outerStart = pt(rOuter, a0Deg + dOuter);
+  const outerEnd = pt(rOuter, a1Deg - dOuter);
+  const outerCornerStart = pt(rOuter, a0Deg);
+  const outerCornerEnd = pt(rOuter, a1Deg);
+  const edgeEndOuterSide = pt(rOuter - k, a1Deg);
+  const edgeEndInnerSide = pt(rInner + k, a1Deg);
+  const innerCornerEnd = pt(rInner, a1Deg);
+  const innerStart = pt(rInner, a1Deg - dInner);
+  const innerEnd = pt(rInner, a0Deg + dInner);
+  const innerCornerStart = pt(rInner, a0Deg);
+  const edgeStartInnerSide = pt(rInner + k, a0Deg);
+  const edgeStartOuterSide = pt(rOuter - k, a0Deg);
+
+  const span = a1Deg - a0Deg;
+  const largeArc = span > 180 ? 1 : 0;
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `Q ${outerCornerEnd.x} ${outerCornerEnd.y} ${edgeEndOuterSide.x} ${edgeEndOuterSide.y}`,
+    `L ${edgeEndInnerSide.x} ${edgeEndInnerSide.y}`,
+    `Q ${innerCornerEnd.x} ${innerCornerEnd.y} ${innerStart.x} ${innerStart.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${innerEnd.x} ${innerEnd.y}`,
+    `Q ${innerCornerStart.x} ${innerCornerStart.y} ${edgeStartInnerSide.x} ${edgeStartInnerSide.y}`,
+    `L ${edgeStartOuterSide.x} ${edgeStartOuterSide.y}`,
+    `Q ${outerCornerStart.x} ${outerCornerStart.y} ${outerStart.x} ${outerStart.y}`,
+    'Z',
+  ].join(' ');
+}
+
+/**
+ * «Перетягивание каната»: у каждой стороны СВОЙ полюс — «было» всегда на
+ * 9 часах, «сейчас» на 3 часах — растёт симметрично от своего полюса к
+ * чужому (сверху и снизу поровну), при равенстве — ровно вертикальный разрез
+ * пополам. База — now/(now+prev): всегда в (0..1), не ломается на любых
+ * числах (в отличие от процента роста, который может быть >100% или
+ * отрицательным) — но сама по себе слишком сжата (100% роста даёт лишь ~67%
+ * кольца, 200% — ~75%). Отклонение от 50% растягиваем в 1.8 раза и упираем в
+ * потолок ±45%, чтобы 100% роста давало ~80% кольца, а 200%+ — все примерно
+ * одинаковые ~95% (сам процент точнее видно в центре). Между секторами —
+ * небольшой зазор (не встык).
  *
  * «Было» — ВСЕГДА статично-нейтральная (текст и дуга), никогда не красится и
  * не полужирнеет, сколько бы она ни занимала кольца. Реагирует только
@@ -24,8 +70,10 @@ import { tokens } from '@/theme';
 export function CompareDonut({
   prev,
   now,
-  size = 96,
-  strokeWidth = 14,
+  size = 140,
+  strokeWidth = 21,
+  cornerRadius = 4,
+  gapPx = 2,
   neutralColor = '#DADFEA', // чуть темнее accent.soft — той же лавандовой подложки, что у кнопок календаря, но заметнее на кольце
   centerLabel,
   centerSub,
@@ -34,6 +82,9 @@ export function CompareDonut({
   now: number;
   size?: number;
   strokeWidth?: number;
+  cornerRadius?: number;
+  /** Зазор между секторами в пикселях (переводится в градусы по среднему радиусу кольца). */
+  gapPx?: number;
   neutralColor?: string;
   centerLabel?: string;
   centerSub?: string;
@@ -51,34 +102,31 @@ export function CompareDonut({
 
   const nowWins = now >= prev;
   const trueAccent = nowWins ? tokens.semantic.positive : tokens.semantic.negative;
-  const nowColor = nowWins ? tokens.semantic.positive : tokens.accent.base;
 
-  const r = (size - strokeWidth) / 2;
-  const c = 2 * Math.PI * r;
-  const center = size / 2;
+  const rOuter = size / 2;
+  const rInner = rOuter - strokeWidth;
+  const cx = rOuter;
+  const cy = rOuter;
+  const midRadius = (rOuter + rInner) / 2;
+  const gapDeg = (gapPx / midRadius) * (180 / Math.PI);
+  const halfGap = gapDeg / 2;
+
+  // «сейчас» центрирован на 0° (3 часа), «было» на 180° (9 часов) — зазор
+  // срезаем по halfGap с каждого конца каждого сектора.
+  const nowPath = ringSectorPath(cx, cy, rInner, rOuter, -shareNow * 180 + halfGap, shareNow * 180 - halfGap, cornerRadius);
+  const prevPath = ringSectorPath(cx, cy, rInner, rOuter, 180 - sharePrev * 180 + halfGap, 180 + sharePrev * 180 - halfGap, cornerRadius);
 
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
-        {/* «Было» — центр дуги на 9 часах (180°), всегда статична, рисуется первой. */}
-        <G rotation={180 - sharePrev * 180} origin={`${center}, ${center}`}>
-          <Circle
-            cx={center} cy={center} r={r}
-            stroke={neutralColor} strokeWidth={strokeWidth} fill="none"
-            strokeDasharray={`${sharePrev * c} ${c - sharePrev * c}`}
-            strokeLinecap="butt"
-          />
-        </G>
-        {/* «Сейчас» — центр дуги на 3 часах (0°), всегда реагирует и рисуется
-            поверх (скруглённые концы не подрезаются соседней дугой). */}
-        <G rotation={-shareNow * 180} origin={`${center}, ${center}`}>
-          <Circle
-            cx={center} cy={center} r={r}
-            stroke={nowColor} strokeWidth={strokeWidth} fill="none"
-            strokeDasharray={`${shareNow * c} ${c - shareNow * c}`}
-            strokeLinecap="round"
-          />
-        </G>
+        <Defs>
+          <LinearGradient id="nowGrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0" stopColor="#2CE296" />
+            <Stop offset="1" stopColor="#21A870" />
+          </LinearGradient>
+        </Defs>
+        <Path d={prevPath} fill={neutralColor} />
+        <Path d={nowPath} fill={nowWins ? 'url(#nowGrowGradient)' : tokens.accent.base} />
       </Svg>
       {centerLabel ? (
         <View style={styles.center} pointerEvents="none">
@@ -92,6 +140,6 @@ export function CompareDonut({
 
 const styles = StyleSheet.create({
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  centerLabel: { fontSize: tokens.typography.title, fontWeight: '800' },
-  centerSub: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },
+  centerLabel: { fontSize: 24, fontFamily: font.bold },
+  centerSub: { fontSize: 12, fontFamily: font.medium, color: hexToRgba('#212121', 0.5), letterSpacing: -0.24, marginTop: 2 },
 });
