@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
 import { CapitalRingHero } from '@/components/CapitalRingHero';
 import { Donut } from '@/components/Donut';
+import { CompareDonut } from '@/components/CompareDonut';
 import { BarTrend, type BarPoint } from '@/components/BarTrend';
 import { useData } from '@/state/DataContext';
 import {
@@ -16,13 +17,14 @@ import {
   distributionByType,
   distributionByOrg,
   capitalSeries,
-  monthComparison,
-  incomeRunRateSeries,
+  incomePaceWindows,
 } from '@/state/selectors';
 import { tokens } from '@/theme';
-import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
+import { formatMoney, formatPercent, formatPercentSigned, CURRENCY_SYMBOL } from '@/format';
 import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
+
+const CHART_W = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
 
 const SHORT_TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклады',
@@ -57,10 +59,8 @@ export default function AnalyticsScreen() {
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const capSeries = useMemo(() => capitalSeries(data, 30), [data]);
-  const incomeSeries = useMemo(() => incomeRunRateSeries(data, 31), [data]);
-  const comp = useMemo(() => monthComparison(data), [data]);
+  const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
   const trendBars = useMemo(() => bucketSeries(capSeries, 5), [capSeries]);
-  const incomeBars = useMemo(() => bucketSeries(incomeSeries, 6), [incomeSeries]);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -69,10 +69,11 @@ export default function AnalyticsScreen() {
   const lastCap = capSeries[capSeries.length - 1] ?? 0;
   const deltaAbs = lastCap - first;
   const deltaPct = first > 0 ? (deltaAbs / first) * 100 : 0;
-  const incomeStart = incomeSeries[0] ?? 0;
-  const incomeNow = incomeSeries[incomeSeries.length - 1] ?? 0;
+  const incomeStart = incomePace.prev;
+  const incomeNow = incomePace.now;
   const incomeDeltaAbs = incomeNow - incomeStart;
   const incomeDeltaPct = incomeStart > 0 ? (incomeDeltaAbs / incomeStart) * 100 : 0;
+  const nowWinsPace = incomeNow >= incomeStart;
   const topType = byType.groups[0];
 
   // НДФЛ
@@ -134,47 +135,42 @@ export default function AnalyticsScreen() {
               </View>
             ) : null}
 
-            {/* Темп дохода */}
+            {/* Темп дохода — «перетягивание каната»: пончик из двух сегментов
+                (было/стало) сам показывает пропорцию роста/просадки, темп —
+                числом в центре. Слева/справа — абсолютные цифры периодов.
+                Никакого графика-тренда — он уже есть в хиро выше. */}
             <Text style={styles.section}>Темп дохода</Text>
             <Card>
-              <View style={styles.incomePaceTop}>
-                <View style={styles.incomePaceMain}>
-                  <Text style={styles.incomePaceLabel}>Сейчас в день</Text>
-                  <Text style={styles.incomePaceValue} numberOfLines={1} adjustsFontSizeToFit>
-                    +{formatMoney(incomeNow, { currency: cur, kopecks: 'hide' })}
+              <View style={styles.paceCornersRow}>
+                <View style={styles.paceCorner}>
+                  <Text style={styles.paceColLabel}>Месяц назад</Text>
+                  <Text style={[styles.paceCornerValue, { color: tokens.text.tertiary }]} numberOfLines={1}>
+                    +{formatMoney(incomeStart, { currency: cur, kopecks: 'hide', withSymbol: false })}
                   </Text>
+                  <Text style={styles.paceColValueSuffix}>{CURRENCY_SYMBOL[cur]}/день</Text>
                 </View>
-                <View style={[styles.incomePacePill, { backgroundColor: incomeDeltaAbs >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
-                  <MaterialIcons
-                    name={incomeDeltaAbs >= 0 ? 'trending-up' : 'trending-down'}
-                    size={16}
-                    color={incomeDeltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
-                  />
-                  <Text style={[styles.incomePacePillText, { color: incomeDeltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {incomeDeltaAbs >= 0 ? '+' : '−'}{formatMoney(Math.abs(incomeDeltaAbs), { currency: cur, kopecks: 'hide' })}/д
+
+                <View style={[styles.paceCorner, styles.paceCornerRight]}>
+                  <Text style={styles.paceColLabel}>Сегодня</Text>
+                  <Text
+                    style={[styles.paceCornerValue, { color: nowWinsPace ? tokens.semantic.positive : tokens.accent.base }]}
+                    numberOfLines={1}
+                  >
+                    +{formatMoney(incomeNow, { currency: cur, kopecks: 'hide', withSymbol: false })}
                   </Text>
+                  <Text style={styles.paceColValueSuffix}>{CURRENCY_SYMBOL[cur]}/день</Text>
                 </View>
               </View>
-              <BarTrend points={incomeBars} height={92} scale="zero" />
-              <View style={styles.incomePaceMeta}>
-                <View style={styles.incomePaceMetaCell}>
-                  <Text style={styles.incomePaceMetaLabel}>30 дней назад</Text>
-                  <Text style={styles.incomePaceMetaValue}>
-                    +{formatMoney(incomeStart, { currency: cur, kopecks: 'hide' })}/д
-                  </Text>
-                </View>
-                <View style={styles.incomePaceMetaCell}>
-                  <Text style={styles.incomePaceMetaLabel}>Сейчас в месяц</Text>
-                  <Text style={styles.incomePaceMetaValue}>
-                    +{formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
-                  </Text>
-                </View>
-                <View style={styles.incomePaceMetaCell}>
-                  <Text style={styles.incomePaceMetaLabel}>Изменение</Text>
-                  <Text style={[styles.incomePaceMetaValue, { color: incomeDeltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {formatPercentSigned(incomeDeltaPct)}
-                  </Text>
-                </View>
+
+              <View style={styles.paceDonutRow}>
+                <CompareDonut
+                  prev={incomeStart}
+                  now={incomeNow}
+                  size={128}
+                  strokeWidth={18}
+                  centerLabel={`${incomeDeltaAbs >= 0 ? '+' : '−'}${Math.round(Math.abs(incomeDeltaPct))}%`}
+                  centerSub={`${incomeDeltaAbs >= 0 ? '+' : '−'}${formatMoney(Math.abs(incomeDeltaAbs), { currency: cur, kopecks: 'hide' })}/д`}
+                />
               </View>
             </Card>
 
@@ -192,14 +188,6 @@ export default function AnalyticsScreen() {
                 </View>
               </View>
               <BarTrend points={trendBars} height={110} />
-            </Card>
-
-            {/* Сравнение за месяц */}
-            <Text style={styles.section}>Сравнение за месяц</Text>
-            <Card>
-              <CompRow label="Капитал" now={comp.capitalNow} prev={comp.capitalPrev} cur={cur} />
-              <Sep />
-              <CompRow label="Доход в день" now={comp.incomeNow} prev={comp.incomePrev} cur={cur} hideKopecks />
             </Card>
 
             {/* По инструментам — донат */}
@@ -309,35 +297,6 @@ function Sep() {
   return <View style={styles.sep} />;
 }
 
-function CompRow({
-  label,
-  now,
-  prev,
-  cur,
-  hideKopecks,
-}: {
-  label: string;
-  now: number;
-  prev: number;
-  cur: import('@/domain/types').CurrencyCode;
-  hideKopecks?: boolean;
-}) {
-  const delta = now - prev;
-  const pct = prev > 0 ? (delta / prev) * 100 : 0;
-  const positive = delta >= 0;
-  return (
-    <View style={styles.compRow}>
-      <Text style={styles.compLabel}>{label}</Text>
-      <View style={styles.compRight}>
-        <Text style={styles.compNow}>{formatMoney(now, { currency: cur, kopecks: hideKopecks ? 'hide' : 'auto' })}</Text>
-        <Text style={[styles.compDelta, { color: positive ? tokens.semantic.positive : tokens.semantic.negative }]}>
-          {positive ? '+' : '−'}{formatMoney(Math.abs(delta), { currency: cur, kopecks: 'hide' })} ({formatPercentSigned(pct)})
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screenSub: { fontSize: tokens.typography.label, color: tokens.text.secondary, marginTop: -8, marginBottom: tokens.spacing.lg },
   insight: { flexDirection: 'row', gap: tokens.spacing.md, alignItems: 'flex-start', backgroundColor: '#F1ECFB', borderRadius: tokens.radius.lg, padding: tokens.spacing.lg, marginBottom: tokens.spacing.lg },
@@ -347,23 +306,13 @@ const styles = StyleSheet.create({
   insightTitle: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
   insightText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 3, lineHeight: 18 },
   section: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
-  incomePaceTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: tokens.spacing.md, marginBottom: tokens.spacing.lg },
-  incomePaceMain: { flex: 1, minWidth: 0 },
-  incomePaceLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  incomePaceValue: { fontSize: tokens.typography.metric, fontWeight: '800', color: tokens.text.primary, marginTop: 2 },
-  incomePacePill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
-  incomePacePillText: { fontSize: tokens.typography.caption, fontWeight: '800' },
-  incomePaceMeta: {
-    flexDirection: 'row',
-    gap: tokens.spacing.sm,
-    marginTop: tokens.spacing.lg,
-    paddingTop: tokens.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: tokens.surface.hairline,
-  },
-  incomePaceMetaCell: { flex: 1, minWidth: 0 },
-  incomePaceMetaLabel: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  incomePaceMetaValue: { fontSize: tokens.typography.caption, fontWeight: '700', color: tokens.text.primary, marginTop: 2 },
+  paceCornersRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
+  paceCorner: { flexShrink: 1 },
+  paceCornerRight: { alignItems: 'flex-end' },
+  paceColLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
+  paceCornerValue: { fontSize: tokens.typography.metric, fontWeight: '800', marginTop: 4 },
+  paceColValueSuffix: { fontSize: tokens.typography.caption, fontWeight: '600', color: tokens.text.tertiary, marginTop: 2 },
+  paceDonutRow: { alignItems: 'center', marginTop: tokens.spacing.lg },
   trendTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.lg },
   trendDelta: { fontSize: tokens.typography.title, fontWeight: '800', color: tokens.text.primary },
   trendPill: { borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
@@ -397,11 +346,6 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
   rowAccent: { color: tokens.accent.base, fontWeight: '700' },
   sep: { height: 1, backgroundColor: tokens.surface.hairline },
-  compRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: tokens.spacing.sm },
-  compLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
-  compRight: { alignItems: 'flex-end' },
-  compNow: { fontSize: tokens.typography.body, fontWeight: '700', color: tokens.text.primary },
-  compDelta: { fontSize: tokens.typography.caption, fontWeight: '600', marginTop: 2 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },

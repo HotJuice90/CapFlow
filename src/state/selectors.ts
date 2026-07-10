@@ -935,6 +935,22 @@ export function incomeRunRateSeries(data: AppData, days = 30, now: Date = new Da
   return series;
 }
 
+/**
+ * Средний темп дохода в двух соседних окнах по `windowDays` — не точка «ровно
+ * N дней назад» против точки «сегодня» (которая целиком зависит от того, в
+ * какой именно день внутри периода случилось разовое событие — пополнение,
+ * правка ставки), а средняя тенденция по каждому куску времени целиком.
+ */
+export function incomePaceWindows(
+  data: AppData,
+  windowDays = 30,
+  now: Date = new Date(),
+): { prev: number; now: number } {
+  const series = incomeRunRateSeries(data, windowDays * 2, now);
+  const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+  return { prev: avg(series.slice(0, windowDays)), now: avg(series.slice(windowDays)) };
+}
+
 export interface PeriodComparison {
   capitalNow: number;
   capitalPrev: number;
