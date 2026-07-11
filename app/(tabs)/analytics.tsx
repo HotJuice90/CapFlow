@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Dimensions, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Defs, Pattern as SvgPattern, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,13 +21,18 @@ import {
   distributionByOrg,
   capitalSeries,
   incomePaceWindows,
+  manualTotalCapitalConverted,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney, formatPercent, formatPercentSigned, CURRENCY_SYMBOL } from '@/format';
+import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
 
 const CHART_W = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
+// Доступная ширина под цифру «Темп дохода» слева/справа от бублика (140) — минус
+// паддинг плашки (16*2) и небольшой запас (~пара мм), чтобы автоуменьшение
+// шрифта срабатывало чуть раньше, не залезая в кольцо.
+const PACE_VALUE_MAX_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - 32 - 140) / 2 - 8;
 
 const SHORT_TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклады',
@@ -70,9 +76,14 @@ export default function AnalyticsScreen() {
   // «Можно разместить» — временно ручной ввод (настройки → «Капитал вне
   // активов»), пока не решено, как именно заводить свободный капитал как
   // сущность. Не задано — карточку не показываем вообще.
-  const manualTotalCapital = data.settings.manualTotalCapital;
+  const manualTotalCapital = manualTotalCapitalConverted(data);
   const freeCapital = manualTotalCapital ? Math.max(0, manualTotalCapital - byOrg.total) : 0;
-  const freeCapitalShare = manualTotalCapital ? freeCapital / manualTotalCapital : 0;
+  // Раз свободный капитал теперь занимает свой сегмент в той же полосе, доли площадок
+  // тоже считаем от общего капитала (а не только суммы площадок) — иначе сегменты
+  // перестают складываться в 100% одной полосы.
+  const grandTotal = manualTotalCapital || byOrg.total;
+  const freeCapitalShare = manualTotalCapital ? freeCapital / grandTotal : 0;
+  const orgShare = (capital: number) => (manualTotalCapital ? capital / grandTotal : capital / (byOrg.total || 1));
 
   const first = capSeries[0] ?? 0;
   const lastCap = capSeries[capSeries.length - 1] ?? 0;
@@ -156,9 +167,14 @@ export default function AnalyticsScreen() {
                     <Text style={styles.paceChipText}>Месяц назад</Text>
                   </View>
                   <View style={styles.paceValueBlock}>
-                    <Text style={styles.paceUnit}>{CURRENCY_SYMBOL[cur]} / день</Text>
-                    <Text style={[styles.paceValue, { color: tokens.text.tertiary }]} numberOfLines={1}>
-                      +{formatMoney(incomeStart, { currency: cur, kopecks: 'hide', withSymbol: false })}
+                    <Text style={styles.paceUnit}>день</Text>
+                    <Text
+                      style={[styles.paceValue, { color: tokens.text.tertiary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.55}
+                    >
+                      +{formatMoney(incomeStart, { currency: cur, kopecks: 'hide' })}
                     </Text>
                   </View>
                 </View>
@@ -170,12 +186,14 @@ export default function AnalyticsScreen() {
                     <Text style={styles.paceChipText}>Сегодня</Text>
                   </View>
                   <View style={[styles.paceValueBlock, styles.paceValueBlockRight]}>
-                    <Text style={styles.paceUnit}>{CURRENCY_SYMBOL[cur]} / день</Text>
+                    <Text style={styles.paceUnit}>день</Text>
                     <Text
                       style={[styles.paceValue, { color: nowWinsPace ? tokens.semantic.positive : tokens.accent.base }]}
                       numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.55}
                     >
-                      +{formatMoney(incomeNow, { currency: cur, kopecks: 'hide', withSymbol: false })}
+                      +{formatMoney(incomeNow, { currency: cur, kopecks: 'hide' })}
                     </Text>
                   </View>
                 </View>
@@ -248,20 +266,41 @@ export default function AnalyticsScreen() {
                         <Text style={styles.orgName} numberOfLines={1}>{g.label}</Text>
                       </View>
                       <View style={styles.orgPctChip}>
-                        <Text style={styles.orgPctText}>{Math.round(g.share * 100)}%</Text>
+                        <Text style={styles.orgPctText}>{Math.round(orgShare(g.capital) * 100)}%</Text>
                       </View>
                     </View>
                   </View>
                 );
               })}
 
-              <View style={styles.allocationBar}>
+              {/* key меняется вместе с составом сегментов (площадки + есть/нет
+                  свободного капитала) — форсирует чистый ремаунт полосы. Без
+                  этого при живом изменении набора сегментов (напр. в архив
+                  улетело 2 из 3 площадок, экран не перезапускался) Yoga иногда
+                  не пересчитывает flex корректно на inplace-обновлении. */}
+              <View
+                key={`${byOrg.groups.map((g) => g.key).join('-')}|${freeCapital > 0 ? 'free' : 'none'}`}
+                style={styles.allocationBar}
+              >
                 {byOrg.groups.map((g) => (
                   <View
                     key={g.key}
-                    style={[styles.allocationSegment, { flex: Math.max(g.share, 0.01), backgroundColor: g.color }]}
+                    style={[styles.allocationSegment, { flex: Math.max(orgShare(g.capital), 0.01), backgroundColor: g.color }]}
                   />
                 ))}
+                {manualTotalCapital && freeCapital > 0 ? (
+                  <View style={[styles.allocationSegment, styles.freeCapSegment, { flex: Math.max(freeCapitalShare, 0.01) }]}>
+                    <Svg width="100%" height="100%">
+                      <Defs>
+                        <SvgPattern id="freeCapStripes" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                          <Rect width="6" height="6" fill={hexToRgba('#7143AE', 0.12)} />
+                          <Rect width="3" height="6" fill={hexToRgba('#7143AE', 0.32)} />
+                        </SvgPattern>
+                      </Defs>
+                      <Rect width="100%" height="100%" fill="url(#freeCapStripes)" />
+                    </Svg>
+                  </View>
+                ) : null}
               </View>
 
               {manualTotalCapital ? (
@@ -384,7 +423,7 @@ const styles = StyleSheet.create({
   paceValueBlock: { alignItems: 'flex-start' },
   paceValueBlockRight: { alignItems: 'flex-end' },
   paceUnit: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba('#212121', 0.3), letterSpacing: -0.24 },
-  paceValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, marginTop: 0 },
+  paceValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, marginTop: 0, maxWidth: PACE_VALUE_MAX_W },
   paceDonutSpacer: { width: 140 },
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   trendTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.lg },
@@ -413,6 +452,7 @@ const styles = StyleSheet.create({
   orgPctText: { fontSize: 14, lineHeight: 16, fontFamily: font.semibold, color: '#586692' },
   allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.md },
   allocationSegment: { borderRadius: 4 },
+  freeCapSegment: { overflow: 'hidden' },
   freeCapCard: {
     flexDirection: 'row',
     alignItems: 'center',

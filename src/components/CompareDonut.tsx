@@ -100,8 +100,9 @@ export function CompareDonut({
   const shareNow = 0.5 + deviation;
   const sharePrev = 1 - shareNow;
 
+  const noChange = now === prev;
   const nowWins = now >= prev;
-  const trueAccent = nowWins ? tokens.semantic.positive : tokens.semantic.negative;
+  const trueAccent = noChange ? tokens.text.secondary : nowWins ? tokens.semantic.positive : tokens.semantic.negative;
 
   const rOuter = size / 2;
   const rInner = rOuter - strokeWidth;
@@ -126,7 +127,7 @@ export function CompareDonut({
           </LinearGradient>
         </Defs>
         <Path d={prevPath} fill={neutralColor} />
-        <Path d={nowPath} fill={nowWins ? 'url(#nowGrowGradient)' : tokens.accent.base} />
+        <Path d={nowPath} fill={noChange ? neutralColor : nowWins ? 'url(#nowGrowGradient)' : tokens.accent.base} />
       </Svg>
       {centerLabel ? (
         <View style={styles.center} pointerEvents="none">

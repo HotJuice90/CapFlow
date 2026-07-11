@@ -29,6 +29,16 @@ export function crossRate(data: AppData, code: CurrencyCode, base: CurrencyCode)
   return effectiveRate(data, code) / effectiveRate(data, base);
 }
 
+/** manualTotalCapital, пересчитанный из валюты ввода в текущую defaultCurrency —
+ *  иначе при смене валюты по умолчанию число просто переинтерпретируется как есть,
+ *  без конвертации (см. AppSettings.manualTotalCapitalCurrency). */
+export function manualTotalCapitalConverted(data: AppData): number | undefined {
+  const raw = data.settings.manualTotalCapital;
+  if (raw === undefined) return undefined;
+  const from = data.settings.manualTotalCapitalCurrency ?? data.settings.defaultCurrency;
+  return raw * crossRate(data, from, data.settings.defaultCurrency);
+}
+
 /** Пересчёт суммы из валюты актива в основную валюту приложения (по последним курсам). */
 function convert(amount: number, from: CurrencyCode, data: AppData): number {
   const inRub = amount * effectiveRate(data, from);

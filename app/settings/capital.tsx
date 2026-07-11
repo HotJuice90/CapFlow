@@ -6,6 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
+import { manualTotalCapitalConverted } from '@/state/selectors';
 import { tokens, font } from '@/theme';
 import { CURRENCY_SYMBOL } from '@/format';
 
@@ -20,13 +21,18 @@ export default function CapitalScreen() {
   const { data, updateSettings } = useData();
   const symbol = CURRENCY_SYMBOL[data.settings.defaultCurrency];
 
-  const [text, setText] = useState(data.settings.manualTotalCapital ? String(data.settings.manualTotalCapital) : '');
+  const converted = manualTotalCapitalConverted(data);
+  const [text, setText] = useState(converted ? String(Math.round(converted)) : '');
 
   const onChangeText = (t: string) => {
     const norm = t.replace(',', '.').replace(/[^0-9.]/g, '');
     setText(norm);
     const n = parseFloat(norm);
-    void updateSettings({ manualTotalCapital: Number.isFinite(n) && n > 0 ? n : undefined });
+    const valid = Number.isFinite(n) && n > 0;
+    void updateSettings({
+      manualTotalCapital: valid ? n : undefined,
+      manualTotalCapitalCurrency: valid ? data.settings.defaultCurrency : undefined,
+    });
   };
 
   return (

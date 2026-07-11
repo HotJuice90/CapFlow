@@ -10,6 +10,7 @@ import { Card } from '@/components/Card';
 import { SettingsRow } from '@/components/SettingsRow';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { useData } from '@/state/DataContext';
+import { manualTotalCapitalConverted } from '@/state/selectors';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
 import { CURRENCY_SYMBOL, formatMoney, formatPercent } from '@/format';
@@ -29,6 +30,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { data, updateSettings, replaceAll, hasDemo, deleteDemoData, reseedDemo } = useData();
   const version = Constants.expoConfig?.version ?? '—';
+  const manualTotalCapital = manualTotalCapitalConverted(data);
 
   const openCurrency = () => {
     openCurrencyPicker((code) => { void updateSettings({ defaultCurrency: code }); }, data.settings.defaultCurrency);
@@ -101,7 +103,7 @@ export default function SettingsScreen() {
             icon="account-balance-wallet"
             color="#7143AE"
             label="Капитал вне активов"
-            value={data.settings.manualTotalCapital ? formatMoney(data.settings.manualTotalCapital, { currency: data.settings.defaultCurrency, kopecks: 'hide' }) : 'Не задано'}
+            value={manualTotalCapital ? formatMoney(manualTotalCapital, { currency: data.settings.defaultCurrency, kopecks: 'hide' }) : 'Не задано'}
             onPress={() => router.push('/settings/capital')}
           />
           <Divider />
