@@ -25,6 +25,7 @@ import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import { calculate, ENGINE_VERSION } from '@/calc';
 import { computeTaxYearRecord } from './selectors';
 import { uid } from '@/utils/id';
+import { setAbbreviateMillionsDefault, setKopecksDefault } from '@/format';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
 
@@ -180,6 +181,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Синхронизируем дефолт formatMoney с настройкой — иначе саб-компонентам без
+  // доступа к useData (Stat, EarnedStripe и т.п.) пришлось бы прокидывать это пропсами.
+  // Важно: делаем это прямо в рендере, а не в useEffect — эффекты родителя выполняются
+  // ПОСЛЕ рендера детей, так что при переключении тумблера дети успевали бы отрендериться
+  // со старым значением (отставание на один тик, тумблер и цифры на экране расходились).
+  setAbbreviateMillionsDefault(data.settings.abbreviateMillions);
+  setKopecksDefault(data.settings.kopecks);
 
   // Догоняем годовую налоговую статистику реактивно (не только при полном
   // перезапуске приложения) — иначе актив, добавленный задним числом в уже

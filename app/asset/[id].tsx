@@ -516,12 +516,12 @@ function TimelineRow({
       <View style={{ alignItems: 'flex-end' }}>
         {entry.type === 'open' ? (
           <Text style={styles.histBalance}>
-            {formatMoney(entry.amount ?? 0, { currency, abbreviateMillions: true })} · {formatPercent(entry.rate ?? 0)}
+            {formatMoney(entry.amount ?? 0, { currency })} · {formatPercent(entry.rate ?? 0)}
           </Text>
         ) : isBalance ? (
           <>
             <Text style={[styles.histDelta, isUp ? styles.histDeltaUp : styles.histDeltaDown]}>
-              {isUp ? '+' : '−'}{formatMoney(Math.abs(entry.amountDelta ?? 0), { currency, abbreviateMillions: true })}
+              {isUp ? '+' : '−'}{formatMoney(Math.abs(entry.amountDelta ?? 0), { currency })}
             </Text>
             <Text style={styles.histBalance}>{formatMoney(entry.amount ?? 0, { currency, kopecks: 'hide' })}</Text>
           </>

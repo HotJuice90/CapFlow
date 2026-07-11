@@ -314,7 +314,7 @@ function HistoryRow({
       <View style={{ alignItems: 'flex-end' }}>
         {delta !== undefined ? (
           <Text style={[s.histDelta, isUp ? s.histDeltaUp : s.histDeltaDown]}>
-            {isUp ? '+' : '−'}{formatMoney(Math.abs(delta), { currency, abbreviateMillions: true })}
+            {isUp ? '+' : '−'}{formatMoney(Math.abs(delta), { currency })}
           </Text>
         ) : null}
         <Text style={s.histBalance}>{formatMoney(point.amount, { currency, kopecks: 'hide' })}</Text>

@@ -23,7 +23,7 @@ export function SettingsRow({
   chevron?: boolean;
   danger?: boolean;
   /** Строка-свитч вместо значения+шеврона — тап по всей строке тоже переключает. */
-  toggle?: { value: boolean; onChange: (v: boolean) => void };
+  toggle?: { value: boolean; onChange: (v: boolean) => void; offColor?: string };
 }) {
   const tint = danger ? tokens.semantic.negative : color;
   const rowOnPress = toggle ? () => toggle.onChange(!toggle.value) : onPress;
@@ -34,7 +34,7 @@ export function SettingsRow({
       </View>
       <Text style={[styles.label, danger && { color: tokens.semantic.negative }]} numberOfLines={1}>{label}</Text>
       {toggle ? (
-        <Toggle value={toggle.value} onChange={toggle.onChange} />
+        <Toggle value={toggle.value} onChange={toggle.onChange} interactive={false} offColor={toggle.offColor} />
       ) : (
         <>
           {value ? <Text style={styles.value} numberOfLines={1}>{value}</Text> : null}

@@ -15,6 +15,13 @@ export interface AppSettings {
   kopecks: KopecksMode;
   theme: 'light'; // тёмную добавим позже (решение #10)
   navBar: 'light' | 'dark'; // оформление плавающего навбара
+  /** Сокращать суммы от 1 млн («2,4 млн ₽») в обзорных блоках — выкл. показывает полностью. */
+  abbreviateMillions: boolean;
+  /** Ручной ввод «весь капитал, включая ещё не размещённый» (в defaultCurrency).
+   *  Временное решение для карточки «Можно разместить» в аналитике — до того,
+   *  как появится отдельная сущность для свободного капитала (не решено, как
+   *  именно). undefined — не задано, карточка не показывается. */
+  manualTotalCapital?: number;
 }
 
 /** Полный слепок данных приложения. Один JSON — удобно для экспорта/импорта (решение #11). */
@@ -79,6 +86,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   kopecks: 'auto',
   theme: 'light',
   navBar: 'light',
+  abbreviateMillions: true,
 };
 
 export function emptyAppData(): AppData {

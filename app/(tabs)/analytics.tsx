@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
 import { boxShadow } from '@/theme/shadow';
 import { CapitalRingHero } from '@/components/CapitalRingHero';
+import { OrgLogo } from '@/components/BankLogo';
 import { Donut } from '@/components/Donut';
 import { CompareDonut } from '@/components/CompareDonut';
 import { BarTrend, type BarPoint } from '@/components/BarTrend';
@@ -66,6 +67,13 @@ export default function AnalyticsScreen() {
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
 
+  // «Можно разместить» — временно ручной ввод (настройки → «Капитал вне
+  // активов»), пока не решено, как именно заводить свободный капитал как
+  // сущность. Не задано — карточку не показываем вообще.
+  const manualTotalCapital = data.settings.manualTotalCapital;
+  const freeCapital = manualTotalCapital ? Math.max(0, manualTotalCapital - byOrg.total) : 0;
+  const freeCapitalShare = manualTotalCapital ? freeCapital / manualTotalCapital : 0;
+
   const first = capSeries[0] ?? 0;
   const lastCap = capSeries[capSeries.length - 1] ?? 0;
   const deltaAbs = lastCap - first;
@@ -109,7 +117,7 @@ export default function AnalyticsScreen() {
           <>
             <CapitalRingHero
               label="Общий капитал"
-              bigValue={formatMoney(summary.totalCapital, { currency: cur, abbreviateMillions: true })}
+              bigValue={formatMoney(summary.totalCapital, { currency: cur })}
               deltaPct={deltaPct}
               ringGroups={byType.groups.map((g) => ({ value: g.capital, color: g.color }))}
               ringCenterLabel={topType ? `${Math.round(topType.share * 100)}%` : undefined}
@@ -117,7 +125,7 @@ export default function AnalyticsScreen() {
               chips={[
                 { icon: 'calendar-today', label: 'За сегодня', value: `+${formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}` },
                 { icon: 'calendar-month', label: 'За месяц', value: `+${formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}` },
-                { icon: 'chart-timeline-variant', label: 'За год', value: `+${formatMoney(summary.incomePerYear, { currency: cur, abbreviateMillions: true })}` },
+                { icon: 'chart-timeline-variant', label: 'За год', value: `+${formatMoney(summary.incomePerYear, { currency: cur })}` },
               ]}
               spark={capSeries}
             />
@@ -191,7 +199,7 @@ export default function AnalyticsScreen() {
             <Card>
               <View style={styles.trendTop}>
                 <Text style={styles.trendDelta}>
-                  {deltaAbs >= 0 ? '+' : '−'}{formatMoney(Math.abs(deltaAbs), { currency: cur, kopecks: 'hide', abbreviateMillions: true })}
+                  {deltaAbs >= 0 ? '+' : '−'}{formatMoney(Math.abs(deltaAbs), { currency: cur, kopecks: 'hide' })}
                 </Text>
                 <View style={[styles.trendPill, { backgroundColor: deltaPct >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
                   <Text style={[styles.trendPillText, { color: deltaPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
@@ -208,7 +216,7 @@ export default function AnalyticsScreen() {
               <View style={styles.donutRow}>
                 <Donut
                   segments={byType.groups.map((g) => ({ value: g.capital, color: g.color }))}
-                  centerLabel={formatMoney(byType.total, { currency: cur, abbreviateMillions: true })}
+                  centerLabel={formatMoney(byType.total, { currency: cur })}
                   centerSub="всего"
                 />
                 <View style={styles.legend}>
@@ -223,23 +231,58 @@ export default function AnalyticsScreen() {
               </View>
             </Card>
 
-            {/* По площадкам — бары */}
-            <Text style={styles.section}>По площадкам</Text>
-            <Card>
-              {byOrg.groups.map((g, i) => (
-                <View key={g.key} style={i > 0 ? styles.orgGap : undefined}>
-                  <View style={styles.orgLine}>
-                    <View style={[styles.legendDot, { backgroundColor: g.color }]} />
-                    <Text style={styles.orgName} numberOfLines={1}>{g.label}</Text>
-                    <Text style={styles.orgAmount}>{formatMoney(g.capital, { currency: cur, abbreviateMillions: true })}</Text>
-                    <Text style={styles.orgPct}>{Math.round(g.share * 100)}%</Text>
+            {/* Размещение капитала — строки по площадкам + единая пропорциональная полоса */}
+            <Text style={styles.section}>Размещение капитала</Text>
+            <View style={styles.orgCard}>
+              {byOrg.groups.map((g, i) => {
+                const org = data.organizations.find((o) => o.id === g.key);
+                return (
+                  <View key={g.key}>
+                    {i > 0 ? <View style={styles.orgSep} /> : null}
+                    <View style={styles.orgRow}>
+                      <OrgLogo color={g.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
+                      <View style={styles.orgInfo}>
+                        <Text style={styles.orgAmount} numberOfLines={1}>
+                          {formatMoney(g.capital, { currency: cur })}
+                        </Text>
+                        <Text style={styles.orgName} numberOfLines={1}>{g.label}</Text>
+                      </View>
+                      <View style={styles.orgPctChip}>
+                        <Text style={styles.orgPctText}>{Math.round(g.share * 100)}%</Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.track}>
-                    <View style={[styles.fill, { width: `${Math.max(3, Math.round(g.share * 100))}%`, backgroundColor: g.color }]} />
+                );
+              })}
+
+              <View style={styles.allocationBar}>
+                {byOrg.groups.map((g) => (
+                  <View
+                    key={g.key}
+                    style={[styles.allocationSegment, { flex: Math.max(g.share, 0.01), backgroundColor: g.color }]}
+                  />
+                ))}
+              </View>
+
+              {manualTotalCapital ? (
+                <ImageBackground
+                  source={require('../../assets/decor/free-capital-jar.png')}
+                  style={styles.freeCapCard}
+                  imageStyle={styles.freeCapBg}
+                  resizeMode="cover"
+                >
+                  <View style={styles.freeCapInfo}>
+                    <Text style={styles.freeCapValue}>
+                      {formatMoney(freeCapital, { currency: cur, kopecks: 'hide' })}
+                    </Text>
+                    <Text style={styles.freeCapLabel}>Можно разместить</Text>
                   </View>
-                </View>
-              ))}
-            </Card>
+                  <View style={styles.freeCapPctChip}>
+                    <Text style={styles.freeCapPctText}>{Math.round(freeCapitalShare * 100)}%</Text>
+                  </View>
+                </ImageBackground>
+              ) : null}
+            </View>
 
             {/* Налоги (НДФЛ) */}
             <Text style={styles.section}>Налоги (НДФЛ)</Text>
@@ -337,7 +380,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  paceChipText: { fontSize: 11, fontFamily: font.medium, color: hexToRgba('#212121', 0.8) },
+  paceChipText: { fontSize: 11, lineHeight: 13, fontFamily: font.medium, color: hexToRgba('#212121', 0.8) },
   paceValueBlock: { alignItems: 'flex-start' },
   paceValueBlockRight: { alignItems: 'flex-end' },
   paceUnit: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba('#212121', 0.3), letterSpacing: -0.24 },
@@ -354,13 +397,38 @@ const styles = StyleSheet.create({
   legendDot: { width: 12, height: 12, borderRadius: 4 },
   legendLabel: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.primary, fontWeight: '500' },
   legendPct: { fontSize: tokens.typography.caption, fontWeight: '700', color: tokens.text.primary },
-  orgGap: { marginTop: tokens.spacing.lg },
-  orgLine: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
-  orgName: { flex: 1, fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.primary },
-  orgAmount: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
-  orgPct: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, width: 36, textAlign: 'right' },
-  track: { height: 7, borderRadius: 4, backgroundColor: tokens.surface.neutral, overflow: 'hidden', marginTop: tokens.spacing.sm },
-  fill: { height: 7, borderRadius: 4 },
+  orgCard: {
+    backgroundColor: '#F9FAFF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    ...boxShadow(tokens.shadow.card),
+  },
+  orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  orgSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 16 },
+  orgInfo: { flex: 1, minWidth: 0, gap: 6 },
+  orgAmount: { fontSize: 20, lineHeight: 22, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.4 },
+  orgName: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
+  orgPctChip: { width: 50, height: 50, borderRadius: 12, backgroundColor: tokens.surface.white, alignItems: 'center', justifyContent: 'center' },
+  orgPctText: { fontSize: 14, lineHeight: 16, fontFamily: font.semibold, color: '#586692' },
+  allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.md },
+  allocationSegment: { borderRadius: 4 },
+  freeCapCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    backgroundColor: hexToRgba('#7143AE', 0.08),
+    overflow: 'hidden',
+  },
+  freeCapBg: { borderRadius: 16 },
+  freeCapInfo: { gap: 6 },
+  freeCapValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: '#7143AE', letterSpacing: -0.36 },
+  freeCapLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: hexToRgba('#212121', 0.5), letterSpacing: -0.28 },
+  freeCapPctChip: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+  freeCapPctText: { fontSize: 16, lineHeight: 18, fontFamily: font.semibold, color: '#586692' },
   taxTop: { flexDirection: 'row', gap: tokens.spacing.lg },
   taxLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
   taxValue: { fontSize: tokens.typography.title, fontWeight: '700', color: tokens.text.primary, marginTop: 2 },

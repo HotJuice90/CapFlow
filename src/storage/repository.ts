@@ -23,6 +23,12 @@ function migrate(data: AppData): AppData {
   if (!next.ratesHistory) next.ratesHistory = [];
   if (!next.manualRates) next.manualRates = {};
   if (!next.taxYearRecords) next.taxYearRecords = [];
+  if (next.settings.abbreviateMillions === undefined) {
+    next.settings = { ...next.settings, abbreviateMillions: true };
+  }
+  if (next.settings.kopecks === undefined) {
+    next.settings = { ...next.settings, kopecks: 'auto' };
+  }
   // Самовосстанавливающийся мердж, не только «если пусто» — если сохранённая
   // история где-то обрезалась (напр. неудачный live-фетч), старый бэйзлайн
   // с 2013 года всё равно домердживается на каждой загрузке, не только один раз.

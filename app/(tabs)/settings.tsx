@@ -12,7 +12,7 @@ import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { useData } from '@/state/DataContext';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
-import { CURRENCY_SYMBOL, formatPercent } from '@/format';
+import { CURRENCY_SYMBOL, formatMoney, formatPercent } from '@/format';
 import { exportData, importData } from '@/backup/backup';
 import { t } from '@/i18n';
 import Constants from 'expo-constants';
@@ -96,6 +96,16 @@ export default function SettingsScreen() {
           <SettingsRow icon="account-balance" color="#3E63DD" label="Ключевая ставка ЦБ" value={formatPercent(data.params.keyRate)} onPress={() => router.push('/settings/key-rate')} />
           <Divider />
           <SettingsRow icon="description" color="#FF5C00" label="Налоговые параметры" onPress={() => router.push('/settings/tax')} />
+          <Divider />
+          <SettingsRow
+            icon="account-balance-wallet"
+            color="#7143AE"
+            label="Капитал вне активов"
+            value={data.settings.manualTotalCapital ? formatMoney(data.settings.manualTotalCapital, { currency: data.settings.defaultCurrency, kopecks: 'hide' }) : 'Не задано'}
+            onPress={() => router.push('/settings/capital')}
+          />
+          <Divider />
+          <SettingsRow icon="format-list-numbered" color="#3E63DD" label="Формат данных" onPress={() => router.push('/settings/data-format')} />
         </Group>
 
         <Group title="Приложение">

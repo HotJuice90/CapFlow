@@ -190,11 +190,11 @@ export default function CalendarScreen() {
             {/* Компактная сводка месяца — в стиле нижней таблички дня */}
             <Card style={styles.statsCard} padded={false}>
               <View style={styles.statsRow}>
-                <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, abbreviateMillions: true, kopecks: 'hide' })}`} color="#009933" />
+                <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color="#009933" />
                 <View style={styles.statSep} />
-                <Stat label="Налог за месяц" value={`−${formatMoney(monthTaxSum, { currency: cur, abbreviateMillions: true, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
+                <Stat label="Налог за месяц" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
                 <View style={styles.statSep} />
-                <Stat label="Освободится" value={formatMoney(monthReleaseSum, { currency: cur, abbreviateMillions: true, kopecks: 'hide' })} color="#586692" />
+                <Stat label="Освободится" value={formatMoney(monthReleaseSum, { currency: cur, kopecks: 'hide' })} color="#586692" />
                 <View style={styles.statSep} />
                 <Stat label={isCurrentMonth ? 'До конца месяца' : 'Дней в месяце'} value={`${daysLeft}`} />
               </View>
@@ -295,7 +295,7 @@ function InstrumentRow({
               <Text style={styles.rowSub} numberOfLines={1}>{org?.name ?? ''}</Text>
             </View>
             <Text style={styles.rowAmount} numberOfLines={1}>
-              {c.incomePerDay >= 0 ? '+' : ''}{formatMoney(c.incomePerDay, { currency: c.currency, abbreviateMillions: true })}
+              {c.incomePerDay >= 0 ? '+' : ''}{formatMoney(c.incomePerDay, { currency: c.currency })}
             </Text>
           </View>
 
@@ -400,7 +400,7 @@ function EarnedStripe({ amount, currency }: { amount: number; currency: Currency
           <Text style={styles.earnedStripeText}>Доход за период</Text>
         </View>
         <Text style={styles.earnedStripeAmount}>
-          +{formatMoney(amount, { currency, abbreviateMillions: true })}
+          +{formatMoney(amount, { currency })}
         </Text>
       </View>
     </View>

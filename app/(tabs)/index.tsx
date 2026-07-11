@@ -141,7 +141,7 @@ export default function HomeScreen() {
             <HomeIncomeHero
               dayValue={formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
               monthValue={formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
-              capitalValue={formatMoney(summary.workingCapital, { currency: cur, abbreviateMillions: true })}
+              capitalValue={formatMoney(summary.workingCapital, { currency: cur })}
               capitalDeltaPct={capitalDeltaPct}
               avgRate={formatPercent(summary.avgRate)}
               topInstrument={taxSummary.topInstrument ? {
@@ -174,8 +174,8 @@ export default function HomeScreen() {
                 </View>
               </View>
               <View style={styles.taxFooterRow}>
-                <Text style={styles.taxFooterLabel}>Заработано {formatMoney(taxSummary.selfAccrued, { currency: cur, abbreviateMillions: true })}</Text>
-                <Text style={styles.taxFooterLabel}>Остаток {formatMoney(taxRemain, { currency: cur, abbreviateMillions: true })}</Text>
+                <Text style={styles.taxFooterLabel}>Заработано {formatMoney(taxSummary.selfAccrued, { currency: cur })}</Text>
+                <Text style={styles.taxFooterLabel}>Остаток {formatMoney(taxRemain, { currency: cur })}</Text>
               </View>
 
               {taxSummary.taxPaidTotal > 0.5 || taxSummary.taxAccruedWithheld > 0.5 ? (
@@ -185,13 +185,13 @@ export default function HomeScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.taxFooterLabel}>Уже заплатили</Text>
                       <Text style={styles.taxSplitValue}>
-                        {formatMoney(taxSummary.taxPaidTotal, { currency: cur, abbreviateMillions: true })}
+                        {formatMoney(taxSummary.taxPaidTotal, { currency: cur })}
                       </Text>
                     </View>
                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
                       <Text style={styles.taxFooterLabel}>Ещё удержит банк</Text>
                       <Text style={styles.taxSplitValue}>
-                        {formatMoney(taxWithheldRemaining, { currency: cur, abbreviateMillions: true })}
+                        {formatMoney(taxWithheldRemaining, { currency: cur })}
                       </Text>
                     </View>
                   </View>
@@ -240,7 +240,7 @@ export default function HomeScreen() {
                               </Text>
                             </View>
                             <Text style={styles.eventAmount}>
-                              {formatMoney(v.derived.finalAmount ?? v.asset.amount, { currency: v.asset.currency, abbreviateMillions: true })}
+                              {formatMoney(v.derived.finalAmount ?? v.asset.amount, { currency: v.asset.currency })}
                             </Text>
                           </Pressable>
                         </View>

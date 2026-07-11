@@ -61,7 +61,7 @@ export function TypeCardsRow({
             </View>
             <Text style={styles.label} numberOfLines={1}>{g.label}</Text>
             <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
-              {formatMoney(g.capital, { currency, abbreviateMillions: true })}
+              {formatMoney(g.capital, { currency })}
             </Text>
             <View style={styles.metaRow}>
               <Text style={styles.count}>{pluralItems(g.typeId, g.count)}</Text>

@@ -32,8 +32,25 @@ export type KopecksMode = 'hide' | 'show' | 'auto';
 export interface MoneyOptions {
   currency?: CurrencyCode;
   kopecks?: KopecksMode; // по умолчанию 'auto'
-  abbreviateMillions?: boolean; // обзорные блоки — true
+  /** По умолчанию берётся из настроек пользователя (см. setAbbreviateMillionsDefault) — обзорные экраны не передают это явно. */
+  abbreviateMillions?: boolean;
   withSymbol?: boolean; // по умолчанию true
+}
+
+/** Синхронизируется из DataContext при изменении data.settings.abbreviateMillions —
+ *  так обзорным экранам (включая вложенные саб-компоненты без доступа к useData)
+ *  не нужно прокидывать настройку явно на каждый formatMoney. */
+let abbreviateMillionsDefault = true;
+export function setAbbreviateMillionsDefault(value: boolean): void {
+  abbreviateMillionsDefault = value;
+}
+
+/** Тот же приём для копеек (settings.kopecks) — вызовы без явного kopecks
+ *  берут этот дефолт. Места, которым нужно жёстко скрыть копейки независимо
+ *  от настройки (напр. узкие чипы), продолжают явно передавать kopecks: 'hide'. */
+let kopecksDefault: KopecksMode = 'auto';
+export function setKopecksDefault(value: KopecksMode): void {
+  kopecksDefault = value;
 }
 
 function groupThousands(intPart: string): string {
@@ -56,8 +73,8 @@ function formatNumber(value: number, kopecks: KopecksMode): string {
 export function formatMoney(value: number, options: MoneyOptions = {}): string {
   const {
     currency,
-    kopecks = 'auto',
-    abbreviateMillions = false,
+    kopecks = kopecksDefault,
+    abbreviateMillions = abbreviateMillionsDefault,
     withSymbol = true,
   } = options;
 

@@ -159,7 +159,7 @@ function ArchiveRow({
         </Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.rowAmount}>{formatMoney(asset.amount, { currency: asset.currency, abbreviateMillions: true })}</Text>
+        <Text style={styles.rowAmount}>{formatMoney(asset.amount, { currency: asset.currency })}</Text>
         <View style={[styles.statusPill, isStale && styles.statusPillWarning]}>
           <Text style={[styles.statusPillText, isStale && styles.statusPillTextWarning]}>{statusLabel}</Text>
         </View>
