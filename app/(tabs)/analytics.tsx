@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Dimensions, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Pattern as SvgPattern, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +18,7 @@ import {
   insights,
   distributionByType,
   distributionByOrg,
-  capitalSeries,
+  capitalHistorySeries,
   incomePaceWindows,
   manualTotalCapitalConverted,
 } from '@/state/selectors';
@@ -32,16 +32,31 @@ const CHART_W = Dimensions.get('window').width - tokens.spacing.screenH * 2 - to
 // шрифта срабатывало чуть раньше, не залезая в кольцо.
 const PACE_VALUE_MAX_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - 32 - 140) / 2 - 8;
 
+type HeroPeriod = 'month' | 'year' | 'all';
+const HERO_PERIODS: { key: HeroPeriod; label: string; days: number | 'all' | 'year' }[] = [
+  { key: 'month', label: 'Месяц', days: 30 },
+  { key: 'year', label: 'Год', days: 'year' },
+  { key: 'all', label: 'Всё время', days: 'all' },
+];
+const HERO_PERIOD_TAIL: Record<HeroPeriod, string> = {
+  month: 'за месяц',
+  year: 'за год',
+  all: 'за всё время',
+};
+
 export default function AnalyticsScreen() {
   const { data } = useData();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  const [heroPeriod, setHeroPeriod] = useState<HeroPeriod>('month');
+
   const summary = useMemo(() => analyticsSummary(data), [data]);
   const ins = useMemo(() => insights(data), [data]);
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
-  const capSeries = useMemo(() => capitalSeries(data, 30), [data]);
+  const heroDays = HERO_PERIODS.find((p) => p.key === heroPeriod)!.days;
+  const capSeries = useMemo(() => capitalHistorySeries(data, heroDays), [data, heroDays]);
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
 
   const cur = data.settings.defaultCurrency;
@@ -61,7 +76,12 @@ export default function AnalyticsScreen() {
 
   const first = capSeries[0] ?? 0;
   const lastCap = capSeries[capSeries.length - 1] ?? 0;
-  const deltaPct = first > 0 ? ((lastCap - first) / first) * 100 : 0;
+  const deltaAbs = lastCap - first;
+  // Если в начале периода капитала ещё не было (первый актив открыт позже) —
+  // рост в % не определён математически, а «0%» тут откровенно врёт (капитал
+  // ведь реально вырос с нуля). Показываем честный абсолют вместо процента.
+  const hasDeltaPct = first > 0;
+  const deltaPct = hasDeltaPct ? (deltaAbs / first) * 100 : 0;
   const incomeStart = incomePace.prev;
   const incomeNow = incomePace.now;
   const incomeDeltaAbs = incomeNow - incomeStart;
@@ -99,21 +119,24 @@ export default function AnalyticsScreen() {
         ) : (
           <>
             {/* Хиро — светлый, в языке остальных виджетов экрана. Только то, чего
-                нет в других блоках: якорное число, динамика за 30 дней (пилюля +
-                спарклайн — единственный график капитала на экране) и
+                нет в других блоках: якорное число, реальный график капитала (тело +
+                проценты по дням, реконструкция из активов — не дублирует «за
+                сегодня/месяц» на главной, там про темп, тут про факт) и
                 аналитические метрики (ставка/премия/заработано). Состав по типам —
-                ниже в «По инструментам», дневные/месячные доходы — на главной. */}
+                ниже в «По инструментам». */}
             <View style={styles.heroCard}>
               <View style={styles.heroTop}>
                 <Text style={styles.heroLabel}>Общий капитал</Text>
-                <View style={[styles.heroDeltaPill, { backgroundColor: deltaPct >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
+                <View style={[styles.heroDeltaPill, { backgroundColor: deltaAbs >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
                   <MaterialIcons
-                    name={deltaPct >= 0 ? 'trending-up' : 'trending-down'}
+                    name={deltaAbs >= 0 ? 'trending-up' : 'trending-down'}
                     size={14}
-                    color={deltaPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
+                    color={deltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
                   />
-                  <Text style={[styles.heroDeltaText, { color: deltaPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {formatPercentSigned(deltaPct)} за 30 дней
+                  <Text style={[styles.heroDeltaText, { color: deltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {hasDeltaPct
+                      ? `${formatPercentSigned(deltaPct)} ${HERO_PERIOD_TAIL[heroPeriod]}`
+                      : `${deltaAbs >= 0 ? '+' : '−'}${formatMoney(Math.abs(deltaAbs), { currency: cur, kopecks: 'hide' })} ${HERO_PERIOD_TAIL[heroPeriod]}`}
                   </Text>
                 </View>
               </View>
@@ -122,7 +145,19 @@ export default function AnalyticsScreen() {
               </Text>
 
               <View style={styles.heroSpark}>
-                <Sparkline data={capSeries} width={CHART_W} height={44} color={tokens.semantic.positive} />
+                <Sparkline data={capSeries} width={CHART_W} height={110} color={tokens.semantic.positive} fromZero />
+              </View>
+
+              <View style={styles.heroPeriodRow}>
+                {HERO_PERIODS.map((p) => (
+                  <Pressable
+                    key={p.key}
+                    style={[styles.heroPeriodChip, heroPeriod === p.key && styles.heroPeriodChipActive]}
+                    onPress={() => setHeroPeriod(p.key)}
+                  >
+                    <Text style={[styles.heroPeriodText, heroPeriod === p.key && styles.heroPeriodTextActive]}>{p.label}</Text>
+                  </Pressable>
+                ))}
               </View>
 
               <View style={styles.heroStats}>
@@ -430,6 +465,11 @@ const styles = StyleSheet.create({
   heroDeltaText: { fontSize: 12, lineHeight: 14, fontFamily: font.semibold },
   heroValue: { fontSize: 32, lineHeight: 34, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.64, marginTop: 8 },
   heroSpark: { marginTop: tokens.spacing.md },
+  heroPeriodRow: { flexDirection: 'row', gap: 6, marginTop: tokens.spacing.sm },
+  heroPeriodChip: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: tokens.radius.pill, backgroundColor: 'rgba(215,226,235,0.5)' },
+  heroPeriodChipActive: { backgroundColor: tokens.accent.light },
+  heroPeriodText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba('#212121', 0.6) },
+  heroPeriodTextActive: { fontFamily: font.semibold, color: '#FFFFFF' },
   heroStats: { flexDirection: 'row', gap: 8, marginTop: tokens.spacing.md },
   heroStat: { flex: 1, backgroundColor: tokens.surface.white, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
   heroStatLabel: { fontSize: 11, lineHeight: 13, fontFamily: font.medium, color: hexToRgba('#212121', 0.4) },

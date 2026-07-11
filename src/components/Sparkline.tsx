@@ -7,15 +7,20 @@ export function Sparkline({
   width = 120,
   height = 56,
   color = '#3DDC97',
+  fromZero = false,
 }: {
   data: number[];
   width?: number;
   height?: number;
   color?: string;
+  /** Шкала от 0, а не от min(data) — иначе любой ряд визуально «стартует с нуля»,
+   *  даже когда там уже реальный капитал (просто он был ниже текущего). Включать
+   *  для абсолютных денежных величин (капитал), не для темповых рядов (доход/день). */
+  fromZero?: boolean;
 }) {
   if (data.length < 2) return <Svg width={width} height={height} />;
 
-  const min = Math.min(...data);
+  const min = fromZero ? 0 : Math.min(...data);
   const max = Math.max(...data);
   const span = max - min || 1;
   const pad = 4;

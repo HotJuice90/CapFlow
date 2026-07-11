@@ -899,19 +899,66 @@ export function assetTimeline(asset: Asset): AssetTimelineEntry[] {
   return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-/** Реконструкция капитала по дням за последние N дней (для графика в аналитике). */
-export function capitalSeries(data: AppData, days = 30): number[] {
-  const today = new Date();
+/**
+ * Реконструкция РЕАЛЬНОГО капитала по дням (тело + начисленные проценты на каждый
+ * день, а не только тело) — решение #9: из первичных данных, а не снимков.
+ * Учитывает и уже закрытые/архивные активы за те дни, когда они были живы —
+ * иначе прошлое занижается всякий раз, когда что-то закрывают. Датой реального
+ * закрытия берём последний снапшот актива (`reason: closed|archived`), а не
+ * плановый `endDate` — банк мог закрыть/продлить раньше или позже срока.
+ *
+ * `days`: число — скользящее окно N дней назад (напр. «Месяц» — 30);
+ * `'year'` — КАЛЕНДАРНЫЙ год (1 января текущего года — сегодня), не диапазон
+ * в 365 дней — так график совпадает с будущим годовым снапшотом (2026 — это
+ * ровно 2026-й, а не последние 365 дней от сегодня);
+ * `'all'` — с даты открытия самого первого актива в истории.
+ */
+export function capitalHistorySeries(data: AppData, days: number | 'all' | 'year', now: Date = new Date()): number[] {
+  const instrById = new Map(data.instruments.map((i) => [i.id, i]));
+  const closedAtById = new Map<string, string>();
+  for (const s of data.snapshots) {
+    const prev = closedAtById.get(s.assetId);
+    if (!prev || s.createdAt > prev) closedAtById.set(s.assetId, s.createdAt);
+  }
+
+  const items = data.assets
+    .map((asset) => {
+      const instrument = instrById.get(asset.instrumentId);
+      if (!instrument) return null;
+      const openDate = parseLocal(asset.openDate);
+      const closedAt = asset.status !== 'active' ? new Date(closedAtById.get(asset.id) ?? now) : null;
+      return { asset, instrument, openDate, closedAt };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const opens = items.map((it) => it.openDate.getTime());
+  const earliestOpen = opens.length ? Math.min(...opens) : now.getTime();
+
+  let start: Date;
+  if (days === 'all') {
+    start = new Date(earliestOpen);
+  } else if (days === 'year') {
+    const jan1 = new Date(now.getFullYear(), 0, 1);
+    start = new Date(Math.max(jan1.getTime(), earliestOpen));
+  } else {
+    const rollingStart = new Date(now);
+    rollingStart.setDate(rollingStart.getDate() - (days - 1));
+    // Не уходим в прошлое дальше даты открытия самого первого актива — иначе
+    // при истории короче периода график начинается с искусственно «мёртвой»
+    // зоны там, где портфеля ещё физически не существовало.
+    start = new Date(Math.max(rollingStart.getTime(), earliestOpen));
+  }
+
+  const totalDays = Math.max(0, diffDays(start, now));
   const out: number[] = [];
-  for (let k = days - 1; k >= 0; k--) {
-    const day = new Date(today);
-    day.setDate(day.getDate() - k);
+  for (let k = 0; k <= totalDays; k++) {
+    const day = new Date(start);
+    day.setDate(day.getDate() + k);
     let cap = 0;
-    for (const a of data.assets) {
-      if (a.status !== 'active') continue;
-      if (parseLocal(a.openDate) > day) continue;
-      if (a.endDate && parseLocal(a.endDate) < day) continue;
-      cap += convert(a.amount, a.currency, data);
+    for (const { asset, instrument, openDate, closedAt } of items) {
+      if (openDate > day) continue;
+      if (closedAt && closedAt < day) continue;
+      cap += convert(calculate(asset, instrument, data.params, day, 0).currentValue, asset.currency, data);
     }
     out.push(cap);
   }
@@ -972,7 +1019,7 @@ export interface PeriodComparison {
 export function monthComparison(data: AppData, now: Date = new Date()): PeriodComparison {
   const prev = new Date(now);
   prev.setDate(prev.getDate() - 30);
-  const cap = capitalSeries(data, 31);
+  const cap = capitalHistorySeries(data, 31);
   return {
     capitalNow: cap[cap.length - 1] ?? 0,
     capitalPrev: cap[0] ?? 0,
