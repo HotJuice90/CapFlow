@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,6 +27,7 @@ import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
+const MONTH_PROGRESS_HEIGHT = 3;
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -96,6 +98,20 @@ export default function CalendarScreen() {
   const isCurrentMonth = view.year === now.getFullYear() && view.month === now.getMonth();
   const daysInMonth = new Date(view.year, view.month + 1, 0).getDate();
   const daysLeft = isCurrentMonth ? daysInMonth - now.getDate() : daysInMonth;
+  // Прогресс месяца для полоски-бордера над сеткой: будущий месяц — 0, прошедший — 1,
+  // текущий — доля прожитых дней.
+  const isFutureMonth = view.year > now.getFullYear() || (view.year === now.getFullYear() && view.month > now.getMonth());
+  const monthProgress = isCurrentMonth ? now.getDate() / daysInMonth : isFutureMonth ? 0 : 1;
+
+  // Цвет полоски — по декадам (1-10 / 11-20 / 21-конец), внутри декады насыщенность
+  // растёт от «еле заметно» к «в полную силу» — тот же приём градиента, что у бублика
+  // «Темп дохода» (CompareDonut), просто на прямой полосе.
+  const effectiveDay = isCurrentMonth ? now.getDate() : isFutureMonth ? 1 : daysInMonth;
+  const decadeIndex = effectiveDay <= 10 ? 0 : effectiveDay <= 20 ? 1 : 2;
+  const decadeHue = [tokens.semantic.positive, tokens.semantic.warning, tokens.accent.base][decadeIndex];
+  const decadeStart = decadeIndex === 0 ? 1 : decadeIndex === 1 ? 11 : 21;
+  const decadeEnd = decadeIndex === 0 ? 10 : decadeIndex === 1 ? 20 : daysInMonth;
+  const decadeIntensity = (effectiveDay - decadeStart + 1) / (decadeEnd - decadeStart + 1);
 
   // Точка = «в этот день реально что-то произошло»:
   // — тусклая точка: объединяющий индикатор «сегодня есть хоть одна ежедневная
@@ -200,18 +216,30 @@ export default function CalendarScreen() {
               </View>
             </Card>
 
-            {/* Сетка */}
-            <Card style={styles.softShadow}>
-              <MonthCalendar
-                year={view.year}
-                month={view.month}
-                markers={markers}
-                selected={selected}
-                today={todayIso}
-                onSelect={setSelected}
-                onPrev={prevMonth}
-                onNext={nextMonth}
-              />
+            {/* Сетка — прогресс месяца border-top'ом: полоска НЕ внутри паддинга,
+                чтобы её углы срезались той же маской contentLayer (overflow:hidden),
+                что и у самой карточки — тогда она ровно «от закругления до закругления». */}
+            <Card style={styles.softShadow} padded={false}>
+              <View style={[styles.monthProgressTrack, { backgroundColor: hexToRgba(decadeHue, 0.12) }]}>
+                <LinearGradient
+                  colors={[hexToRgba(decadeHue, 0.3), hexToRgba(decadeHue, 0.3 + 0.7 * decadeIntensity)]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.monthProgressFill, { width: `${monthProgress * 100}%` }]}
+                />
+              </View>
+              <View style={styles.monthGridInner}>
+                <MonthCalendar
+                  year={view.year}
+                  month={view.month}
+                  markers={markers}
+                  selected={selected}
+                  today={todayIso}
+                  onSelect={setSelected}
+                  onPrev={prevMonth}
+                  onNext={nextMonth}
+                />
+              </View>
             </Card>
 
             {/* Выбранный день — один сплошной блок: сводка сверху + список инструментов */}
@@ -409,6 +437,9 @@ function EarnedStripe({ amount, currency }: { amount: number; currency: Currency
 
 const styles = StyleSheet.create({
   softShadow: boxShadow('0px 6px 18px rgba(48,69,62,0.05)'),
+  monthProgressTrack: { height: MONTH_PROGRESS_HEIGHT },
+  monthProgressFill: { height: MONTH_PROGRESS_HEIGHT },
+  monthGridInner: { padding: tokens.spacing.lg, paddingTop: tokens.spacing.lg + MONTH_PROGRESS_HEIGHT },
   statsCard: { marginBottom: tokens.spacing.lg, ...boxShadow('0px 6px 18px rgba(48,69,62,0.05)') },
   statsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 16 },
   stat: { flex: 1, alignItems: 'center' },
