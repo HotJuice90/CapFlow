@@ -8,11 +8,10 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
 import { boxShadow } from '@/theme/shadow';
-import { CapitalRingHero } from '@/components/CapitalRingHero';
 import { OrgLogo } from '@/components/BankLogo';
 import { Donut } from '@/components/Donut';
 import { CompareDonut } from '@/components/CompareDonut';
-import { BarTrend, type BarPoint } from '@/components/BarTrend';
+import { Sparkline } from '@/components/Sparkline';
 import { useData } from '@/state/DataContext';
 import {
   analyticsSummary,
@@ -25,7 +24,6 @@ import {
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
-import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
 
 const CHART_W = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
@@ -33,29 +31,6 @@ const CHART_W = Dimensions.get('window').width - tokens.spacing.screenH * 2 - to
 // паддинг плашки (16*2) и небольшой запас (~пара мм), чтобы автоуменьшение
 // шрифта срабатывало чуть раньше, не залезая в кольцо.
 const PACE_VALUE_MAX_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - 32 - 140) / 2 - 8;
-
-const SHORT_TYPE_LABEL: Record<string, string> = {
-  deposit: 'Вклады',
-  savings: 'Счета',
-  dfa: 'ЦФА',
-};
-
-/** Дневной ряд → N корзин (последний день корзины — значение бара). */
-function bucketSeries(series: number[], buckets: number): BarPoint[] {
-  const n = series.length;
-  if (n === 0) return [];
-  const bucketSize = Math.ceil(n / buckets);
-  const today = new Date();
-  const out: BarPoint[] = [];
-  for (let b = 0; b < buckets; b++) {
-    const endIdx = Math.min(n - 1, (b + 1) * bucketSize - 1);
-    const daysAgo = n - 1 - endIdx;
-    const d = new Date(today);
-    d.setDate(d.getDate() - daysAgo);
-    out.push({ label: daysAgo === 0 ? 'Сейчас' : formatDateShort(d), value: series[endIdx] });
-  }
-  return out;
-}
 
 export default function AnalyticsScreen() {
   const { data } = useData();
@@ -68,7 +43,6 @@ export default function AnalyticsScreen() {
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const capSeries = useMemo(() => capitalSeries(data, 30), [data]);
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
-  const trendBars = useMemo(() => bucketSeries(capSeries, 5), [capSeries]);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -87,14 +61,12 @@ export default function AnalyticsScreen() {
 
   const first = capSeries[0] ?? 0;
   const lastCap = capSeries[capSeries.length - 1] ?? 0;
-  const deltaAbs = lastCap - first;
-  const deltaPct = first > 0 ? (deltaAbs / first) * 100 : 0;
+  const deltaPct = first > 0 ? ((lastCap - first) / first) * 100 : 0;
   const incomeStart = incomePace.prev;
   const incomeNow = incomePace.now;
   const incomeDeltaAbs = incomeNow - incomeStart;
   const incomeDeltaPct = incomeStart > 0 ? (incomeDeltaAbs / incomeStart) * 100 : 0;
   const nowWinsPace = incomeNow >= incomeStart;
-  const topType = byType.groups[0];
 
   // НДФЛ
   const limit = data.params.taxFreeLimit;
@@ -126,20 +98,58 @@ export default function AnalyticsScreen() {
           </Card>
         ) : (
           <>
-            <CapitalRingHero
-              label="Общий капитал"
-              bigValue={formatMoney(summary.totalCapital, { currency: cur })}
-              deltaPct={deltaPct}
-              ringGroups={byType.groups.map((g) => ({ value: g.capital, color: g.color }))}
-              ringCenterLabel={topType ? `${Math.round(topType.share * 100)}%` : undefined}
-              ringCenterSub={topType ? SHORT_TYPE_LABEL[topType.key] ?? topType.label : undefined}
-              chips={[
-                { icon: 'calendar-today', label: 'За сегодня', value: `+${formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}` },
-                { icon: 'calendar-month', label: 'За месяц', value: `+${formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}` },
-                { icon: 'chart-timeline-variant', label: 'За год', value: `+${formatMoney(summary.incomePerYear, { currency: cur })}` },
-              ]}
-              spark={capSeries}
-            />
+            {/* Хиро — светлый, в языке остальных виджетов экрана. Только то, чего
+                нет в других блоках: якорное число, динамика за 30 дней (пилюля +
+                спарклайн — единственный график капитала на экране) и
+                аналитические метрики (ставка/премия/заработано). Состав по типам —
+                ниже в «По инструментам», дневные/месячные доходы — на главной. */}
+            <View style={styles.heroCard}>
+              <View style={styles.heroTop}>
+                <Text style={styles.heroLabel}>Общий капитал</Text>
+                <View style={[styles.heroDeltaPill, { backgroundColor: deltaPct >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
+                  <MaterialIcons
+                    name={deltaPct >= 0 ? 'trending-up' : 'trending-down'}
+                    size={14}
+                    color={deltaPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
+                  />
+                  <Text style={[styles.heroDeltaText, { color: deltaPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {formatPercentSigned(deltaPct)} за 30 дней
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(summary.totalCapital, { currency: cur })}
+              </Text>
+
+              <View style={styles.heroSpark}>
+                <Sparkline data={capSeries} width={CHART_W} height={44} color={tokens.semantic.positive} />
+              </View>
+
+              <View style={styles.heroStats}>
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatLabel} numberOfLines={1}>Ставка</Text>
+                  <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {formatPercent(summary.avgRate)}
+                  </Text>
+                </View>
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatLabel} numberOfLines={1}>К ключевой</Text>
+                  <Text
+                    style={[styles.heroStatValue, { color: summary.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {formatPercentSigned(summary.premiumToKeyRate)}
+                  </Text>
+                </View>
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatLabel} numberOfLines={1}>Заработано</Text>
+                  <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
+                    +{formatMoney(summary.accrued, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                </View>
+              </View>
+            </View>
 
             {/* Инсайт */}
             {ins[0] ? (
@@ -211,22 +221,6 @@ export default function AnalyticsScreen() {
                 />
               </View>
             </View>
-
-            {/* Тренд капитала */}
-            <Text style={styles.section}>Тренд капитала</Text>
-            <Card>
-              <View style={styles.trendTop}>
-                <Text style={styles.trendDelta}>
-                  {deltaAbs >= 0 ? '+' : '−'}{formatMoney(Math.abs(deltaAbs), { currency: cur, kopecks: 'hide' })}
-                </Text>
-                <View style={[styles.trendPill, { backgroundColor: deltaPct >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
-                  <Text style={[styles.trendPillText, { color: deltaPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {formatPercentSigned(deltaPct)} за 30 дней
-                  </Text>
-                </View>
-              </View>
-              <BarTrend points={trendBars} height={110} />
-            </Card>
 
             {/* По инструментам — донат */}
             <Text style={styles.section}>По инструментам</Text>
@@ -349,13 +343,10 @@ export default function AnalyticsScreen() {
               </View>
             </Card>
 
-            {/* Эффективность */}
+            {/* Эффективность — ставка и премия к ключевой переехали в хиро,
+                тут остаётся то, что туда не влезло по смыслу. */}
             <Text style={styles.section}>Эффективность</Text>
             <Card>
-              <Row label="Средняя ставка портфеля" value={formatPercent(summary.avgRate)} />
-              <Sep />
-              <Row label="Премия к ключевой" value={formatPercentSigned(summary.premiumToKeyRate)} accent={summary.premiumToKeyRate >= 0} />
-              <Sep />
               <Row label="Доход на 1 млн (год)" value={formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' })} />
               {summary.topInstrument ? (
                 <>
@@ -426,10 +417,23 @@ const styles = StyleSheet.create({
   paceValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, marginTop: 0, maxWidth: PACE_VALUE_MAX_W },
   paceDonutSpacer: { width: 140 },
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  trendTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.lg },
-  trendDelta: { fontSize: tokens.typography.title, fontWeight: '800', color: tokens.text.primary },
-  trendPill: { borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  trendPillText: { fontSize: tokens.typography.caption, fontWeight: '700' },
+  heroCard: {
+    backgroundColor: '#F9FAFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: tokens.spacing.sm,
+    ...boxShadow(tokens.shadow.card),
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.medium, color: hexToRgba('#212121', 0.5), letterSpacing: -0.28 },
+  heroDeltaPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  heroDeltaText: { fontSize: 12, lineHeight: 14, fontFamily: font.semibold },
+  heroValue: { fontSize: 32, lineHeight: 34, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.64, marginTop: 8 },
+  heroSpark: { marginTop: tokens.spacing.md },
+  heroStats: { flexDirection: 'row', gap: 8, marginTop: tokens.spacing.md },
+  heroStat: { flex: 1, backgroundColor: tokens.surface.white, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
+  heroStatLabel: { fontSize: 11, lineHeight: 13, fontFamily: font.medium, color: hexToRgba('#212121', 0.4) },
+  heroStatValue: { fontSize: 15, lineHeight: 17, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.3 },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.lg },
   legend: { flex: 1, gap: tokens.spacing.sm },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
