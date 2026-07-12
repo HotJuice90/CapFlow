@@ -463,12 +463,35 @@ function Sep() {
 }
 
 const styles = StyleSheet.create({
-  insight: { flexDirection: 'row', gap: tokens.spacing.md, alignItems: 'flex-start', backgroundColor: '#F1ECFB', borderRadius: tokens.radius.lg, padding: tokens.spacing.lg, marginBottom: tokens.spacing.lg },
-  insightIcon: { width: 40, height: 40, borderRadius: tokens.radius.sm, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center' },
-  insightTag: { alignSelf: 'flex-start', backgroundColor: '#7C4DD6', borderRadius: tokens.radius.xs, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4 },
-  insightTagText: { fontSize: tokens.typography.micro, color: '#FFFFFF', fontWeight: '700' },
-  insightTitle: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
-  insightText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, marginTop: 3, lineHeight: 18 },
+  insight: {
+    flexDirection: 'row',
+    gap: tokens.spacing.md,
+    alignItems: 'flex-start',
+    backgroundColor: '#F9F7FE',
+    borderRadius: tokens.radius.lg,
+    padding: tokens.spacing.lg,
+    marginBottom: tokens.spacing.lg,
+    ...boxShadow(tokens.shadow.cardSoft),
+  },
+  insightIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: tokens.radius.sm,
+    backgroundColor: hexToRgba('#7C4DD6', 0.12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: hexToRgba('#7C4DD6', 0.12),
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 4,
+  },
+  insightTagText: { fontSize: 11, lineHeight: 13, fontFamily: font.semibold, color: '#7C4DD6', letterSpacing: -0.11 },
+  insightTitle: { fontSize: 14, lineHeight: 16, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.28 },
+  insightText: { fontSize: 13, lineHeight: 18, fontFamily: font.regular, color: '#667085', marginTop: 3, letterSpacing: -0.13 },
   section: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
   paceCard: {
     backgroundColor: '#F9FAFF',
