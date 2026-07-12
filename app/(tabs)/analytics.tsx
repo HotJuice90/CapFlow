@@ -90,11 +90,17 @@ export default function AnalyticsScreen() {
   const incomeDeltaPct = incomeStart > 0 ? (incomeDeltaAbs / incomeStart) * 100 : 0;
   const nowWinsPace = incomeNow >= incomeStart;
 
-  // НДФЛ
-  const limit = data.params.taxFreeLimit;
-  const usedLimit = Math.min(summary.incomePerYear, limit);
-  const remainLimit = Math.max(0, limit - summary.incomePerYear);
-  const usedPct = limit > 0 ? Math.round((usedLimit / limit) * 100) : 0;
+  // НДФЛ: сколько налога уже набежало на сегодня из прогноза за весь год —
+  // обе величины про сам налог, поэтому сравнение честное (в отличие от
+  // прежней попытки сравнивать налог с необлагаемым лимитом). Рядом — метка
+  // «сколько прошло года»: если она левее заливки, налог набегает медленнее
+  // года (обычно значит — ещё не пробили лимит), если правее — уже пробили
+  // и теперь копится быстрее календаря.
+  const taxAccruedPct = summary.taxYear > 0 ? Math.round((summary.taxAccrued / summary.taxYear) * 100) : 0;
+  const nowDate = new Date();
+  const yearStart = new Date(nowDate.getFullYear(), 0, 1).getTime();
+  const yearEnd = new Date(nowDate.getFullYear() + 1, 0, 1).getTime();
+  const yearProgressPct = ((nowDate.getTime() - yearStart) / (yearEnd - yearStart)) * 100;
 
   return (
     <ScreenBackground>
@@ -367,31 +373,58 @@ export default function AnalyticsScreen() {
               ) : null}
             </View>
 
-            {/* Налоги (НДФЛ) */}
+            {/* Налоги (НДФЛ) — операционный расклад «на сегодня» (доплатить
+                самому, что удержит банк) уже есть на Главной; тут — прогноз
+                по факту начисления: итог за год + разбивка по механизму
+                (банк/сам), плюс реально уплаченное за всё время как
+                отдельная, явно подписанная лайфтайм-цифра (не годовая, чтобы
+                не путать масштаб). Ставка НДФЛ — не константа (настраивается
+                по стране/года), тап ведёт к источнику. */}
             <Text style={styles.section}>Налоги (НДФЛ)</Text>
-            <Card>
-              <View style={styles.taxTop}>
+            <View style={styles.taxCard}>
+              <View style={styles.taxHeaderRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>Ожидаемый налог за год</Text>
+                  <Text style={styles.taxLabel}>Прогноз налога за год</Text>
                   <Text style={styles.taxValue}>{formatMoney(summary.taxYear, { currency: cur })}</Text>
-                  <Text style={styles.taxHint}>{formatPercent(data.params.taxRate)} сверх лимита</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>Необлагаемый лимит</Text>
-                  <Text style={styles.taxValue}>{formatMoney(limit, { currency: cur })}</Text>
-                  <Text style={styles.taxHint}>1 млн × ключевая</Text>
-                </View>
+                <Pressable style={styles.taxRatePill} onPress={() => { tapBuzz(); router.push('/settings/tax'); }}>
+                  <Text style={styles.taxRatePillText}>{formatPercent(data.params.taxRate)} ▸</Text>
+                </Pressable>
               </View>
+
               <View style={styles.taxBarWrap}>
-                <View style={styles.taxTrack}>
-                  <View style={[styles.taxFill, { width: `${usedPct}%` }]} />
+                <View style={styles.taxTrackWrap}>
+                  <View style={styles.taxTrack}>
+                    <LinearGradient
+                      colors={[hexToRgba('#9A6DD7', 0.7), '#9A6DD7']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.taxFill, { width: `${Math.min(Math.max(taxAccruedPct, 0), 100)}%` }]}
+                    />
+                  </View>
+                  <View style={[styles.taxYearMarker, { left: `${Math.min(Math.max(yearProgressPct, 0), 100)}%` }]} />
                 </View>
                 <View style={styles.taxMeta}>
-                  <Text style={styles.taxMetaLeft}>Использовано {formatMoney(usedLimit, { currency: cur, kopecks: 'hide' })} · {usedPct}%</Text>
-                  <Text style={styles.taxMetaRight}>Остаток {formatMoney(remainLimit, { currency: cur, kopecks: 'hide' })}</Text>
+                  <Text style={styles.taxMetaLeft}>Набежало: {formatMoney(summary.taxAccrued, { currency: cur, kopecks: 'hide' })} · {taxAccruedPct}%</Text>
+                  <Text style={styles.taxMetaRight}>Год прошёл: {Math.round(yearProgressPct)}%</Text>
                 </View>
               </View>
-            </Card>
+
+              <View style={styles.taxSep} />
+
+              <View style={styles.taxSplitRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.taxLabel}>Удержит банк</Text>
+                  <Text style={styles.taxSplitValue}>{formatMoney(summary.taxYearWithheld, { currency: cur, kopecks: 'hide' })}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.taxLabel}>Доплатить самому</Text>
+                  <Text style={styles.taxSplitValue}>{formatMoney(summary.taxYearSelf, { currency: cur, kopecks: 'hide' })}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.taxHint}>Уплачено за всё время: {formatMoney(summary.taxPaidTotal, { currency: cur, kopecks: 'hide' })}</Text>
+            </View>
 
             {/* Эффективность — ставка и премия к ключевой переехали в хиро,
                 тут остаётся то, что туда не влезло по смыслу. */}
@@ -613,16 +646,37 @@ const styles = StyleSheet.create({
   freeCapLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: hexToRgba('#212121', 0.5), letterSpacing: -0.28 },
   freeCapPctChip: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
   freeCapPctText: { fontSize: 16, lineHeight: 18, fontFamily: font.semibold, color: '#586692' },
-  taxTop: { flexDirection: 'row', gap: tokens.spacing.lg },
-  taxLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  taxValue: { fontSize: tokens.typography.title, fontWeight: '700', color: tokens.text.primary, marginTop: 2 },
-  taxHint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },
+  taxCard: {
+    backgroundColor: '#F9FAFF',
+    borderRadius: 20,
+    padding: 16,
+    ...boxShadow(tokens.shadow.card),
+  },
+  taxHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  taxLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: '#909497', letterSpacing: -0.24 },
+  taxValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: '#212121', marginTop: 4 },
+  taxHint: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 12, letterSpacing: -0.12 },
+  taxRatePill: { backgroundColor: hexToRgba('#9A6DD7', 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  taxRatePillText: { fontSize: 13, lineHeight: 15, fontFamily: font.semibold, color: '#9A6DD7', letterSpacing: -0.13 },
   taxBarWrap: { marginTop: tokens.spacing.lg },
-  taxTrack: { height: 8, borderRadius: 4, backgroundColor: tokens.surface.neutral, overflow: 'hidden' },
-  taxFill: { height: 8, borderRadius: 4, backgroundColor: '#9A6DD7' },
+  taxTrackWrap: { paddingVertical: 6 },
+  taxTrack: { height: 10, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral, overflow: 'hidden' },
+  taxFill: { height: '100%', borderRadius: tokens.radius.pill },
+  taxYearMarker: {
+    position: 'absolute',
+    top: 0,
+    width: 3,
+    height: 22,
+    marginLeft: -1.5,
+    borderRadius: 1.5,
+    backgroundColor: '#212121',
+  },
   taxMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  taxMetaLeft: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  taxMetaRight: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
+  taxMetaLeft: { fontSize: 13, lineHeight: 16, fontFamily: font.regular, color: '#909497', letterSpacing: -0.13 },
+  taxMetaRight: { fontSize: 13, lineHeight: 16, fontFamily: font.regular, color: '#909497', letterSpacing: -0.13 },
+  taxSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
+  taxSplitRow: { flexDirection: 'row', gap: tokens.spacing.lg },
+  taxSplitValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: '#212121', marginTop: 4, letterSpacing: -0.36 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: tokens.spacing.sm },
   rowLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
   rowSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
