@@ -11,14 +11,16 @@ import { boxShadow } from '@/theme/shadow';
 import { OrgLogo } from '@/components/BankLogo';
 import { Donut } from '@/components/Donut';
 import { CompareDonut } from '@/components/CompareDonut';
-import { Sparkline } from '@/components/Sparkline';
+import { CapitalAxisChart } from '@/components/CapitalAxisChart';
 import { useData } from '@/state/DataContext';
+import { tapBuzz } from '@/lib/haptics';
 import {
   analyticsSummary,
   insights,
   distributionByType,
   distributionByOrg,
   capitalHistorySeries,
+  earnedInPeriod,
   incomePaceWindows,
   manualTotalCapitalConverted,
 } from '@/state/selectors';
@@ -26,23 +28,20 @@ import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { t } from '@/i18n';
 
-const CHART_W = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
 // Доступная ширина под цифру «Темп дохода» слева/справа от бублика (140) — минус
 // паддинг плашки (16*2) и небольшой запас (~пара мм), чтобы автоуменьшение
 // шрифта срабатывало чуть раньше, не залезая в кольцо.
 const PACE_VALUE_MAX_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - 32 - 140) / 2 - 8;
 
-type HeroPeriod = 'month' | 'year' | 'all';
+type HeroPeriod = 'year' | 'month' | 'all';
 const HERO_PERIODS: { key: HeroPeriod; label: string; days: number | 'all' | 'year' }[] = [
   { key: 'month', label: 'Месяц', days: 30 },
   { key: 'year', label: 'Год', days: 'year' },
   { key: 'all', label: 'Всё время', days: 'all' },
 ];
-const HERO_PERIOD_TAIL: Record<HeroPeriod, string> = {
-  month: 'за месяц',
-  year: 'за год',
-  all: 'за всё время',
-};
+// Ширина графика без «карточки» — он теперь лежит прямо на фоне экрана,
+// только с обычным полем страницы по бокам (без доп. паддинга плашки).
+const GRAPH_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 
 export default function AnalyticsScreen() {
   const { data } = useData();
@@ -57,6 +56,7 @@ export default function AnalyticsScreen() {
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const heroDays = HERO_PERIODS.find((p) => p.key === heroPeriod)!.days;
   const capSeries = useMemo(() => capitalHistorySeries(data, heroDays), [data, heroDays]);
+  const earnedPeriod = useMemo(() => earnedInPeriod(data, heroDays), [data, heroDays]);
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
 
   const cur = data.settings.defaultCurrency;
@@ -74,14 +74,6 @@ export default function AnalyticsScreen() {
   const freeCapitalShare = manualTotalCapital ? freeCapital / grandTotal : 0;
   const orgShare = (capital: number) => (manualTotalCapital ? capital / grandTotal : capital / (byOrg.total || 1));
 
-  const first = capSeries[0] ?? 0;
-  const lastCap = capSeries[capSeries.length - 1] ?? 0;
-  const deltaAbs = lastCap - first;
-  // Если в начале периода капитала ещё не было (первый актив открыт позже) —
-  // рост в % не определён математически, а «0%» тут откровенно врёт (капитал
-  // ведь реально вырос с нуля). Показываем честный абсолют вместо процента.
-  const hasDeltaPct = first > 0;
-  const deltaPct = hasDeltaPct ? (deltaAbs / first) * 100 : 0;
   const incomeStart = incomePace.prev;
   const incomeNow = incomePace.now;
   const incomeDeltaAbs = incomeNow - incomeStart;
@@ -105,7 +97,6 @@ export default function AnalyticsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenTitle>{t.tabs.analytics}</ScreenTitle>
-        <Text style={styles.screenSub}>Как работает ваш капитал</Text>
 
         {!hasAssets ? (
           <Card style={styles.empty}>
@@ -118,70 +109,65 @@ export default function AnalyticsScreen() {
           </Card>
         ) : (
           <>
-            {/* Хиро — светлый, в языке остальных виджетов экрана. Только то, чего
-                нет в других блоках: якорное число, реальный график капитала (тело +
-                проценты по дням, реконструкция из активов — не дублирует «за
-                сегодня/месяц» на главной, там про темп, тут про факт) и
-                аналитические метрики (ставка/премия/заработано). Состав по типам —
-                ниже в «По инструментам». */}
-            <View style={styles.heroCard}>
-              <View style={styles.heroTop}>
-                <Text style={styles.heroLabel}>Общий капитал</Text>
-                <View style={[styles.heroDeltaPill, { backgroundColor: deltaAbs >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' }]}>
-                  <MaterialIcons
-                    name={deltaAbs >= 0 ? 'trending-up' : 'trending-down'}
-                    size={14}
-                    color={deltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
-                  />
-                  <Text style={[styles.heroDeltaText, { color: deltaAbs >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {hasDeltaPct
-                      ? `${formatPercentSigned(deltaPct)} ${HERO_PERIOD_TAIL[heroPeriod]}`
-                      : `${deltaAbs >= 0 ? '+' : '−'}${formatMoney(Math.abs(deltaAbs), { currency: cur, kopecks: 'hide' })} ${HERO_PERIOD_TAIL[heroPeriod]}`}
-                  </Text>
-                </View>
-              </View>
+            {/* Хиро — по макету (node 467:4593). Капитал + график лежат прямо на фоне
+                экрана (без своей плашки), ниже — отдельная светлая карточка с
+                переключателем периода, заработанным ЗА ПЕРИОД (не лайфтайм — тот
+                же движок earnedInPeriod, реагирует на Год/Месяц/Всё время) и
+                средней ставкой + премией к ключевой в одной ячейке. Состав по
+                типам — ниже в «По инструментам», не дублируем тут. */}
+            <View style={styles.heroCapitalBlock}>
+              <Text style={styles.heroLabel}>Мой капитал</Text>
               <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
                 {formatMoney(summary.totalCapital, { currency: cur })}
               </Text>
+            </View>
 
-              <View style={styles.heroSpark}>
-                <Sparkline data={capSeries} width={CHART_W} height={110} color={tokens.semantic.positive} fromZero />
-              </View>
+            <CapitalAxisChart data={capSeries} width={GRAPH_W} height={178} />
 
-              <View style={styles.heroPeriodRow}>
-                {HERO_PERIODS.map((p) => (
-                  <Pressable
-                    key={p.key}
-                    style={[styles.heroPeriodChip, heroPeriod === p.key && styles.heroPeriodChipActive]}
-                    onPress={() => setHeroPeriod(p.key)}
-                  >
-                    <Text style={[styles.heroPeriodText, heroPeriod === p.key && styles.heroPeriodTextActive]}>{p.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <View style={styles.heroStats}>
-                <View style={styles.heroStat}>
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>Ставка</Text>
-                  <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
-                    {formatPercent(summary.avgRate)}
-                  </Text>
+            <View style={styles.heroSummaryCard}>
+              <View style={styles.heroSummaryLeft}>
+                <View style={styles.heroPeriodRow}>
+                  {HERO_PERIODS.map((p) => (
+                    <Pressable
+                      key={p.key}
+                      style={[styles.heroPeriodChip, heroPeriod === p.key && styles.heroPeriodChipActive]}
+                      onPress={() => { tapBuzz(); setHeroPeriod(p.key); }}
+                    >
+                      <Text style={[styles.heroPeriodText, heroPeriod === p.key && styles.heroPeriodTextActive]}>{p.label}</Text>
+                    </Pressable>
+                  ))}
                 </View>
-                <View style={styles.heroStat}>
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>К ключевой</Text>
+                <View>
                   <Text
-                    style={[styles.heroStatValue, { color: summary.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}
+                    style={[styles.heroEarnedValue, { color: earnedPeriod >= 0 ? '#21A870' : tokens.semantic.negative }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    {formatPercentSigned(summary.premiumToKeyRate)}
+                    {earnedPeriod >= 0 ? '+' : '−'}{formatMoney(Math.abs(earnedPeriod), { currency: cur, kopecks: 'hide' })}
                   </Text>
+                  <Text style={styles.heroEarnedLabel}>Заработано за период</Text>
                 </View>
-                <View style={styles.heroStat}>
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>Заработано</Text>
-                  <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
-                    +{formatMoney(summary.accrued, { currency: cur, kopecks: 'hide' })}
+              </View>
+
+              <View style={styles.heroDivider} />
+
+              <View style={styles.heroRateCell}>
+                <Text style={styles.heroRateLabel} numberOfLines={1}>Средняя ставка</Text>
+                <View style={styles.heroRateValueBlock}>
+                  <Text style={styles.heroRateValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {formatPercent(summary.avgRate)}
                   </Text>
+                  <Pressable
+                    style={[
+                      styles.heroRatePill,
+                      { backgroundColor: summary.premiumToKeyRate >= 0 ? 'rgba(31,169,113,0.1)' : 'rgba(229,139,139,0.1)' },
+                    ]}
+                    onPress={() => { tapBuzz(); router.push('/settings/key-rate'); }}
+                  >
+                    <Text style={[styles.heroRatePillText, { color: summary.premiumToKeyRate >= 0 ? '#1a8f5c' : '#C11818' }]} numberOfLines={1}>
+                      {summary.premiumToKeyRate >= 0 ? '▲' : '▼'} {formatPercentSigned(summary.premiumToKeyRate)} КС
+                    </Text>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -418,7 +404,6 @@ function Sep() {
 }
 
 const styles = StyleSheet.create({
-  screenSub: { fontSize: tokens.typography.label, color: tokens.text.secondary, marginTop: -8, marginBottom: tokens.spacing.lg },
   insight: { flexDirection: 'row', gap: tokens.spacing.md, alignItems: 'flex-start', backgroundColor: '#F1ECFB', borderRadius: tokens.radius.lg, padding: tokens.spacing.lg, marginBottom: tokens.spacing.lg },
   insightIcon: { width: 40, height: 40, borderRadius: tokens.radius.sm, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center' },
   insightTag: { alignSelf: 'flex-start', backgroundColor: '#7C4DD6', borderRadius: tokens.radius.xs, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4 },
@@ -452,28 +437,41 @@ const styles = StyleSheet.create({
   paceValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, marginTop: 0, maxWidth: PACE_VALUE_MAX_W },
   paceDonutSpacer: { width: 140 },
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  heroCard: {
+  heroCapitalBlock: { gap: 8, marginBottom: 24 },
+  heroLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
+  heroValue: { fontSize: 40, lineHeight: 42, fontFamily: font.semibold, color: tokens.text.secondary, letterSpacing: -0.8 },
+  heroSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
     padding: 16,
-    marginBottom: tokens.spacing.sm,
+    marginTop: -12,
+    marginBottom: tokens.spacing.xl,
     ...boxShadow(tokens.shadow.card),
   },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.medium, color: hexToRgba('#212121', 0.5), letterSpacing: -0.28 },
-  heroDeltaPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  heroDeltaText: { fontSize: 12, lineHeight: 14, fontFamily: font.semibold },
-  heroValue: { fontSize: 32, lineHeight: 34, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.64, marginTop: 8 },
-  heroSpark: { marginTop: tokens.spacing.md },
-  heroPeriodRow: { flexDirection: 'row', gap: 6, marginTop: tokens.spacing.sm },
-  heroPeriodChip: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: tokens.radius.pill, backgroundColor: 'rgba(215,226,235,0.5)' },
+  heroSummaryLeft: { gap: 16 },
+  heroPeriodRow: {
+    flexDirection: 'row',
+    gap: 2,
+    padding: 1,
+    borderRadius: 35,
+    backgroundColor: 'rgba(215,226,235,0.2)',
+  },
+  heroPeriodChip: { alignItems: 'center', justifyContent: 'center', height: 25, paddingHorizontal: 10, borderRadius: 35 },
   heroPeriodChipActive: { backgroundColor: tokens.accent.light },
-  heroPeriodText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba('#212121', 0.6) },
-  heroPeriodTextActive: { fontFamily: font.semibold, color: '#FFFFFF' },
-  heroStats: { flexDirection: 'row', gap: 8, marginTop: tokens.spacing.md },
-  heroStat: { flex: 1, backgroundColor: tokens.surface.white, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
-  heroStatLabel: { fontSize: 11, lineHeight: 13, fontFamily: font.medium, color: hexToRgba('#212121', 0.4) },
-  heroStatValue: { fontSize: 15, lineHeight: 17, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.3 },
+  heroPeriodText: { fontSize: 13, lineHeight: 15, fontFamily: font.medium, color: hexToRgba('#212121', 0.5), letterSpacing: -0.26 },
+  heroPeriodTextActive: { color: '#FFFFFF' },
+  heroEarnedValue: { fontSize: 32, lineHeight: 34, fontFamily: font.semibold, letterSpacing: -0.64 },
+  heroEarnedLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: '#909497', marginTop: 4 },
+  heroDivider: { width: 1, alignSelf: 'stretch', backgroundColor: tokens.surface.hairline },
+  heroRateCell: { alignItems: 'center', justifyContent: 'space-between', paddingTop: 7 },
+  heroRateLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: '#909497', letterSpacing: -0.24 },
+  heroRateValueBlock: { alignItems: 'center', gap: 10, marginTop: 8 },
+  heroRateValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: '#212121' },
+  heroRatePill: { borderRadius: 35, paddingHorizontal: 8, paddingVertical: 8 },
+  heroRatePillText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.lg },
   legend: { flex: 1, gap: tokens.spacing.sm },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },

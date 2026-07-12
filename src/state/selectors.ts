@@ -899,21 +899,19 @@ export function assetTimeline(asset: Asset): AssetTimelineEntry[] {
   return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-/**
- * Реконструкция РЕАЛЬНОГО капитала по дням (тело + начисленные проценты на каждый
- * день, а не только тело) — решение #9: из первичных данных, а не снимков.
- * Учитывает и уже закрытые/архивные активы за те дни, когда они были живы —
- * иначе прошлое занижается всякий раз, когда что-то закрывают. Датой реального
- * закрытия берём последний снапшот актива (`reason: closed|archived`), а не
- * плановый `endDate` — банк мог закрыть/продлить раньше или позже срока.
- *
- * `days`: число — скользящее окно N дней назад (напр. «Месяц» — 30);
- * `'year'` — КАЛЕНДАРНЫЙ год (1 января текущего года — сегодня), не диапазон
- * в 365 дней — так график совпадает с будущим годовым снапшотом (2026 — это
- * ровно 2026-й, а не последние 365 дней от сегодня);
- * `'all'` — с даты открытия самого первого актива в истории.
- */
-export function capitalHistorySeries(data: AppData, days: number | 'all' | 'year', now: Date = new Date()): number[] {
+export type HeroWindow = number | 'all' | 'year';
+
+interface HistoryItem {
+  asset: Asset;
+  instrument: FinancialInstrument;
+  openDate: Date;
+  /** Дата РЕАЛЬНОГО закрытия (последний снапшот), не плановый endDate — null, если ещё активен. */
+  closedAt: Date | null;
+}
+
+/** Активы (любого статуса) + дата их реального открытия/закрытия — общая база
+ *  для всех реконструкций «капитал/доход по дням из первичных данных». */
+function buildHistoryItems(data: AppData, now: Date): { items: HistoryItem[]; earliestOpen: number } {
   const instrById = new Map(data.instruments.map((i) => [i.id, i]));
   const closedAtById = new Map<string, string>();
   for (const s of data.snapshots) {
@@ -922,32 +920,49 @@ export function capitalHistorySeries(data: AppData, days: number | 'all' | 'year
   }
 
   const items = data.assets
-    .map((asset) => {
+    .map((asset): HistoryItem | null => {
       const instrument = instrById.get(asset.instrumentId);
       if (!instrument) return null;
       const openDate = parseLocal(asset.openDate);
       const closedAt = asset.status !== 'active' ? new Date(closedAtById.get(asset.id) ?? now) : null;
       return { asset, instrument, openDate, closedAt };
     })
-    .filter((x): x is NonNullable<typeof x> => x !== null);
+    .filter((x): x is HistoryItem => x !== null);
 
   const opens = items.map((it) => it.openDate.getTime());
   const earliestOpen = opens.length ? Math.min(...opens) : now.getTime();
+  return { items, earliestOpen };
+}
 
-  let start: Date;
-  if (days === 'all') {
-    start = new Date(earliestOpen);
-  } else if (days === 'year') {
+/**
+ * Начало периода: `days` число — скользящее окно N дней назад (напр. «Месяц» — 30);
+ * `'year'` — КАЛЕНДАРНЫЙ год (1 января текущего года — сегодня), не диапазон
+ * в 365 дней — так график совпадает с будущим годовым снапшотом (2026 — это
+ * ровно 2026-й, а не последние 365 дней от сегодня); `'all'` — с даты открытия
+ * самого первого актива. Ни один режим не уходит в прошлое дальше даты
+ * открытия первого актива — иначе при истории короче периода получается
+ * искусственно «мёртвая» зона там, где портфеля ещё физически не было.
+ */
+function resolvePeriodStart(days: HeroWindow, now: Date, earliestOpen: number): Date {
+  if (days === 'all') return new Date(earliestOpen);
+  if (days === 'year') {
     const jan1 = new Date(now.getFullYear(), 0, 1);
-    start = new Date(Math.max(jan1.getTime(), earliestOpen));
-  } else {
-    const rollingStart = new Date(now);
-    rollingStart.setDate(rollingStart.getDate() - (days - 1));
-    // Не уходим в прошлое дальше даты открытия самого первого актива — иначе
-    // при истории короче периода график начинается с искусственно «мёртвой»
-    // зоны там, где портфеля ещё физически не существовало.
-    start = new Date(Math.max(rollingStart.getTime(), earliestOpen));
+    return new Date(Math.max(jan1.getTime(), earliestOpen));
   }
+  const rollingStart = new Date(now);
+  rollingStart.setDate(rollingStart.getDate() - (days - 1));
+  return new Date(Math.max(rollingStart.getTime(), earliestOpen));
+}
+
+/**
+ * Реконструкция РЕАЛЬНОГО капитала по дням (тело + начисленные проценты на каждый
+ * день, а не только тело) — решение #9: из первичных данных, а не снимков.
+ * Учитывает и уже закрытые/архивные активы за те дни, когда они были живы —
+ * иначе прошлое занижается всякий раз, когда что-то закрывают.
+ */
+export function capitalHistorySeries(data: AppData, days: HeroWindow, now: Date = new Date()): number[] {
+  const { items, earliestOpen } = buildHistoryItems(data, now);
+  const start = resolvePeriodStart(days, now, earliestOpen);
 
   const totalDays = Math.max(0, diffDays(start, now));
   const out: number[] = [];
@@ -963,6 +978,29 @@ export function capitalHistorySeries(data: AppData, days: number | 'all' | 'year
     out.push(cap);
   }
   return out;
+}
+
+/**
+ * Сколько реально ЗАРАБОТАНО (начисленные проценты, `accrued`) именно за
+ * выбранный период — в отличие от `capitalHistorySeries`, тут пополнения и
+ * снятия тела не в счёт, только сам доход. Разница `accrued` на конец и на
+ * начало периода по каждому активу (для активов, открытых внутри периода —
+ * от даты открытия, т.к. до неё их не существовало).
+ */
+export function earnedInPeriod(data: AppData, days: HeroWindow, now: Date = new Date()): number {
+  const { items, earliestOpen } = buildHistoryItems(data, now);
+  const start = resolvePeriodStart(days, now, earliestOpen);
+
+  let earned = 0;
+  for (const { asset, instrument, openDate, closedAt } of items) {
+    const end = closedAt && closedAt < now ? closedAt : now;
+    if (end < start || openDate > end) continue;
+    const effectiveStart = openDate > start ? openDate : start;
+    const endAccrued = calculate(asset, instrument, data.params, end, 0).accrued;
+    const startAccrued = calculate(asset, instrument, data.params, effectiveStart, 0).accrued;
+    earned += convert(endAccrued - startAccrued, asset.currency, data);
+  }
+  return earned;
 }
 
 function incomeRunRateOn(data: AppData, day: Date): number {
