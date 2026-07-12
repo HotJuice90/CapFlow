@@ -122,7 +122,7 @@ export default function AnalyticsScreen() {
               </Text>
             </View>
 
-            <CapitalAxisChart data={capSeries} width={GRAPH_W} height={178} />
+            <CapitalAxisChart data={capSeries} width={GRAPH_W} height={210} />
 
             <View style={styles.heroSummaryCard}>
               <View style={styles.heroSummaryLeft}>
@@ -137,13 +137,13 @@ export default function AnalyticsScreen() {
                     </Pressable>
                   ))}
                 </View>
-                <View>
+                <View style={{ minWidth: 0 }}>
                   <Text
                     style={[styles.heroEarnedValue, { color: earnedPeriod >= 0 ? '#21A870' : tokens.semantic.negative }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    {earnedPeriod >= 0 ? '+' : '−'}{formatMoney(Math.abs(earnedPeriod), { currency: cur, kopecks: 'hide' })}
+                    {earnedPeriod >= 0 ? '+' : '−'}{formatMoney(Math.abs(earnedPeriod), { currency: cur })}
                   </Text>
                   <Text style={styles.heroEarnedLabel}>Заработано за период</Text>
                 </View>
@@ -437,13 +437,13 @@ const styles = StyleSheet.create({
   paceValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, marginTop: 0, maxWidth: PACE_VALUE_MAX_W },
   paceDonutSpacer: { width: 140 },
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  heroCapitalBlock: { gap: 8, marginBottom: 24 },
+  heroCapitalBlock: { gap: 8, marginBottom: 6 },
   heroLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
   heroValue: { fontSize: 40, lineHeight: 42, fontFamily: font.semibold, color: tokens.text.secondary, letterSpacing: -0.8 },
   heroSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 16,
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
     padding: 16,
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     marginBottom: tokens.spacing.xl,
     ...boxShadow(tokens.shadow.card),
   },
-  heroSummaryLeft: { gap: 16 },
+  heroSummaryLeft: { flex: 1, minWidth: 0, alignItems: 'flex-start', gap: 20 },
   heroPeriodRow: {
     flexDirection: 'row',
     gap: 2,
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
   heroDivider: { width: 1, alignSelf: 'stretch', backgroundColor: tokens.surface.hairline },
   heroRateCell: { alignItems: 'center', justifyContent: 'space-between', paddingTop: 7 },
   heroRateLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: '#909497', letterSpacing: -0.24 },
-  heroRateValueBlock: { alignItems: 'center', gap: 10, marginTop: 8 },
+  heroRateValueBlock: { alignItems: 'center', gap: 10, marginTop: 12 },
   heroRateValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: '#212121' },
   heroRatePill: { borderRadius: 35, paddingHorizontal: 8, paddingVertical: 8 },
   heroRatePillText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
