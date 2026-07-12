@@ -4,12 +4,12 @@ import Svg, { Defs, Pattern as SvgPattern, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
 import { boxShadow } from '@/theme/shadow';
 import { OrgLogo } from '@/components/BankLogo';
-import { Donut } from '@/components/Donut';
 import { CompareDonut } from '@/components/CompareDonut';
 import { CapitalAxisChart } from '@/components/CapitalAxisChart';
 import { useData } from '@/state/DataContext';
@@ -267,24 +267,29 @@ export default function AnalyticsScreen() {
               </View>
             </View>
 
-            {/* По инструментам — донат */}
-            <Text style={styles.section}>По инструментам</Text>
+            {/* По инструментам — «сосуды» с жидкостью по типу (перекликается с
+                бокалом в «Можно разместить» ниже): компактно в ряд, при
+                добавлении новых типов колонки просто станут уже, а не
+                растянут карточку по высоте. */}
+            <Text style={[styles.section, { marginTop: tokens.spacing.xxl + tokens.spacing.lg }]}>По инструментам</Text>
             <Card>
-              <View style={styles.donutRow}>
-                <Donut
-                  segments={byType.groups.map((g) => ({ value: g.capital, color: g.color }))}
-                  centerLabel={formatMoney(byType.total, { currency: cur })}
-                  centerSub="всего"
-                />
-                <View style={styles.legend}>
-                  {byType.groups.map((g) => (
-                    <View key={g.key} style={styles.legendRow}>
-                      <View style={[styles.legendDot, { backgroundColor: g.color }]} />
-                      <Text style={styles.legendLabel} numberOfLines={1}>{g.label}</Text>
-                      <Text style={styles.legendPct}>{Math.round(g.share * 100)}%</Text>
+              <View style={styles.vesselRow}>
+                {byType.groups.map((g) => (
+                  <View key={g.key} style={styles.vesselCol}>
+                    <View style={styles.vessel}>
+                      <LinearGradient
+                        colors={[hexToRgba(g.color, 0.55), g.color]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={[styles.vesselFill, { height: `${Math.max(g.share * 100, 10)}%` }]}
+                      />
+                      <View style={styles.vesselShine} />
+                      <MaterialIcons name={typeIcon(g.key)} size={26} color={hexToRgba(g.color, 0.4)} />
                     </View>
-                  ))}
-                </View>
+                    <Text style={styles.vesselPct}>{Math.round(g.share * 100)}%</Text>
+                    <Text style={styles.vesselLabel} numberOfLines={2}>{g.label}</Text>
+                  </View>
+                ))}
               </View>
             </Card>
 
@@ -431,6 +436,16 @@ export default function AnalyticsScreen() {
   );
 }
 
+function typeIcon(typeId: string): keyof typeof MaterialIcons.glyphMap {
+  switch (typeId) {
+    case 'savings': return 'savings';
+    case 'deposit': return 'account-balance';
+    case 'bond': return 'receipt-long';
+    case 'dfa': return 'stars';
+    default: return 'category';
+  }
+}
+
 function Row({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
     <View style={styles.row}>
@@ -519,12 +534,29 @@ const styles = StyleSheet.create({
   heroRateValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: '#212121' },
   heroRatePill: { borderRadius: 35, paddingHorizontal: 8, paddingVertical: 8 },
   heroRatePillText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
-  donutRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.lg },
-  legend: { flex: 1, gap: tokens.spacing.sm },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
-  legendDot: { width: 12, height: 12, borderRadius: 4 },
-  legendLabel: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.primary, fontWeight: '500' },
-  legendPct: { fontSize: tokens.typography.caption, fontWeight: '700', color: tokens.text.primary },
+  vesselRow: { flexDirection: 'row', gap: 10 },
+  vesselCol: { flex: 1, alignItems: 'center' },
+  vessel: {
+    width: '100%',
+    height: 76,
+    borderRadius: tokens.radius.md,
+    backgroundColor: 'rgba(152,162,183,0.14)',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vesselFill: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  vesselShine: {
+    position: 'absolute',
+    top: -10,
+    left: -8,
+    width: 22,
+    height: 110,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    transform: [{ rotate: '-18deg' }],
+  },
+  vesselPct: { fontSize: 15, lineHeight: 17, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.3, marginTop: 8 },
+  vesselLabel: { fontSize: 11, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.22, textAlign: 'center', marginTop: 2 },
   orgCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
