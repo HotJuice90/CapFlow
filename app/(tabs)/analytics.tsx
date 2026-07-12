@@ -23,9 +23,11 @@ import {
   earnedInPeriod,
   incomePaceWindows,
   manualTotalCapitalConverted,
+  rateSpread,
+  avgLockDuration,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
+import { formatMoney, formatPercent, formatPercentSigned, pluralDays } from '@/format';
 import { t } from '@/i18n';
 
 // Доступная ширина под цифру «Темп дохода» слева/справа от бублика (140) — минус
@@ -58,9 +60,17 @@ export default function AnalyticsScreen() {
   const capSeries = useMemo(() => capitalHistorySeries(data, heroDays), [data, heroDays]);
   const earnedPeriod = useMemo(() => earnedInPeriod(data, heroDays), [data, heroDays]);
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
+  const spread = useMemo(() => rateSpread(data), [data]);
+  const lockDays = useMemo(() => avgLockDuration(data), [data]);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
+
+  // % прироста капитала за выбранный период — тот же ряд, что рисует график,
+  // просто первое/последнее значение вместо всей кривой.
+  const periodStartCap = capSeries[0] ?? 0;
+  const periodEndCap = capSeries[capSeries.length - 1] ?? 0;
+  const periodGrowthPct = periodStartCap > 0 ? ((periodEndCap - periodStartCap) / periodStartCap) * 100 : 0;
 
   // «Можно разместить» — временно ручной ввод (настройки → «Капитал вне
   // активов»), пока не решено, как именно заводить свободный капитал как
@@ -116,7 +126,21 @@ export default function AnalyticsScreen() {
                 средней ставкой + премией к ключевой в одной ячейке. Состав по
                 типам — ниже в «По инструментам», не дублируем тут. */}
             <View style={styles.heroCapitalBlock}>
-              <Text style={styles.heroLabel}>Мой капитал</Text>
+              <View style={styles.heroLabelRow}>
+                <Text style={styles.heroLabel}>Мой капитал</Text>
+                {periodStartCap > 0 ? (
+                  <View
+                    style={[
+                      styles.heroGrowthPill,
+                      { backgroundColor: periodGrowthPct >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' },
+                    ]}
+                  >
+                    <Text style={[styles.heroGrowthText, { color: periodGrowthPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                      {formatPercentSigned(periodGrowthPct, 1)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
                 {formatMoney(summary.totalCapital, { currency: cur })}
               </Text>
@@ -379,6 +403,26 @@ export default function AnalyticsScreen() {
                   />
                 </>
               ) : null}
+              {manualTotalCapital ? (
+                <>
+                  <Sep />
+                  <Row label="Задействовано" value={formatMoney(byOrg.total, { currency: cur, kopecks: 'hide' })} />
+                  <Sep />
+                  <Row label="Свободно" value={formatMoney(freeCapital, { currency: cur, kopecks: 'hide' })} />
+                </>
+              ) : null}
+              {spread && spread.max > spread.min ? (
+                <>
+                  <Sep />
+                  <Row label="Разброс ставки" value={`${formatPercent(spread.min)} – ${formatPercent(spread.max)}`} />
+                </>
+              ) : null}
+              {lockDays !== null ? (
+                <>
+                  <Sep />
+                  <Row label="Заморожено в среднем" value={`${Math.round(lockDays)} ${pluralDays(Math.round(lockDays))}`} />
+                </>
+              ) : null}
             </Card>
           </>
         )}
@@ -438,7 +482,10 @@ const styles = StyleSheet.create({
   paceDonutSpacer: { width: 140 },
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   heroCapitalBlock: { gap: 8, marginBottom: 6 },
+  heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
+  heroGrowthPill: { borderRadius: 35, paddingHorizontal: 7, paddingVertical: 3 },
+  heroGrowthText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
   heroValue: { fontSize: 40, lineHeight: 42, fontFamily: font.semibold, color: tokens.text.secondary, letterSpacing: -0.8 },
   heroSummaryCard: {
     flexDirection: 'row',

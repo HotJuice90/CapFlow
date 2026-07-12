@@ -430,6 +430,44 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   };
 }
 
+export interface RateSpread {
+  min: number;
+  max: number;
+}
+
+/** Разброс текущих ставок по активным активам — самая высокая и самая низкая. */
+export function rateSpread(data: AppData, now: Date = new Date()): RateSpread | null {
+  const views = buildAssetViews(data, now);
+  if (views.length === 0) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of views) {
+    const r = v.derived.currentRate;
+    if (r < min) min = r;
+    if (r > max) max = r;
+  }
+  return { min, max };
+}
+
+/**
+ * Средневзвешенный (по текущей стоимости) срок до планового окончания срочных
+ * активов — насколько «заморожен» капитал прямо сейчас. Бессрочные инструменты
+ * (вклады/накопительные без endDate — derived.daysRemaining === undefined) в
+ * расчёт не входят: у них нет понятия «срок», а не «срок = 0».
+ */
+export function avgLockDuration(data: AppData, now: Date = new Date()): number | null {
+  const views = buildAssetViews(data, now);
+  let weightedDays = 0;
+  let capital = 0;
+  for (const v of views) {
+    if (v.derived.daysRemaining === undefined || v.derived.daysRemaining <= 0) continue;
+    const cap = convert(v.derived.currentValue, v.asset.currency, data);
+    weightedDays += v.derived.daysRemaining * cap;
+    capital += cap;
+  }
+  return capital > 0 ? weightedDays / capital : null;
+}
+
 export interface Insight {
   icon: string;
   title: string;
