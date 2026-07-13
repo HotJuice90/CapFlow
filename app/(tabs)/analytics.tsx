@@ -98,7 +98,7 @@ export default function AnalyticsScreen() {
   // «сколько прошло года»: если она левее заливки, налог набегает медленнее
   // года (обычно значит — ещё не пробили лимит), если правее — уже пробили
   // и теперь копится быстрее календаря.
-  const taxAccruedPct = summary.taxYear > 0 ? Math.round((summary.taxAccrued / summary.taxYear) * 100) : 0;
+  const taxAccruedPct = summary.taxYearGross > 0 ? Math.round((summary.taxAccruedGross / summary.taxYearGross) * 100) : 0;
   const nowDate = new Date();
   const yearStart = new Date(nowDate.getFullYear(), 0, 1).getTime();
   const yearEnd = new Date(nowDate.getFullYear() + 1, 0, 1).getTime();
@@ -376,18 +376,24 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* Налоги (НДФЛ) — операционный расклад «на сегодня» (доплатить
-                самому, что удержит банк) уже есть на Главной; тут — прогноз
-                по факту начисления: итог за год + разбивка по механизму
-                (банк/сам), плюс реально уплаченное за всё время как
+                самому, что удержит банк, с учётом лимита — честная
+                рекомендация «сколько реально отложить») уже есть на Главной;
+                тут — прогноз по факту начисления: итог за год + разбивка по
+                механизму (банк/сам), плюс реально уплаченное за всё время как
                 отдельная, явно подписанная лайфтайм-цифра (не годовая, чтобы
-                не путать масштаб). Ставка НДФЛ — не константа (настраивается
+                не путать масштаб). Вся карточка — «грязный» налог (taxYearGross/
+                taxAccruedGross, БЕЗ лимита): та же плоская ставка×доход
+                методика, что и в списке ниже, чтобы сумма списка сходилась с
+                заголовком (net-версия с лимитом узнаваемо «теряла» активы —
+                свободный лимит гасил их до 0, и в сумме визуально пропадал
+                кто-то из списка). Ставка НДФЛ — не константа (настраивается
                 по стране/года), тап ведёт к источнику. */}
             <Text style={styles.section}>Налоги (НДФЛ)</Text>
             <View style={styles.taxCard}>
               <View style={styles.taxHeaderRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.taxLabel}>Прогноз налога за год</Text>
-                  <Text style={styles.taxValue}>{formatMoney(summary.taxYear, { currency: cur })}</Text>
+                  <Text style={styles.taxValue}>{formatMoney(summary.taxYearGross, { currency: cur })}</Text>
                 </View>
                 <Pressable style={styles.taxRatePill} onPress={() => { tapBuzz(); router.push('/settings/tax'); }}>
                   <Text style={styles.taxRatePillText}>{formatPercent(data.params.taxRate)} ▸</Text>
@@ -407,7 +413,7 @@ export default function AnalyticsScreen() {
                   <View style={[styles.taxYearMarker, { left: `${Math.min(Math.max(yearProgressPct, 0), 100)}%` }]} />
                 </View>
                 <View style={styles.taxMeta}>
-                  <Text style={styles.taxMetaLeft}>Набежало: {formatMoney(summary.taxAccrued, { currency: cur, kopecks: 'hide' })} · {taxAccruedPct}%</Text>
+                  <Text style={styles.taxMetaLeft}>Набежало: {formatMoney(summary.taxAccruedGross, { currency: cur, kopecks: 'hide' })} · {taxAccruedPct}%</Text>
                   <Text style={styles.taxMetaRight}>Год прошёл: {Math.round(yearProgressPct)}%</Text>
                 </View>
               </View>
@@ -421,7 +427,7 @@ export default function AnalyticsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.taxLabel}>Доплатить самому</Text>
-                  <Text style={styles.taxSplitValue}>{formatMoney(summary.taxYearSelf, { currency: cur, kopecks: 'hide' })}</Text>
+                  <Text style={styles.taxSplitValue}>{formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
                 </View>
               </View>
 
@@ -431,15 +437,24 @@ export default function AnalyticsScreen() {
                 <>
                   <View style={styles.taxSep} />
                   <Text style={styles.taxByInstrumentTitle}>Налог по инструментам (без учёта лимита)</Text>
-                  {taxRows.map((r, i) => (
-                    <View key={r.key}>
-                      {i > 0 ? <View style={styles.taxByInstrumentSep} /> : null}
-                      <View style={styles.taxByInstrumentRow}>
-                        <Text style={styles.taxByInstrumentName} numberOfLines={1}>{r.name}</Text>
-                        <Text style={styles.taxByInstrumentValue}>{formatMoney(r.tax, { currency: cur, kopecks: 'hide' })}</Text>
+                  {taxRows.map((r, i) => {
+                    const primary = r.taxToDate ?? r.tax;
+                    const secondary = r.taxToDate !== undefined ? r.tax : undefined;
+                    return (
+                      <View key={r.key}>
+                        {i > 0 ? <View style={styles.taxByInstrumentSep} /> : null}
+                        <View style={styles.taxByInstrumentRow}>
+                          <Text style={styles.taxByInstrumentName} numberOfLines={1}>{r.name}</Text>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.taxByInstrumentValue}>{formatMoney(primary, { currency: cur, kopecks: 'hide' })}</Text>
+                            {secondary !== undefined ? (
+                              <Text style={styles.taxByInstrumentSubValue}>год ~ {formatMoney(secondary, { currency: cur, kopecks: 'hide' })}</Text>
+                            ) : null}
+                          </View>
+                        </View>
                       </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </>
               ) : null}
             </View>
@@ -698,7 +713,8 @@ const styles = StyleSheet.create({
   taxByInstrumentTitle: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: '#909497', letterSpacing: -0.24, marginBottom: tokens.spacing.sm },
   taxByInstrumentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
   taxByInstrumentName: { flex: 1, fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
-  taxByInstrumentValue: { fontSize: 14, lineHeight: 16, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.14 },
+  taxByInstrumentValue: { fontSize: 16, lineHeight: 18, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.16 },
+  taxByInstrumentSubValue: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 1 },
   taxByInstrumentSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: tokens.spacing.sm },
   rowLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },

@@ -322,6 +322,18 @@ export interface AnalyticsSummary {
   taxYearWithheld: number;
   /** Из taxYear — доля активов БЕЗ флага: это придётся доплатить самому. */
   taxYearSelf: number;
+  /** Прогноз за год БЕЗ учёта необлагаемого лимита («грязный» налог — та же
+   *  методика, что и в списке «Налог по инструментам» на экране аналитики,
+   *  чтобы сумма списка совпадала с заголовком карточки, а не с net-цифрой
+   *  taxYear, которая после вычета лимита может занижать реальную сумму
+   *  «на бумаге» до одного актива из трёх). Для «отложить на налог» на
+   *  Главной по-прежнему используем net-версию (taxYearSelf/taxAccruedSelf) —
+   *  там лимит учитывать НУЖНО, это честная рекомендация «сколько реально
+   *  причитается», а не сумма по списку. */
+  taxYearGross: number;
+  taxYearSelfGross: number;
+  /** Тот же «грязный» приём для «набежало на сегодня» — см. taxYearGross. */
+  taxAccruedGross: number;
   /** Реально удержанный банками налог (BalanceAdjustment.taxWithheld) — по ВСЕМ
    *  активам, включая закрытые/архивные: факт, не оценка. */
   taxPaidTotal: number;
@@ -431,7 +443,28 @@ function closedThisYearContributions(data: AppData, now: Date): ClosedYearContri
 export interface TaxByInstrumentRow {
   key: string;
   name: string;
+  /** Прогноз/итог за год — для срочных и закрытых это уже финальная, точная
+   *  цифра (весь их этот-годовой срок известен наперёд). */
   tax: number;
+  /** Только для АКТИВНЫХ бессрочных (без фиксированного срока) — реально
+   *  накопленный (не прогнозный) налог с начала года по сегодня. У срочных и
+   *  закрытых своего «на сегодня» нет: их `tax` и так точная финальная сумма,
+   *  дублировать нечего. */
+  taxToDate?: number;
+}
+
+/** Реально накопленный (не прогнозный) доход с начала года (или открытия,
+ *  если оно позже) до СЕГОДНЯ — та же дельта accrued, что и в
+ *  closedThisYearContributions/earnedInPeriod, только верхняя граница —
+ *  «сейчас», а не дата закрытия/окончания срока. */
+function thisYearAccruedToDate(asset: Asset, instrument: FinancialInstrument, data: AppData, now: Date): number {
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const openDate = parseLocal(asset.openDate);
+  const lower = openDate > yearStart ? openDate : yearStart;
+  if (lower >= now) return 0;
+  const nowAccrued = calculate(asset, instrument, data.params, now, 0).accrued;
+  const lowerAccrued = calculate(asset, instrument, data.params, lower, 0).accrued;
+  return convert(nowAccrued - lowerAccrued, asset.currency, data);
 }
 
 /**
@@ -442,6 +475,11 @@ export interface TaxByInstrumentRow {
  * учтён в самом прогнозе выше по карточке). Доход — тот же, что в
  * incomePerYear/taxYear (thisYearTaxableIncome/closedThisYearContributions),
  * не derived.tax (тот на весь срок вклада, для срочных завышает в разы).
+ *
+ * Для активных БЕССРОЧНЫХ инструментов (нет known endDate — прогноз годовой
+ * суммы это экстраполяция «если ставка продержится весь год», а не факт)
+ * добавляем taxToDate — сколько РЕАЛЬНО набежало с начала года по сегодня,
+ * чтобы не путать прогноз с фактом: раньше оба писались одним числом.
  */
 export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByInstrumentRow[] {
   const rate = data.params.taxRate / 100;
@@ -449,10 +487,13 @@ export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByIns
   for (const v of buildAssetViews(data, now)) {
     const annual = thisYearTaxableIncome(v.asset, v.instrument, data, now, v.derived.balanceNow, v.derived.currentRate);
     if (annual <= 0) continue;
+    const isPerpetual = !(v.instrument.behavior === 'term' && v.asset.endDate);
+    const toDateIncome = isPerpetual ? thisYearAccruedToDate(v.asset, v.instrument, data, now) : 0;
     rows.push({
       key: v.asset.id,
       name: v.asset.title ? `${v.instrument.name} · ${v.asset.title}` : v.instrument.name,
       tax: annual * rate,
+      taxToDate: isPerpetual && toDateIncome > 0 ? toDateIncome * rate : undefined,
     });
   }
   for (const cl of closedThisYearContributions(data, now)) {
@@ -540,12 +581,19 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     const paid = (a.balanceAdjustments ?? []).reduce((s, adj) => s + (adj.taxWithheld ?? 0), 0);
     return sum + convert(paid, a.currency, data);
   }, 0);
+  const rate = data.params.taxRate / 100;
   const taxYearSelf = calcPortfolioTax(selfAnnualPerAsset, data.params);
   const taxYearWithheld = calcAssetTax(withheldAnnual, data.params, 0, true);
   const taxYear = taxYearSelf + taxYearWithheld;
   const taxAccruedSelf = calcPortfolioTax(selfAccruedPerAsset, data.params);
   const taxAccruedWithheld = calcAssetTax(withheldAccrued, data.params, 0, true);
   const taxAccrued = taxAccruedSelf + taxAccruedWithheld;
+  // «Грязный» вариант (без лимита) — та же плоская ставка×доход методика,
+  // что и в taxByInstrument, чтобы сумма списка сходилась с заголовком.
+  const taxYearSelfGross = selfAnnualPerAsset.reduce((sum, v) => sum + v, 0) * rate;
+  const taxYearGross = taxYearSelfGross + taxYearWithheld;
+  const taxAccruedSelfGross = selfAccruedPerAsset.reduce((sum, v) => sum + v, 0) * rate;
+  const taxAccruedGross = taxAccruedSelfGross + taxAccruedWithheld;
   let topOrganization: AnalyticsSummary['topOrganization'];
   for (const oi of orgIncome.values()) {
     if (!topOrganization || oi.income > topOrganization.incomePerDay) {
@@ -566,6 +614,9 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     taxAccruedSelf,
     taxYearWithheld,
     taxYearSelf,
+    taxYearGross,
+    taxYearSelfGross,
+    taxAccruedGross,
     taxPaidTotal,
     netYear: incomePerYear - taxYear,
     avgRate,
