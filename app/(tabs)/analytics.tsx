@@ -25,6 +25,7 @@ import {
   manualTotalCapitalConverted,
   rateSpread,
   avgLockDuration,
+  taxByInstrument,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned, pluralDays } from '@/format';
@@ -62,6 +63,7 @@ export default function AnalyticsScreen() {
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
   const spread = useMemo(() => rateSpread(data), [data]);
   const lockDays = useMemo(() => avgLockDuration(data), [data]);
+  const taxRows = useMemo(() => taxByInstrument(data), [data]);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -424,6 +426,22 @@ export default function AnalyticsScreen() {
               </View>
 
               <Text style={styles.taxHint}>Уплачено за всё время: {formatMoney(summary.taxPaidTotal, { currency: cur, kopecks: 'hide' })}</Text>
+
+              {taxRows.length > 0 ? (
+                <>
+                  <View style={styles.taxSep} />
+                  <Text style={styles.taxByInstrumentTitle}>Налог по инструментам (без учёта лимита)</Text>
+                  {taxRows.map((r, i) => (
+                    <View key={r.key}>
+                      {i > 0 ? <View style={styles.taxByInstrumentSep} /> : null}
+                      <View style={styles.taxByInstrumentRow}>
+                        <Text style={styles.taxByInstrumentName} numberOfLines={1}>{r.name}</Text>
+                        <Text style={styles.taxByInstrumentValue}>{formatMoney(r.tax, { currency: cur, kopecks: 'hide' })}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              ) : null}
             </View>
 
             {/* Эффективность — ставка и премия к ключевой переехали в хиро,
@@ -677,6 +695,11 @@ const styles = StyleSheet.create({
   taxSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
   taxSplitRow: { flexDirection: 'row', gap: tokens.spacing.lg },
   taxSplitValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: '#212121', marginTop: 4, letterSpacing: -0.36 },
+  taxByInstrumentTitle: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: '#909497', letterSpacing: -0.24, marginBottom: tokens.spacing.sm },
+  taxByInstrumentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
+  taxByInstrumentName: { flex: 1, fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
+  taxByInstrumentValue: { fontSize: 14, lineHeight: 16, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.14 },
+  taxByInstrumentSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: tokens.spacing.sm },
   rowLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
   rowSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },

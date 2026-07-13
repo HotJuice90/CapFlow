@@ -3,14 +3,21 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop, Circle, Line } from 'react-native-svg';
 import { font } from '@/theme';
 
-/** Круглый шаг сетки (1/2/5 × 10^n), ближайший к value/steps — тот же приём,
- *  что у любого нормального графика с осью: 5,92 млн → шаг 2 млн (2/4/6). */
+/**
+ * Круглый шаг сетки (1/2/5 × 10^n), ближайший к value/steps — тот же приём,
+ * что у любого нормального графика с осью: 5,92 млн → шаг 2 млн (2/4/6).
+ * Границы тиров нарочно смещены (1.2/2.5/6, не классические 1/2/5) — с
+ * классикой шаг ПЕРЕСКАКИВАЕТ сразу в разы (2М→5М) при малейшем превышении
+ * порога, и верх графика становится «мёртвым» пустым местом. С запасом до
+ * следующего тира шаг остаётся прежним чуть дольше — просто на один-два
+ * деления больше, а не резкий скачок в другой разряд.
+ */
 function niceStep(maxValue: number, steps = 3): number {
   if (maxValue <= 0) return 1;
   const rough = maxValue / steps;
   const magnitude = 10 ** Math.floor(Math.log10(rough));
   const normalized = rough / magnitude;
-  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  const nice = normalized <= 1.2 ? 1 : normalized <= 2.5 ? 2 : normalized <= 6 ? 5 : 10;
   return nice * magnitude;
 }
 
@@ -128,7 +135,11 @@ export function CapitalAxisChart({
   const step = niceStep(max || 1);
   // «Круглый» потолок для сетки/подписей (2М/4М/6М) — на нём и держатся ярлыки.
   const niceMax = step * Math.max(1, Math.ceil(max / step));
-  const gridValues = [step, step * 2, niceMax].filter((v, i, arr) => v <= niceMax && arr.indexOf(v) === i);
+  // Все круглые деления шага до потолка — НЕ жёстко «шаг/2×шаг/потолок»: если
+  // делений больше трёх (max требует 4+ шагов), фиксированные три позиции
+  // давали неровный пропуск подписей (напр. 2М/4М/8М вместо 2М/4М/6М/8М).
+  const gridValues: number[] = [];
+  for (let v = step; v <= niceMax + step * 0.01; v += step) gridValues.push(v);
   // Реальный максимум растёт непрерывно (капает процент), а niceMax — круглыми
   // ступенями, так что сразу после пробития очередной ступени пик ложится
   // вплотную к верхнему краю. Даём отдельный запас в масштабе (не в подписях),
