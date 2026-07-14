@@ -7,7 +7,7 @@ import { crossRate } from '@/state/selectors';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { tapBuzz } from '@/lib/haptics';
 import type { CurrencyCode } from '@/domain/types';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { CURRENCY_SYMBOL } from '@/format/money';
 import { timeAgo } from '@/format/date';
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: tokens.surface.white,
     marginBottom: tokens.spacing.xl,
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    ...boxShadow(tokens.shadow.subtle),
   },
   baseChange: { fontFamily: font.medium, fontSize: 14, color: tokens.accent.base },
   cardHeader: {
@@ -135,8 +135,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: tokens.spacing.md,
   },
-  cardTitle: { fontFamily: font.semibold, fontSize: 20, color: '#212121', letterSpacing: -0.2 },
-  cardSubtitle: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24 },
+  cardTitle: { fontFamily: font.semibold, fontSize: 20, color: tokens.text.primary, letterSpacing: -0.2 },
+  cardSubtitle: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   list: { gap: 4, marginBottom: tokens.spacing.xl },
   row: {
     flexDirection: 'row',
@@ -147,16 +147,16 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 12,
     paddingVertical: 10,
-    backgroundColor: 'rgba(249,250,255,0.55)',
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    backgroundColor: tokens.surface.rowTint,
+    ...boxShadow(tokens.shadow.subtle),
   },
   rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowCode: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
-  rowName: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.4)', marginTop: 1 },
+  rowCode: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
+  rowName: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 1 },
   rowRight: { alignItems: 'flex-end', gap: 2 },
-  rowRate: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  rowRate: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
   cbrPill: { backgroundColor: '#f9faff', borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 6 },
-  cbrText: { fontFamily: font.medium, fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.8)' },
+  cbrText: { fontFamily: font.medium, fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.8) },
   rebuildBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', paddingVertical: tokens.spacing.md },
   rebuildText: { fontFamily: font.medium, fontSize: 13, color: tokens.text.tertiary },
 });

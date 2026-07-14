@@ -286,7 +286,7 @@ function HistoryRow({
           <MaterialIcons name="close" size={18} color={tokens.text.secondary} />
         </Pressable>
         <Pressable onPress={saveEdit} hitSlop={8} style={s.editBtnSave}>
-          <MaterialIcons name="check" size={18} color="#FFFFFF" />
+          <MaterialIcons name="check" size={18} color={tokens.text.inverse} />
         </Pressable>
       </View>
     </View>
@@ -301,7 +301,7 @@ function HistoryRow({
         <MaterialCommunityIcons
           name={isFirst ? 'flag-outline' : point.isCorrection ? 'wrench-outline' : isUp ? 'arrow-up' : 'arrow-down'}
           size={16}
-          color={isFirst ? tokens.accent.base : point.isCorrection ? '#9A6DD7' : isUp ? tokens.semantic.positive : tokens.semantic.negative}
+          color={isFirst ? tokens.accent.base : point.isCorrection ? tokens.category.dfa : isUp ? tokens.semantic.positive : tokens.semantic.negative}
         />
       </View>
       <View style={{ flex: 1 }}>
@@ -359,10 +359,10 @@ function HistoryRow({
 const s = StyleSheet.create({
   // flex:1 — шит теперь фиксированной высоты (sheetAllowedDetents: [0.92], не
   // fitToContents), поэтому контент должен СКРОЛЛИТЬСЯ, а не просто помещаться.
-  sheet: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20 },
+  sheet: { flex: 1, backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20 },
   scroll: { flex: 1 },
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
-  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: '#212121', marginBottom: 12 },
+  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 12 },
 
   balanceBox: {
     alignItems: 'center',
@@ -377,7 +377,7 @@ const s = StyleSheet.create({
   correctionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: hexToRgba('#9A6DD7', 0.08),
+    backgroundColor: hexToRgba(tokens.category.dfa, 0.08),
     borderRadius: tokens.radius.md,
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.md,
@@ -395,8 +395,8 @@ const s = StyleSheet.create({
   },
   hint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginBottom: tokens.spacing.sm },
 
-  histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: '#fff' },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
+  histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: tokens.surface.white },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   histIcon: {
     width: 32, height: 32, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
@@ -405,7 +405,7 @@ const s = StyleSheet.create({
   histIconOpen: { backgroundColor: tokens.accent.soft },
   histIconUp: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.12) },
   histIconDown: { backgroundColor: hexToRgba(tokens.semantic.negative, 0.12) },
-  histIconCorrection: { backgroundColor: hexToRgba('#9A6DD7', 0.14) },
+  histIconCorrection: { backgroundColor: hexToRgba(tokens.category.dfa, 0.14) },
   histDate: { fontFamily: font.medium, fontSize: tokens.typography.label, color: tokens.text.primary },
   histSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
   histDelta: { fontFamily: font.semibold, fontSize: tokens.typography.label },
@@ -443,7 +443,7 @@ const s = StyleSheet.create({
     backgroundColor: tokens.semantic.positive,
   },
 
-  swipeHint: { width: 64, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  swipeHint: { width: 64, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.surface.white },
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   saveBtn: {
@@ -454,5 +454,5 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   disabled: { backgroundColor: tokens.text.tertiary },
-  saveText: { color: '#FFFFFF', fontSize: tokens.typography.body, fontWeight: '700' },
+  saveText: { color: tokens.text.inverse, fontSize: tokens.typography.body, fontWeight: '700' },
 });

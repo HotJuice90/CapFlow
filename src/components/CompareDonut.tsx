@@ -123,7 +123,7 @@ export function CompareDonut({
         <Defs>
           <LinearGradient id="nowGrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <Stop offset="0" stopColor="#2CE296" />
-            <Stop offset="1" stopColor="#21A870" />
+            <Stop offset="1" stopColor={tokens.semantic.positive} />
           </LinearGradient>
         </Defs>
         <Path d={prevPath} fill={neutralColor} />
@@ -142,5 +142,5 @@ export function CompareDonut({
 const styles = StyleSheet.create({
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   centerLabel: { fontSize: 24, lineHeight: 26, fontFamily: font.bold },
-  centerSub: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba('#212121', 0.5), letterSpacing: -0.24, marginTop: 2 },
+  centerSub: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, marginTop: 2 },
 });

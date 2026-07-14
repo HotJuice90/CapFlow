@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { tokens } from '@/theme';
 
 // Цветные
 import Alfa from '../../assets/banks/alfa.svg';
@@ -60,7 +61,7 @@ export function BankLogo({ bankId, name = '', size = 24, variant = 'color', fall
   if (Svg) return <Svg width={size} height={size} />;
   return (
     <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2, backgroundColor: variant === 'white' ? 'transparent' : fallbackColor }]}>
-      <Text style={{ color: variant === 'white' ? fallbackColor : '#fff', fontSize: size * 0.42, fontWeight: '800' }}>{letter(name)}</Text>
+      <Text style={{ color: variant === 'white' ? fallbackColor : tokens.text.inverse, fontSize: size * 0.42, fontWeight: '800' }}>{letter(name)}</Text>
     </View>
   );
 }
@@ -123,7 +124,7 @@ export function OrgLogo({
   if (fallbackIcon) {
     return (
       <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: color }]}>
-        <MaterialCommunityIcons name={fallbackIcon} size={Math.round(size * 0.55)} color="#FFFFFF" />
+        <MaterialCommunityIcons name={fallbackIcon} size={Math.round(size * 0.55)} color={tokens.text.inverse} />
       </View>
     );
   }
@@ -133,6 +134,6 @@ export function OrgLogo({
 const styles = StyleSheet.create({
   fallback: { justifyContent: 'center', alignItems: 'center' },
   orgBox: { alignItems: 'center', justifyContent: 'center' },
-  orgBoxLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAF2F9' },
+  orgBoxLight: { backgroundColor: tokens.surface.white, borderWidth: 1, borderColor: tokens.surface.hairline },
   orgBoxNoBorder: { borderWidth: 0 },
 });

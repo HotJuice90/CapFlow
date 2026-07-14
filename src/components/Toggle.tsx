@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: tokens.surface.white,
     boxShadow: '0px 1px 3px rgba(0,0,0,0.15)',
   },
 });

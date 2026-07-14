@@ -3,6 +3,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tapBuzz } from '@/lib/haptics';
 import { useData } from '@/state/DataContext';
+import { tokens, hexToRgba } from '@/theme';
 import HomeIcon from '../../assets/nav/home.svg';
 import HomeActiveIcon from '../../assets/nav/home-active.svg';
 import CalendarIcon from '../../assets/nav/calendar.svg';
@@ -27,16 +28,16 @@ const ICONS: Record<string, [React.FC<any>, React.FC<any>]> = {
 // блюр отложен. Полупрозрачная плашка без BlurView — стабильно, визуально близко.
 const THEME = {
   light: {
-    bg: 'rgba(255,255,255,0.92)',
-    border: 'rgba(255,255,255,0.7)',
-    active: '#62709C',
-    inactive: '#667085',
+    bg: hexToRgba(tokens.surface.white, 0.92),
+    border: tokens.surface.glassBorder,
+    active: tokens.accent.base,
+    inactive: tokens.text.secondary,
   },
   dark: {
     bg: 'rgba(34,42,68,0.92)',
-    border: 'rgba(255,255,255,0.14)',
-    active: '#A8B6E2',
-    inactive: 'rgba(255,255,255,0.5)',
+    border: hexToRgba(tokens.text.inverse, 0.14),
+    active: tokens.accent.light,
+    inactive: hexToRgba(tokens.text.inverse, 0.5),
   },
 };
 

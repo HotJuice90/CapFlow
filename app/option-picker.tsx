@@ -83,9 +83,9 @@ export default function OptionPickerSheet() {
                   <MaterialCommunityIcons
                     name={f.icon as keyof typeof MaterialCommunityIcons.glyphMap}
                     size={16}
-                    color={active ? '#FFFFFF' : f.color}
+                    color={active ? tokens.text.inverse : f.color}
                   />
-                  <Text style={[s.filterChipText, active ? { color: '#FFFFFF', fontFamily: font.semibold } : { color: f.color }]}>
+                  <Text style={[s.filterChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color: f.color }]}>
                     {f.label}
                   </Text>
                 </Pressable>
@@ -118,7 +118,7 @@ export default function OptionPickerSheet() {
                   <MaterialCommunityIcons
                     name={o.icon as keyof typeof MaterialCommunityIcons.glyphMap}
                     size={19}
-                    color={active ? '#FFFFFF' : (o.iconColor ?? tokens.accent.base)}
+                    color={active ? tokens.text.inverse : (o.iconColor ?? tokens.accent.base)}
                   />
                 </View>
               ) : null}
@@ -149,9 +149,9 @@ export default function OptionPickerSheet() {
 }
 
 const s = StyleSheet.create({
-  sheet: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+  sheet: { backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
-  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: '#212121', marginBottom: 10 },
+  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 10 },
 
   searchRow: {
     flexDirection: 'row',
@@ -163,7 +163,7 @@ const s = StyleSheet.create({
     backgroundColor: tokens.surface.neutral,
     marginBottom: 10,
   },
-  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: '#212121' },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: tokens.text.primary },
 
   // Скролл бleedит до края шита (минус паддинг шита компенсирован тут же).
   filterWrap: { marginHorizontal: -20, marginBottom: 10 },
@@ -175,23 +175,23 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
   },
   filterChipText: { fontFamily: font.medium, fontSize: 13 },
 
   list: { maxHeight: 400 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderRadius: tokens.radius.sm, paddingHorizontal: 4 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   iconBox: {
     width: 36, height: 36, borderRadius: 12,
     backgroundColor: tokens.accent.soft,
     alignItems: 'center', justifyContent: 'center',
   },
   radioOff: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#D8DFE9', marginRight: 1 },
-  label: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  label: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
   labelActive: { color: tokens.accent.base },
   sub: { fontFamily: font.regular, fontSize: 13, color: tokens.text.secondary, marginTop: 2 },
   empty: { fontFamily: font.regular, paddingVertical: 24, color: tokens.text.tertiary, textAlign: 'center' },
-  createRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#EAF2F9' },
+  createRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
   createText: { fontFamily: font.semibold, fontSize: 15, color: tokens.accent.base },
 });

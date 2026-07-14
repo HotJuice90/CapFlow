@@ -18,7 +18,7 @@ import type {
   PayoutPeriod,
 } from '@/domain/types';
 import { appAlert } from '@/lib/dialog';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 import { uid } from '@/utils/id';
 
 const TYPE_OPTIONS: { label: string; value: InstrumentTypeId }[] = [
@@ -187,8 +187,8 @@ export default function InstrumentFormScreen() {
                   style={[styles.typeChip, active && { backgroundColor: color }]}
                   onPress={() => setTypeId(opt.value)}
                 >
-                  <MaterialCommunityIcons name={TYPE_ICON[opt.value]} size={16} color={active ? '#FFFFFF' : color} />
-                  <Text style={[styles.typeChipText, active ? { color: '#FFFFFF', fontFamily: font.semibold } : { color }]}>
+                  <MaterialCommunityIcons name={TYPE_ICON[opt.value]} size={16} color={active ? tokens.text.inverse : color} />
+                  <Text style={[styles.typeChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
                     {opt.label}
                   </Text>
                 </Pressable>
@@ -263,12 +263,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: tokens.spacing.lg,
   },
-  headerTitle: { fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  headerTitle: { fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
 
   section: {
     fontFamily: font.semibold,
     fontSize: 20,
-    color: '#212121',
+    color: tokens.text.primary,
     letterSpacing: -0.2,
     marginTop: tokens.spacing.xl,
     marginBottom: tokens.spacing.md,
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
   },
   typeChipText: { fontFamily: font.medium, fontSize: 14 },
   typeHint: { fontFamily: font.regular, fontSize: 12, color: tokens.text.tertiary, marginTop: 8 },
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.85),
     borderTopWidth: 1,
     borderTopColor: tokens.surface.hairline,
   },
@@ -313,5 +313,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   disabled: { backgroundColor: tokens.text.tertiary },
-  saveText: { color: '#FFFFFF', fontSize: tokens.typography.body, fontWeight: '700' },
+  saveText: { color: tokens.text.inverse, fontSize: tokens.typography.body, fontWeight: '700' },
 });

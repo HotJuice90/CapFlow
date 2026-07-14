@@ -443,6 +443,8 @@ function closedThisYearContributions(data: AppData, now: Date): ClosedYearContri
 export interface TaxByInstrumentRow {
   key: string;
   name: string;
+  typeId: FinancialInstrument['typeId'];
+  organizationId: string;
   /** Прогноз/итог за год — для срочных и закрытых это уже финальная, точная
    *  цифра (весь их этот-годовой срок известен наперёд). */
   tax: number;
@@ -451,6 +453,11 @@ export interface TaxByInstrumentRow {
    *  закрытых своего «на сегодня» нет: их `tax` и так точная финальная сумма,
    *  дублировать нечего. */
   taxToDate?: number;
+  /** Срочный (известна дата окончания) или уже закрытый актив — сумма налога
+   *  за год ФИКСИРОВАНА (весь срок известен наперёд), в отличие от бессрочных,
+   *  где `tax` — экстраполяция «если ставка продержится весь год». UI рисует
+   *  замочек рядом с суммой. */
+  fixed: boolean;
 }
 
 /** Реально накопленный (не прогнозный) доход с начала года (или открытия,
@@ -492,8 +499,11 @@ export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByIns
     rows.push({
       key: v.asset.id,
       name: v.asset.title ? `${v.instrument.name} · ${v.asset.title}` : v.instrument.name,
+      typeId: v.instrument.typeId,
+      organizationId: v.instrument.organizationId,
       tax: annual * rate,
       taxToDate: isPerpetual && toDateIncome > 0 ? toDateIncome * rate : undefined,
+      fixed: !isPerpetual,
     });
   }
   for (const cl of closedThisYearContributions(data, now)) {
@@ -501,7 +511,62 @@ export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByIns
     rows.push({
       key: cl.asset.id,
       name: cl.asset.title ? `${cl.instrument.name} · ${cl.asset.title}` : cl.instrument.name,
+      typeId: cl.instrument.typeId,
+      organizationId: cl.instrument.organizationId,
       tax: cl.realized * rate,
+      fixed: true,
+    });
+  }
+  return rows.sort((a, b) => b.tax - a.tax);
+}
+
+export interface TaxByOrganizationRow {
+  key: string;
+  name: string;
+  color: string;
+  logo?: string;
+  customImageUri?: string;
+  /** См. TaxByInstrumentRow.tax — сумма той же величины по всем активам площадки. */
+  tax: number;
+  /** См. TaxByInstrumentRow.taxToDate — сумма только там, где она определена
+   *  (у активных бессрочных); если на площадке таких нет, поля вообще не будет. */
+  taxToDate?: number;
+  /** См. TaxByInstrumentRow.fixed — true только если ВСЕ активы площадки
+   *  фиксированные (срочные/закрытые); один бессрочный в составе площадки
+   *  делает итог по ней уже не фиксированным. */
+  fixed: boolean;
+}
+
+/** То же самое, что taxByInstrument, но сгруппировано по площадке (организации)
+ *  вместо актива — та же методика расчёта на каждую строку перед суммированием. */
+export function taxByOrganization(data: AppData, now: Date = new Date()): TaxByOrganizationRow[] {
+  const orgById = new Map(data.organizations.map((o) => [o.id, o]));
+  // Копим отдельно «известное на сегодня» (taxToDate у бессрочных, иначе уже
+  // точный tax у срочных/закрытых — см. r.taxToDate ?? r.tax в отрисовке) и
+  // «итог/прогноз за год» (просто tax) — те же две величины, что и у строки
+  // актива, только суммой по всем активам площадки.
+  const groups = new Map<string, { known: number; forecast: number; hasToDate: boolean; allFixed: boolean }>();
+  for (const r of taxByInstrument(data, now)) {
+    const g = groups.get(r.organizationId) ?? { known: 0, forecast: 0, hasToDate: false, allFixed: true };
+    g.known += r.taxToDate ?? r.tax;
+    g.forecast += r.tax;
+    if (r.taxToDate !== undefined) g.hasToDate = true;
+    if (!r.fixed) g.allFixed = false;
+    groups.set(r.organizationId, g);
+  }
+  const rows: TaxByOrganizationRow[] = [];
+  for (const [orgId, g] of groups) {
+    const org = orgById.get(orgId);
+    if (!org) continue;
+    rows.push({
+      key: orgId,
+      name: org.name,
+      color: org.color,
+      logo: org.logo,
+      customImageUri: org.customImageUri,
+      tax: g.forecast,
+      taxToDate: g.hasToDate ? g.known : undefined,
+      fixed: g.allFixed,
     });
   }
   return rows.sort((a, b) => b.tax - a.tax);

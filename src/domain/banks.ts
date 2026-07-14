@@ -20,6 +20,12 @@ export const BANKS: { id: string; name: string; color: string; url: string; type
   { id: 'yandex',      name: 'Яндекс',      color: '#FC3F1D', url: 'https://bank.yandex.ru' },
 ];
 
+/** Палитра для ручного выбора цвета площадки (когда нет готового лого/бренд-цвета). */
+export const BRAND_COLORS = [
+  '#EF3124', '#FF5C00', '#F2A900', '#21A038', '#10B3A3',
+  '#3E63DD', '#0A2896', '#9A6DD7', '#E5478B', '#5A6472',
+];
+
 export function findBank(id?: string) {
   return id ? BANKS.find((b) => b.id === id) : undefined;
 }

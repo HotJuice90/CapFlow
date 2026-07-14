@@ -82,16 +82,16 @@ export default function SettingsScreen() {
         <ScreenTitle>{t.settings.title}</ScreenTitle>
 
         <Group title="Данные">
-          <SettingsRow icon="account-balance" color="#9A6DD7" label="Площадки" onPress={() => router.push('/catalog/organizations')} />
+          <SettingsRow icon="account-balance" color={tokens.category.dfa} label="Площадки" onPress={() => router.push('/catalog/organizations')} />
           <Divider />
           <SettingsRow icon="layers" color="#21A038" label="Фин. инструменты" onPress={() => router.push('/catalog/instruments')} />
           <Divider />
-          <SettingsRow icon="archive" color="#62709C" label="Архив активов" onPress={() => router.push('/archive')} />
+          <SettingsRow icon="archive" color={tokens.accent.base} label="Архив активов" onPress={() => router.push('/archive')} />
           {/* Уведомления — временно скрыты, экран не готов. Не удалять роут/строку, просто не рендерим. */}
         </Group>
 
         <Group title="Расчёты">
-          <SettingsRow icon="currency-exchange" color="#F2A900" label="Валюты и курсы" value="ЦБ РФ" onPress={() => router.push('/settings/rates')} />
+          <SettingsRow icon="currency-exchange" color={tokens.semantic.warning} label="Валюты и курсы" value="ЦБ РФ" onPress={() => router.push('/settings/rates')} />
           <Divider />
           <SettingsRow icon="payments" color="#21A038" label="Валюта по умолчанию" value={data.settings.defaultCurrency} onPress={openCurrency} />
           <Divider />
@@ -117,7 +117,7 @@ export default function SettingsScreen() {
           <Divider />
           <SettingsRow
             icon="science"
-            color="#F2A900"
+            color={tokens.semantic.warning}
             label="Тестовые данные"
             toggle={{ value: hasDemo, onChange: onToggleDemo }}
           />
@@ -135,7 +135,7 @@ export default function SettingsScreen() {
         </Group>
 
         <Group title="Справка">
-          <SettingsRow icon="info-outline" color="#62709C" label="О приложении" value={version} onPress={() => router.push('/settings/about')} />
+          <SettingsRow icon="info-outline" color={tokens.accent.base} label="О приложении" value={version} onPress={() => router.push('/settings/about')} />
         </Group>
       </ScrollView>
     </ScreenBackground>

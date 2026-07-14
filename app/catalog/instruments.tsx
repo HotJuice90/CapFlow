@@ -136,7 +136,7 @@ export default function InstrumentsScreen() {
                   <MaterialCommunityIcons
                     name={tab.id === 'all' ? 'view-grid-outline' : TYPE_ICON[tab.id]}
                     size={16}
-                    color={active ? '#FFFFFF' : tab.id === 'all' ? tokens.accent.base : tokens.category[tab.id]}
+                    color={active ? tokens.text.inverse : tab.id === 'all' ? tokens.accent.base : tokens.category[tab.id]}
                   />
                   <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab.label}</Text>
                 </Pressable>
@@ -251,14 +251,14 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
   addBtn: {
     width: 44,
     height: 44,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.5),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: hexToRgba(tokens.surface.white, 0.5),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -274,11 +274,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
   },
   tabChipActive: { backgroundColor: tokens.accent.light },
-  tabChipText: { fontFamily: font.medium, fontSize: 14, color: 'rgba(33,33,33,0.6)' },
-  tabChipTextActive: { fontFamily: font.semibold, color: '#FFFFFF' },
+  tabChipText: { fontFamily: font.medium, fontSize: 14, color: hexToRgba(tokens.text.primary, 0.6) },
+  tabChipTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
 
   group: { marginBottom: 28 },
   groupHeader: {
@@ -289,8 +289,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   groupLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  groupName: { fontFamily: font.semibold, fontSize: 15, color: '#212121' },
-  groupCount: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.35)' },
+  groupName: { fontFamily: font.semibold, fontSize: 15, color: tokens.text.primary },
+  groupCount: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.35) },
 
   list: { gap: 4 },
   row: {
@@ -301,16 +301,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     backgroundColor: tokens.surface.white,
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    ...boxShadow(tokens.shadow.subtle),
   },
   typeIcon: { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  rowName: { fontFamily: font.medium, fontSize: 16, color: '#212121' },
-  rowSubtitle: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.4)', marginTop: 2 },
+  rowName: { fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
+  rowSubtitle: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 2 },
 
   swipeHint: { width: 88, alignItems: 'center', justifyContent: 'center' },
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl, gap: tokens.spacing.sm },
-  emptyTitle: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  emptyTitle: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
   emptyHint: { fontFamily: font.regular, fontSize: 13, color: tokens.text.secondary, textAlign: 'center', paddingHorizontal: tokens.spacing.xl },
 });

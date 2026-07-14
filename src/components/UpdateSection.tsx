@@ -68,7 +68,7 @@ export function UpdateSection() {
                   <Text style={styles.available}>Доступна версия {info.latest}</Text>
                   {info.notes ? <Text style={styles.notes} numberOfLines={3}>{info.notes}</Text> : null}
                   <Pressable style={styles.downloadBtn} onPress={download}>
-                    <MaterialIcons name="download" size={20} color="#FFFFFF" />
+                    <MaterialIcons name="download" size={20} color={tokens.text.inverse} />
                     <Text style={styles.downloadText}>Скачать обновление</Text>
                   </Pressable>
                   <Text style={styles.hint}>Откроется в браузере — скачайте и установите APK.</Text>
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.spacing.md,
     marginTop: tokens.spacing.md,
   },
-  downloadText: { color: '#FFFFFF', fontWeight: '700', fontSize: tokens.typography.label },
+  downloadText: { color: tokens.text.inverse, fontWeight: '700', fontSize: tokens.typography.label },
   hint: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: tokens.spacing.sm, textAlign: 'center' },
   upToDate: { fontSize: tokens.typography.label, color: tokens.semantic.positive, fontWeight: '600', marginTop: tokens.spacing.sm },
   error: { fontSize: tokens.typography.label, color: tokens.semantic.negative, marginTop: tokens.spacing.sm },

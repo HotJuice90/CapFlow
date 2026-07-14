@@ -3,13 +3,14 @@ import { Dimensions, ImageBackground, Pressable, ScrollView, StyleSheet, Text, V
 import Svg, { Defs, Pattern as SvgPattern, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ScreenTitle } from '@/components/ScreenTitle';
 import { Card } from '@/components/Card';
 import { boxShadow } from '@/theme/shadow';
 import { OrgLogo } from '@/components/BankLogo';
+import { InfoTap } from '@/components/InfoTap';
 import { CompareDonut } from '@/components/CompareDonut';
 import { CapitalAxisChart } from '@/components/CapitalAxisChart';
 import { useData } from '@/state/DataContext';
@@ -26,10 +27,19 @@ import {
   rateSpread,
   avgLockDuration,
   taxByInstrument,
+  taxByOrganization,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned, pluralDays } from '@/format';
 import { t } from '@/i18n';
+
+// Иконка по типу инструмента — та же пара, что и в AssetRow.
+const TAX_TYPE_ICON: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
+  dfa: 'chart-line',
+};
 
 // Доступная ширина под цифру «Темп дохода» слева/справа от бублика (140) — минус
 // паддинг плашки (16*2) и небольшой запас (~пара мм), чтобы автоуменьшение
@@ -52,6 +62,7 @@ export default function AnalyticsScreen() {
   const router = useRouter();
 
   const [heroPeriod, setHeroPeriod] = useState<HeroPeriod>('month');
+  const [taxTab, setTaxTab] = useState<'assets' | 'orgs'>('assets');
 
   const summary = useMemo(() => analyticsSummary(data), [data]);
   const ins = useMemo(() => insights(data), [data]);
@@ -63,7 +74,9 @@ export default function AnalyticsScreen() {
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
   const spread = useMemo(() => rateSpread(data), [data]);
   const lockDays = useMemo(() => avgLockDuration(data), [data]);
-  const taxRows = useMemo(() => taxByInstrument(data), [data]);
+  const taxAssetRows = useMemo(() => taxByInstrument(data), [data]);
+  const taxOrgRows = useMemo(() => taxByOrganization(data), [data]);
+  const taxRows = taxTab === 'assets' ? taxAssetRows : taxOrgRows;
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -103,6 +116,10 @@ export default function AnalyticsScreen() {
   const yearStart = new Date(nowDate.getFullYear(), 0, 1).getTime();
   const yearEnd = new Date(nowDate.getFullYear() + 1, 0, 1).getTime();
   const yearProgressPct = ((nowDate.getTime() - yearStart) / (yearEnd - yearStart)) * 100;
+  // Инсайт вместо геометрического сравнения бара с меткой: на сколько п.п.
+  // налог набегает быстрее/медленнее равномерного темпа календаря (>0 — уже
+  // пробили необлагаемый лимит и дальше облагается весь доход).
+  const taxPaceDeltaPct = taxAccruedPct - yearProgressPct;
 
   return (
     <ScreenBackground>
@@ -140,7 +157,7 @@ export default function AnalyticsScreen() {
                   <View
                     style={[
                       styles.heroGrowthPill,
-                      { backgroundColor: periodGrowthPct >= 0 ? 'rgba(31,169,113,0.12)' : 'rgba(229,72,77,0.12)' },
+                      { backgroundColor: periodGrowthPct >= 0 ? hexToRgba(tokens.semantic.positive, 0.12) : hexToRgba(tokens.semantic.negative, 0.12) },
                     ]}
                   >
                     <Text style={[styles.heroGrowthText, { color: periodGrowthPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
@@ -171,7 +188,7 @@ export default function AnalyticsScreen() {
                 </View>
                 <View style={{ minWidth: 0 }}>
                   <Text
-                    style={[styles.heroEarnedValue, { color: earnedPeriod >= 0 ? '#21A870' : tokens.semantic.negative }]}
+                    style={[styles.heroEarnedValue, { color: earnedPeriod >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
@@ -192,11 +209,11 @@ export default function AnalyticsScreen() {
                   <Pressable
                     style={[
                       styles.heroRatePill,
-                      { backgroundColor: summary.premiumToKeyRate >= 0 ? 'rgba(31,169,113,0.1)' : 'rgba(229,139,139,0.1)' },
+                      { backgroundColor: summary.premiumToKeyRate >= 0 ? hexToRgba(tokens.semantic.positive, 0.1) : hexToRgba(tokens.semantic.negative, 0.1) },
                     ]}
                     onPress={() => { tapBuzz(); router.push('/settings/key-rate'); }}
                   >
-                    <Text style={[styles.heroRatePillText, { color: summary.premiumToKeyRate >= 0 ? '#1a8f5c' : '#C11818' }]} numberOfLines={1}>
+                    <Text style={[styles.heroRatePillText, { color: summary.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]} numberOfLines={1}>
                       {summary.premiumToKeyRate >= 0 ? '▲' : '▼'} {formatPercentSigned(summary.premiumToKeyRate)} КС
                     </Text>
                   </Pressable>
@@ -392,66 +409,146 @@ export default function AnalyticsScreen() {
             <View style={styles.taxCard}>
               <View style={styles.taxHeaderRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>Прогноз налога за год</Text>
-                  <Text style={styles.taxValue}>{formatMoney(summary.taxYearGross, { currency: cur })}</Text>
+                  <Text style={styles.taxLabel}>Набежало на сегодня</Text>
+                  <Text style={styles.taxValue}>{formatMoney(summary.taxAccruedGross, { currency: cur })}</Text>
                 </View>
                 <Pressable style={styles.taxRatePill} onPress={() => { tapBuzz(); router.push('/settings/tax'); }}>
-                  <Text style={styles.taxRatePillText}>{formatPercent(data.params.taxRate)} ▸</Text>
+                  <Text style={styles.taxRatePillText}>{formatPercent(data.params.taxRate)}</Text>
+                  <MaterialIcons name="chevron-right" size={14} color={tokens.category.dfa} />
                 </Pressable>
               </View>
 
               <View style={styles.taxBarWrap}>
-                <View style={styles.taxTrackWrap}>
-                  <View style={styles.taxTrack}>
-                    <LinearGradient
-                      colors={[hexToRgba('#9A6DD7', 0.7), '#9A6DD7']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[styles.taxFill, { width: `${Math.min(Math.max(taxAccruedPct, 0), 100)}%` }]}
-                    />
-                  </View>
-                  <View style={[styles.taxYearMarker, { left: `${Math.min(Math.max(yearProgressPct, 0), 100)}%` }]} />
+                <View style={styles.taxTrack}>
+                  <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+                    <Defs>
+                      <SvgPattern id="taxTrackStripes" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                        <Rect width="6" height="6" fill={hexToRgba(tokens.category.dfa, 0.08)} />
+                        <Rect width="3" height="6" fill={hexToRgba(tokens.category.dfa, 0.18)} />
+                      </SvgPattern>
+                    </Defs>
+                    <Rect width="100%" height="100%" fill="url(#taxTrackStripes)" />
+                  </Svg>
+                  <LinearGradient
+                    colors={['#BDA0E5', tokens.category.dfa]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.taxFill, { width: `${Math.min(Math.max(taxAccruedPct, 0), 100)}%` }]}
+                  />
                 </View>
                 <View style={styles.taxMeta}>
-                  <Text style={styles.taxMetaLeft}>Набежало: {formatMoney(summary.taxAccruedGross, { currency: cur, kopecks: 'hide' })} · {taxAccruedPct}%</Text>
-                  <Text style={styles.taxMetaRight}>Год прошёл: {Math.round(yearProgressPct)}%</Text>
+                  <View style={styles.taxMetaInlineRow}>
+                    <Text style={styles.taxMetaBigValue}>{taxAccruedPct}%</Text>
+                    {Math.abs(taxPaceDeltaPct) >= 1 ? (
+                      <InfoTap
+                        title="Темп начисления налога"
+                        message="Показывает, насколько текущий налог отстаёт от ожидаемого или опережает его. Если значение ниже — налог пока накапливается медленнее прогноза. Если выше — быстрее. На это влияют сроки выплат, доходность активов и необлагаемый лимит."
+                      >
+                        <View style={styles.taxPaceRow}>
+                          <MaterialIcons
+                            name={taxPaceDeltaPct > 0 ? 'trending-up' : 'trending-down'}
+                            size={12}
+                            color={tokens.text.tertiary}
+                          />
+                          <Text style={styles.taxPaceText}>{Math.abs(Math.round(taxPaceDeltaPct))}%</Text>
+                        </View>
+                      </InfoTap>
+                    ) : null}
+                  </View>
+                  <View style={styles.taxMetaInlineRow}>
+                    <Text style={styles.taxMetaSmallLabel}>Прогноз:</Text>
+                    <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
+                  </View>
                 </View>
               </View>
 
               <View style={styles.taxSep} />
 
-              <View style={styles.taxSplitRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>Удержит банк</Text>
-                  <Text style={styles.taxSplitValue}>{formatMoney(summary.taxYearWithheld, { currency: cur, kopecks: 'hide' })}</Text>
+              <View style={styles.taxTileRow}>
+                <View style={styles.taxTileWide}>
+                  <View style={styles.taxTileCol}>
+                    <Text style={styles.taxTileLabel}>Удержит банк</Text>
+                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearWithheld, { currency: cur, kopecks: 'hide' })}</Text>
+                  </View>
+                  <View style={styles.taxTileDivider} />
+                  <View style={styles.taxTileCol}>
+                    <Text style={styles.taxTileLabel}>Самостоятельно</Text>
+                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>Доплатить самому</Text>
-                  <Text style={styles.taxSplitValue}>{formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
+                <View style={styles.taxTilePaid}>
+                  <Text style={styles.taxTileLabel}>Уплачено</Text>
+                  <Text style={[styles.taxTileValue, { color: tokens.semantic.positive }]}>{formatMoney(summary.taxPaidTotal, { currency: cur, kopecks: 'hide' })}</Text>
                 </View>
               </View>
 
-              <Text style={styles.taxHint}>Уплачено за всё время: {formatMoney(summary.taxPaidTotal, { currency: cur, kopecks: 'hide' })}</Text>
-
-              {taxRows.length > 0 ? (
+              {taxAssetRows.length > 0 || taxOrgRows.length > 0 ? (
                 <>
                   <View style={styles.taxSep} />
-                  <Text style={styles.taxByInstrumentTitle}>Налог по инструментам (без учёта лимита)</Text>
+                  <View style={styles.taxTabPillWrap}>
+                    <Pressable
+                      style={[styles.taxTabSegment, taxTab === 'assets' && styles.taxTabSegmentActive]}
+                      onPress={() => { tapBuzz(); setTaxTab('assets'); }}
+                    >
+                      <Text style={[styles.taxTabSegmentText, taxTab === 'assets' && styles.taxTabSegmentTextActive]}>Активы</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.taxTabSegment, taxTab === 'orgs' && styles.taxTabSegmentActive]}
+                      onPress={() => { tapBuzz(); setTaxTab('orgs'); }}
+                    >
+                      <Text style={[styles.taxTabSegmentText, taxTab === 'orgs' && styles.taxTabSegmentTextActive]}>Площадки</Text>
+                    </Pressable>
+                  </View>
                   {taxRows.map((r, i) => {
                     const primary = r.taxToDate ?? r.tax;
                     const secondary = r.taxToDate !== undefined ? r.tax : undefined;
                     return (
                       <View key={r.key}>
                         {i > 0 ? <View style={styles.taxByInstrumentSep} /> : null}
-                        <View style={styles.taxByInstrumentRow}>
+                        <Pressable
+                          style={({ pressed }) => [styles.taxByInstrumentRow, pressed && styles.taxRowPressed]}
+                          onPress={() => {
+                            tapBuzz();
+                            router.push('typeId' in r ? `/asset/${r.key}` : `/catalog/organization?id=${r.key}`);
+                          }}
+                        >
+                          {'typeId' in r ? (
+                            <View style={[styles.taxRowIconBox, { backgroundColor: hexToRgba(tokens.category[r.typeId] ?? tokens.accent.base, 0.1) }]}>
+                              <MaterialCommunityIcons
+                                name={TAX_TYPE_ICON[r.typeId] ?? 'bank-outline'}
+                                size={19}
+                                color={tokens.category[r.typeId] ?? tokens.accent.base}
+                              />
+                            </View>
+                          ) : (
+                            <OrgLogo
+                              color={r.color}
+                              logo={r.logo}
+                              imageUri={r.customImageUri}
+                              size={34}
+                              radius={tokens.radius.sm}
+                            />
+                          )}
                           <Text style={styles.taxByInstrumentName} numberOfLines={1}>{r.name}</Text>
                           <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={styles.taxByInstrumentValue}>{formatMoney(primary, { currency: cur, kopecks: 'hide' })}</Text>
+                            <View style={styles.taxByInstrumentValueRow}>
+                              {r.fixed ? (
+                                <InfoTap
+                                  title="Срочный актив"
+                                  message="Для срочных и уже закрытых активов итоговая сумма налога известна заранее. Поэтому она не меняется при ежедневном пересчёте.
+
+Расчёт обновится только в том случае, если изменятся условия актива, например при досрочном закрытии."
+                                >
+                                  <MaterialIcons name="lock-outline" size={11} color={tokens.text.tertiary} style={styles.taxFixedLock} />
+                                </InfoTap>
+                              ) : null}
+                              <Text style={styles.taxByInstrumentValue}>{formatMoney(primary, { currency: cur, kopecks: 'hide' })}</Text>
+                            </View>
                             {secondary !== undefined ? (
                               <Text style={styles.taxByInstrumentSubValue}>год ~ {formatMoney(secondary, { currency: cur, kopecks: 'hide' })}</Text>
                             ) : null}
                           </View>
-                        </View>
+                        </Pressable>
                       </View>
                     );
                   })}
@@ -555,10 +652,10 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     marginBottom: 4,
   },
-  insightTagText: { fontSize: 11, lineHeight: 13, fontFamily: font.semibold, color: '#7C4DD6', letterSpacing: -0.11 },
-  insightTitle: { fontSize: 14, lineHeight: 16, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.28 },
-  insightText: { fontSize: 13, lineHeight: 18, fontFamily: font.regular, color: '#667085', marginTop: 3, letterSpacing: -0.13 },
-  section: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
+  insightTagText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.semibold, color: '#7C4DD6', letterSpacing: -0.11 },
+  insightTitle: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.28 },
+  insightText: { fontSize: tokens.typography.caption, lineHeight: 18, fontFamily: font.regular, color: tokens.text.secondary, marginTop: 3, letterSpacing: -0.13 },
+  section: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
   paceCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
@@ -573,24 +670,24 @@ const styles = StyleSheet.create({
   paceSide: { gap: 13, alignItems: 'flex-start' },
   paceSideRight: { alignItems: 'flex-end' },
   paceChip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: tokens.surface.white,
     borderRadius: tokens.radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  paceChipText: { fontSize: 11, lineHeight: 13, fontFamily: font.medium, color: hexToRgba('#212121', 0.8) },
+  paceChipText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.8) },
   paceValueBlock: { alignItems: 'flex-start' },
   paceValueBlockRight: { alignItems: 'flex-end' },
-  paceUnit: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba('#212121', 0.3), letterSpacing: -0.24 },
+  paceUnit: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   paceValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, marginTop: 0, maxWidth: PACE_VALUE_MAX_W },
   paceDonutSpacer: { width: 140 },
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   heroCapitalBlock: { gap: 8, marginBottom: 6 },
   heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
+  heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
   heroGrowthPill: { borderRadius: 35, paddingHorizontal: 7, paddingVertical: 3 },
   heroGrowthText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
-  heroValue: { fontSize: 40, lineHeight: 42, fontFamily: font.semibold, color: tokens.text.secondary, letterSpacing: -0.8 },
+  heroValue: { fontSize: tokens.typography.metricLg, lineHeight: 42, fontFamily: font.semibold, color: tokens.text.secondary, letterSpacing: -0.8 },
   heroSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -612,15 +709,15 @@ const styles = StyleSheet.create({
   },
   heroPeriodChip: { alignItems: 'center', justifyContent: 'center', height: 25, paddingHorizontal: 10, borderRadius: 35 },
   heroPeriodChipActive: { backgroundColor: tokens.accent.light },
-  heroPeriodText: { fontSize: 13, lineHeight: 15, fontFamily: font.medium, color: hexToRgba('#212121', 0.5), letterSpacing: -0.26 },
-  heroPeriodTextActive: { color: '#FFFFFF' },
-  heroEarnedValue: { fontSize: 32, lineHeight: 34, fontFamily: font.semibold, letterSpacing: -0.64 },
+  heroPeriodText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.26 },
+  heroPeriodTextActive: { color: tokens.text.inverse },
+  heroEarnedValue: { fontSize: tokens.typography.metric, lineHeight: 34, fontFamily: font.semibold, letterSpacing: -0.64 },
   heroEarnedLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: '#909497', marginTop: 4 },
   heroDivider: { width: 1, alignSelf: 'stretch', backgroundColor: tokens.surface.hairline },
   heroRateCell: { alignItems: 'center', justifyContent: 'space-between', paddingTop: 7 },
   heroRateLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: '#909497', letterSpacing: -0.24 },
   heroRateValueBlock: { alignItems: 'center', gap: 10, marginTop: 12 },
-  heroRateValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: '#212121' },
+  heroRateValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary },
   heroRatePill: { borderRadius: 35, paddingHorizontal: 8, paddingVertical: 8 },
   heroRatePillText: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
   vesselRow: { flexDirection: 'row', gap: 10 },
@@ -641,11 +738,11 @@ const styles = StyleSheet.create({
     left: -8,
     width: 22,
     height: 110,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.25),
     transform: [{ rotate: '-18deg' }],
   },
-  vesselPct: { fontSize: 15, lineHeight: 17, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.3, marginTop: 8 },
-  vesselLabel: { fontSize: 11, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.22, textAlign: 'center', marginTop: 2 },
+  vesselPct: { fontSize: 15, lineHeight: 17, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 8 },
+  vesselLabel: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.22, textAlign: 'center', marginTop: 2 },
   orgCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
@@ -656,10 +753,10 @@ const styles = StyleSheet.create({
   orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 16 },
   orgInfo: { flex: 1, minWidth: 0, gap: 6 },
-  orgAmount: { fontSize: 20, lineHeight: 22, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.4 },
-  orgName: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
+  orgAmount: { fontSize: tokens.typography.title, lineHeight: 22, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.4 },
+  orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
   orgPctChip: { width: 50, height: 50, borderRadius: 12, backgroundColor: tokens.surface.white, alignItems: 'center', justifyContent: 'center' },
-  orgPctText: { fontSize: 14, lineHeight: 16, fontFamily: font.semibold, color: '#586692' },
+  orgPctText: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.semibold, color: '#586692' },
   allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.md },
   allocationSegment: { borderRadius: 4 },
   freeCapSegment: { overflow: 'hidden' },
@@ -676,9 +773,9 @@ const styles = StyleSheet.create({
   freeCapBg: { borderRadius: 16 },
   freeCapInfo: { gap: 6 },
   freeCapValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: '#7143AE', letterSpacing: -0.36 },
-  freeCapLabel: { fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: hexToRgba('#212121', 0.5), letterSpacing: -0.28 },
-  freeCapPctChip: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
-  freeCapPctText: { fontSize: 16, lineHeight: 18, fontFamily: font.semibold, color: '#586692' },
+  freeCapLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.28 },
+  freeCapPctChip: { width: 40, height: 40, borderRadius: 12, backgroundColor: hexToRgba(tokens.surface.white, 0.5), alignItems: 'center', justifyContent: 'center' },
+  freeCapPctText: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: '#586692' },
   taxCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
@@ -687,44 +784,55 @@ const styles = StyleSheet.create({
   },
   taxHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   taxLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: '#909497', letterSpacing: -0.24 },
-  taxValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: '#212121', marginTop: 4 },
-  taxHint: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 12, letterSpacing: -0.12 },
-  taxRatePill: { backgroundColor: hexToRgba('#9A6DD7', 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
-  taxRatePillText: { fontSize: 13, lineHeight: 15, fontFamily: font.semibold, color: '#9A6DD7', letterSpacing: -0.13 },
+  taxValue: { fontSize: 24, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 4 },
+  taxRatePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: hexToRgba(tokens.category.dfa, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  taxRatePillText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.semibold, color: tokens.category.dfa, letterSpacing: -0.13 },
   taxBarWrap: { marginTop: tokens.spacing.lg },
-  taxTrackWrap: { paddingVertical: 6 },
-  taxTrack: { height: 10, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral, overflow: 'hidden' },
+  taxTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   taxFill: { height: '100%', borderRadius: tokens.radius.pill },
-  taxYearMarker: {
-    position: 'absolute',
-    top: 0,
-    width: 3,
-    height: 22,
-    marginLeft: -1.5,
-    borderRadius: 1.5,
-    backgroundColor: '#212121',
-  },
-  taxMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  taxMetaLeft: { fontSize: 13, lineHeight: 16, fontFamily: font.regular, color: '#909497', letterSpacing: -0.13 },
-  taxMetaRight: { fontSize: 13, lineHeight: 16, fontFamily: font.regular, color: '#909497', letterSpacing: -0.13 },
+  taxMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
+  taxMetaInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  taxMetaBigValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
+  taxMetaSmallLabel: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
+  taxPaceRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  taxPaceText: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
   taxSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
-  taxSplitRow: { flexDirection: 'row', gap: tokens.spacing.lg },
-  taxSplitValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: '#212121', marginTop: 4, letterSpacing: -0.36 },
-  taxByInstrumentTitle: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: '#909497', letterSpacing: -0.24, marginBottom: tokens.spacing.sm },
+  taxTileRow: { flexDirection: 'row', gap: 8 },
+  taxTileWide: { flex: 1, flexDirection: 'row', backgroundColor: hexToRgba('#909497', 0.08), borderRadius: tokens.radius.sm, padding: 10 },
+  taxTilePaid: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.08), borderRadius: tokens.radius.sm, paddingHorizontal: 12, paddingVertical: 10 },
+  taxTileCol: { flex: 1 },
+  taxTileDivider: { width: 1, backgroundColor: hexToRgba('#909497', 0.2), marginHorizontal: 10 },
+  taxTileLabel: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.11 },
+  taxTileValue: { fontSize: tokens.typography.label, lineHeight: 17, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 4, letterSpacing: -0.14 },
+  taxTabPillWrap: {
+    flexDirection: 'row',
+    padding: 1,
+    borderRadius: tokens.radius.pill,
+    backgroundColor: tokens.surface.tabOff,
+    marginBottom: tokens.spacing.xl,
+  },
+  taxTabSegment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: tokens.radius.pill },
+  taxTabSegmentActive: { backgroundColor: tokens.accent.light },
+  taxTabSegmentText: { fontSize: tokens.typography.label, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.14 },
+  taxTabSegmentTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
+  taxRowIconBox: { width: 34, height: 34, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
   taxByInstrumentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
-  taxByInstrumentName: { flex: 1, fontSize: 14, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
-  taxByInstrumentValue: { fontSize: 16, lineHeight: 18, fontFamily: font.semibold, color: '#212121', letterSpacing: -0.16 },
-  taxByInstrumentSubValue: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 1 },
+  taxRowPressed: { opacity: 0.6 },
+  taxByInstrumentName: { flex: 1, fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
+  taxByInstrumentValueRow: { flexDirection: 'row', alignItems: 'center' },
+  taxFixedLock: { marginRight: 6 },
+  taxByInstrumentValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
+  taxByInstrumentSubValue: { fontSize: 12, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 4 },
   taxByInstrumentSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: tokens.spacing.sm },
   rowLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
   rowSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
-  rowValue: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
-  rowAccent: { color: tokens.accent.base, fontWeight: '700' },
+  rowValue: { fontSize: tokens.typography.body, fontFamily: font.semibold, color: tokens.text.primary },
+  rowAccent: { color: tokens.accent.base, fontFamily: font.bold },
   sep: { height: 1, backgroundColor: tokens.surface.hairline },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
-  emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
+  emptyTitle: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
   emptyBtn: { marginTop: tokens.spacing.lg, backgroundColor: tokens.accent.base, paddingHorizontal: tokens.spacing.xl, paddingVertical: tokens.spacing.md, borderRadius: tokens.radius.pill },
-  emptyBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: tokens.typography.label },
+  emptyBtnText: { color: tokens.text.inverse, fontFamily: font.semibold, fontSize: tokens.typography.label },
 });

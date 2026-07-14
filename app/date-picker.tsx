@@ -287,7 +287,7 @@ const s = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,30,28,0.45)' },
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: tokens.surface.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
@@ -297,14 +297,14 @@ const s = StyleSheet.create({
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center' },
 
   headRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: '#212121' },
+  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary },
   chip: { backgroundColor: tokens.accent.soft, borderRadius: tokens.radius.pill, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { fontFamily: font.semibold, fontSize: 13, color: tokens.accent.base },
 
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   navBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: tokens.accent.soft, alignItems: 'center', justifyContent: 'center' },
   monthTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  monthTitle: { fontFamily: font.semibold, fontSize: 17, color: '#212121' },
+  monthTitle: { fontFamily: font.semibold, fontSize: 17, color: tokens.text.primary },
 
   weekRow: { flexDirection: 'row', marginBottom: 4 },
   weekday: { flex: 1, textAlign: 'center', fontFamily: font.semibold, fontSize: 11, color: tokens.text.tertiary },
@@ -315,8 +315,8 @@ const s = StyleSheet.create({
   dayCircle: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   daySelected: { backgroundColor: tokens.accent.base, borderRadius: 19 },
   dayToday: { borderWidth: 1.5, borderColor: tokens.accent.base, borderRadius: 19 },
-  dayText: { fontFamily: font.medium, fontSize: 15, color: '#212121' },
-  dayTextSelected: { fontFamily: font.semibold, color: '#FFFFFF' },
+  dayText: { fontFamily: font.medium, fontSize: 15, color: tokens.text.primary },
+  dayTextSelected: { fontFamily: font.semibold, color: tokens.text.inverse },
 
   wheelWrap: { height: YEAR_ITEM_HEIGHT * 5, justifyContent: 'center' },
   wheelBand: {
@@ -334,7 +334,7 @@ const s = StyleSheet.create({
     marginTop: 8,
     paddingTop: 18,
     borderTopWidth: 1,
-    borderTopColor: '#EAF2F9',
+    borderTopColor: tokens.surface.hairline,
   },
   cancelText: { fontFamily: font.medium, fontSize: 15, color: tokens.text.tertiary },
   okText: { fontFamily: font.semibold, fontSize: 15, color: tokens.accent.base },

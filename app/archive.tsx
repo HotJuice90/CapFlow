@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
 
   hint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginBottom: tokens.spacing.sm },
 
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.lg,
     paddingVertical: tokens.spacing.lg,
     backgroundColor: tokens.surface.white,
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    ...boxShadow(tokens.shadow.subtle),
   },
   rowName: { fontFamily: font.medium, fontSize: tokens.typography.body, color: tokens.text.primary },
   rowSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
@@ -255,6 +255,6 @@ const styles = StyleSheet.create({
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl, gap: tokens.spacing.sm },
-  emptyTitle: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  emptyTitle: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
   emptyHint: { fontFamily: font.regular, fontSize: 13, color: tokens.text.secondary, textAlign: 'center', paddingHorizontal: tokens.spacing.xl },
 });

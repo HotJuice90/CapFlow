@@ -206,7 +206,7 @@ export default function CalendarScreen() {
             {/* Компактная сводка месяца — в стиле нижней таблички дня */}
             <Card style={styles.statsCard} padded={false}>
               <View style={styles.statsRow}>
-                <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color="#009933" />
+                <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.positive} />
                 <View style={styles.statSep} />
                 <Stat label="Налог за месяц" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
                 <View style={styles.statSep} />
@@ -376,15 +376,15 @@ function EarnedStripe({ amount, currency }: { amount: number; currency: Currency
         <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
           <Defs>
             <SvgGradient id="glow" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
-              <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0.4" />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+              <Stop offset="0" stopColor={tokens.text.inverse} stopOpacity="0" />
+              <Stop offset="0.5" stopColor={tokens.text.inverse} stopOpacity="0.4" />
+              <Stop offset="1" stopColor={tokens.text.inverse} stopOpacity="0" />
             </SvgGradient>
             <SvgGradient id="core" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
-              <Stop offset="0.35" stopColor="#FFFFFF" stopOpacity="1" />
-              <Stop offset="0.65" stopColor="#FFFFFF" stopOpacity="1" />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+              <Stop offset="0" stopColor={tokens.text.inverse} stopOpacity="0" />
+              <Stop offset="0.35" stopColor={tokens.text.inverse} stopOpacity="1" />
+              <Stop offset="0.65" stopColor={tokens.text.inverse} stopOpacity="1" />
+              <Stop offset="1" stopColor={tokens.text.inverse} stopOpacity="0" />
             </SvgGradient>
           </Defs>
           {/* спокойное дно рамки */}
@@ -436,18 +436,18 @@ function EarnedStripe({ amount, currency }: { amount: number; currency: Currency
 }
 
 const styles = StyleSheet.create({
-  softShadow: boxShadow('0px 6px 18px rgba(48,69,62,0.05)'),
+  softShadow: boxShadow(tokens.shadow.subtle),
   monthProgressTrack: { height: MONTH_PROGRESS_HEIGHT },
   monthProgressFill: { height: MONTH_PROGRESS_HEIGHT },
   monthGridInner: { padding: tokens.spacing.lg, paddingTop: tokens.spacing.lg + MONTH_PROGRESS_HEIGHT },
-  statsCard: { marginBottom: tokens.spacing.lg, ...boxShadow('0px 6px 18px rgba(48,69,62,0.05)') },
+  statsCard: { marginBottom: tokens.spacing.lg, ...boxShadow(tokens.shadow.subtle) },
   statsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 16 },
   stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: '#212121', letterSpacing: -0.36 },
-  statLabel: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.3)', marginTop: 6, letterSpacing: -0.24, textAlign: 'center' },
-  statSep: { width: 1, height: 30, backgroundColor: '#EAF2F9' },
+  statValue: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
+  statLabel: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), marginTop: 6, letterSpacing: -0.24, textAlign: 'center' },
+  statSep: { width: 1, height: 30, backgroundColor: tokens.surface.hairline },
 
-  dayCard: { marginTop: tokens.spacing.lg, ...boxShadow('0px 6px 18px rgba(48,69,62,0.05)') },
+  dayCard: { marginTop: tokens.spacing.lg, ...boxShadow(tokens.shadow.subtle) },
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -455,13 +455,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EAF2F9',
+    borderBottomColor: tokens.surface.hairline,
   },
-  dayHeaderDate: { fontSize: 24, fontWeight: '600', color: '#212121', letterSpacing: -0.24 },
-  dayHeaderCount: { fontSize: 12, color: 'rgba(33,33,33,0.3)', marginTop: 4, letterSpacing: -0.24 },
+  dayHeaderDate: { fontSize: 24, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.24 },
+  dayHeaderCount: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.3), marginTop: 4, letterSpacing: -0.24 },
   dayHeaderRight: { alignItems: 'flex-end', alignSelf: 'stretch', justifyContent: 'space-between' },
-  dayHeaderAmount: { fontSize: 20, fontWeight: '700', color: '#009933' },
-  dayHeaderSub: { fontSize: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24 },
+  dayHeaderAmount: { fontSize: 20, fontWeight: '700', color: tokens.semantic.positive },
+  dayHeaderSub: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   negative: { color: tokens.semantic.negative },
 
   dayEmpty: { fontSize: tokens.typography.label, color: tokens.text.tertiary, padding: tokens.spacing.lg, textAlign: 'center' },
@@ -469,10 +469,10 @@ const styles = StyleSheet.create({
 
   rowWrap: { paddingVertical: 16 },
   row: { flexDirection: 'row', gap: 12 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   iconFallback: { width: 44, height: 44, borderRadius: 16 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.sm },
-  rowName: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: '#212121', letterSpacing: -0.36 },
+  rowName: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
   rowSub: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: 6, letterSpacing: -0.28 },
   rowAmount: { fontSize: 17, fontWeight: '600', color: '#586692', letterSpacing: -0.17 },
 
@@ -500,11 +500,11 @@ const styles = StyleSheet.create({
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 10 },
   pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
   pillPct: { paddingHorizontal: 8 },
-  pillText: { fontSize: 11, fontWeight: '500', color: 'rgba(33,33,33,0.8)' },
+  pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
   emptyBtn: { marginTop: tokens.spacing.lg, backgroundColor: tokens.accent.base, paddingHorizontal: tokens.spacing.xl, paddingVertical: tokens.spacing.md, borderRadius: tokens.radius.pill },
-  emptyBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: tokens.typography.label },
+  emptyBtnText: { color: tokens.text.inverse, fontWeight: '600', fontSize: tokens.typography.label },
 });

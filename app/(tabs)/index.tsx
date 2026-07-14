@@ -131,7 +131,7 @@ export default function HomeScreen() {
               <MaterialIcons name="search" size={22} color={tokens.text.secondary} />
             </Pressable>
             <Pressable style={styles.addBtn} onPress={() => router.push('/asset/form')} hitSlop={8}>
-              <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
+              <MaterialCommunityIcons name="plus" size={24} color={tokens.text.inverse} />
             </Pressable>
           </View>
         </View>
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   topActions: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   iconBtn: {
     width: 44, height: 44, borderRadius: tokens.radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1, borderColor: tokens.surface.glassBorder,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.85), borderWidth: 1, borderColor: tokens.surface.glassBorder,
     alignItems: 'center', justifyContent: 'center',
   },
   addBtn: { width: 44, height: 44, borderRadius: tokens.radius.pill, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   taxBig: { fontSize: tokens.typography.metric, fontWeight: '800', color: tokens.text.primary, marginTop: 2 },
   taxBarWrap: { marginTop: tokens.spacing.md },
   taxTrack: { height: 8, borderRadius: 4, backgroundColor: tokens.surface.neutral, overflow: 'hidden' },
-  taxFill: { height: 8, borderRadius: 4, backgroundColor: '#9A6DD7' },
+  taxFill: { height: 8, borderRadius: 4, backgroundColor: tokens.category.dfa },
   taxDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.md },
   taxFooterRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   taxFooterLabel: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
@@ -344,16 +344,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: tokens.spacing.md,
     marginTop: tokens.spacing.md,
-    backgroundColor: hexToRgba('#9A6DD7', 0.1),
+    backgroundColor: hexToRgba(tokens.category.dfa, 0.1),
     borderRadius: tokens.radius.md,
     paddingHorizontal: tokens.spacing.lg,
     paddingVertical: tokens.spacing.md,
   },
   taxRecommendLabel: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  taxRecommendValue: { fontSize: tokens.typography.label, fontWeight: '800', color: '#9A6DD7' },
+  taxRecommendValue: { fontSize: tokens.typography.label, fontWeight: '800', color: tokens.category.dfa },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
   emptyBtn: { marginTop: tokens.spacing.lg, backgroundColor: tokens.accent.base, paddingHorizontal: tokens.spacing.xl, paddingVertical: tokens.spacing.md, borderRadius: tokens.radius.pill },
-  emptyBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: tokens.typography.label },
+  emptyBtnText: { color: tokens.text.inverse, fontWeight: '600', fontSize: tokens.typography.label },
 });

@@ -6,7 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { RatesSection } from '@/components/RatesSection';
 import { useData } from '@/state/DataContext';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 
 export default function RatesScreen() {
   const router = useRouter();
@@ -64,14 +64,14 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
   refreshBtn: {
     width: 44,
     height: 44,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.5),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: hexToRgba(tokens.surface.white, 0.5),
     alignItems: 'center',
     justifyContent: 'center',
   },

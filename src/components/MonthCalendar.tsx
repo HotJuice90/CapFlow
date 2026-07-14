@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   dayText: { fontSize: tokens.typography.body, color: tokens.text.primary, fontWeight: '500' },
   dayTextWeekend: { color: '#D48CA6' },
   dayTextSelected: { color: tokens.text.primary, fontWeight: '700' },
-  dayTextToday: { color: '#FFFFFF', fontWeight: '700' },
+  dayTextToday: { color: tokens.text.inverse, fontWeight: '700' },
   dotsRow: { flexDirection: 'row', gap: 2, marginTop: 1, height: 4, alignItems: 'center' },
   dot: { width: 4, height: 4, borderRadius: 2 },
   dotSpacer: { width: 4, height: 4 },

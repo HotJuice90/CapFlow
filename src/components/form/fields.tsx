@@ -269,7 +269,7 @@ export function ColorField({
             ]}
             onPress={() => onChange(c)}
           >
-            {value === c ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
+            {value === c ? <MaterialIcons name="check" size={18} color={tokens.text.inverse} /> : null}
           </Pressable>
         ))}
       </View>

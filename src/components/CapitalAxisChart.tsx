@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop, Circle, Line } from 'react-native-svg';
-import { font } from '@/theme';
+import { font, tokens } from '@/theme';
 
 /**
  * Круглый шаг сетки (1/2/5 × 10^n), ближайший к value/steps — тот же приём,
@@ -171,12 +171,12 @@ export function CapitalAxisChart({
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         <Defs>
           <LinearGradient id="capChartFill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#21A870" stopOpacity={0.22} />
-            <Stop offset="1" stopColor="#21A870" stopOpacity={0} />
+            <Stop offset="0" stopColor={tokens.semantic.positive} stopOpacity={0.22} />
+            <Stop offset="1" stopColor={tokens.semantic.positive} stopOpacity={0} />
           </LinearGradient>
           <LinearGradient id="capChartLine" x1="0" y1="0" x2="1" y2="0">
             <Stop offset="0" stopColor="#2CE296" />
-            <Stop offset="0.54" stopColor="#21A870" />
+            <Stop offset="0.54" stopColor={tokens.semantic.positive} />
           </LinearGradient>
         </Defs>
         {gridValues.map((v) => (
@@ -193,8 +193,8 @@ export function CapitalAxisChart({
         ))}
         <Path d={area} fill="url(#capChartFill)" />
         <Path d={line} stroke="url(#capChartLine)" strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <Circle cx={last.x} cy={last.y} r={4} fill="#21A870" />
-        <Circle cx={last.x} cy={last.y} r={7} fill="#21A870" fillOpacity={0.25} />
+        <Circle cx={last.x} cy={last.y} r={4} fill={tokens.semantic.positive} />
+        <Circle cx={last.x} cy={last.y} r={7} fill={tokens.semantic.positive} fillOpacity={0.25} />
       </Svg>
       {gridValues.map((v) => (
         <View key={v} style={[styles.axisLabel, { top: valueToY(v) - 11 }]}>

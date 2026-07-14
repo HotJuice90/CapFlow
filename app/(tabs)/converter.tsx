@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useData } from '@/state/DataContext';
 import type { CurrencyCode } from '@/domain/types';
-import { tokens } from '@/theme';
+import { tokens, hexToRgba } from '@/theme';
 import { CURRENCY_SYMBOL } from '@/format';
 import { timeAgo } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
@@ -58,13 +58,13 @@ const D = {
   sourceText: '#2B2B2B', sourceLabel: '#909497',
   placeholder: 'rgba(144,148,151,0.45)',
   rateHint: '#7D90C7',
-  updated: 'rgba(33,33,33,0.3)',
+  updated: hexToRgba(tokens.text.primary, 0.3),
   bigRate: '#5C667B',
-  resetBg: '#A8B6E2', resetBorder: '#E2EDF8',
+  resetBg: tokens.accent.light, resetBorder: '#E2EDF8',
   chipBg: '#F7F7F7',
   divider: '#EAECF2',
-  tabBarBg: 'rgba(215,226,235,0.5)',
-  tabActiveBg: '#A8B6E2',
+  tabBarBg: tokens.surface.tabOff,
+  tabActiveBg: tokens.accent.light,
   badgeNeg: '#C11818', badgeNegBg: 'rgba(229,139,139,0.1)',
   badgePos: '#1A8A1A', badgePosBg: 'rgba(139,229,139,0.1)',
   badgeNeutral: '#7A828E', badgeNeutralBg: 'rgba(122,130,142,0.1)',
@@ -205,7 +205,7 @@ function CurrencyPill({ currency, large = false, editable = true, onPress }: {
       <Flag code={currency} size={large ? 32 : 28} />
       <Text style={[s.pillCode, large && s.pillCodeLg]}>{currency}</Text>
       {editable ? (
-        <MaterialIcons name="keyboard-arrow-down" size={large ? 14 : 12} color="rgba(33,33,33,0.45)" />
+        <MaterialIcons name="keyboard-arrow-down" size={large ? 14 : 12} color={hexToRgba(tokens.text.primary, 0.45)} />
       ) : null}
     </Pressable>
   );
@@ -447,7 +447,7 @@ export default function ConverterScreen() {
 
           {/* Кнопка сброса показаний */}
           <Pressable style={[s.resetBtn, { top: topCardH - 22 }]} onPress={resetAmounts} hitSlop={8}>
-            <MaterialIcons name="close" size={20} color="#FFFFFF" />
+            <MaterialIcons name="close" size={20} color={tokens.text.inverse} />
           </Pressable>
         </View>
 
@@ -515,8 +515,8 @@ export default function ConverterScreen() {
                 </Text>
                 <Pressable style={s.loadHistBtn} onPress={doBackfill} disabled={loadingHist}>
                   {loadingHist
-                    ? <ActivityIndicator size="small" color="#FFF" />
-                    : <MaterialIcons name="download" size={18} color="#FFF" />}
+                    ? <ActivityIndicator size="small" color={tokens.text.inverse} />
+                    : <MaterialIcons name="download" size={18} color={tokens.text.inverse} />}
                   <Text style={s.loadHistBtnText}>{loadingHist ? 'Загружаю…' : 'Загрузить историю'}</Text>
                 </Pressable>
               </View>
@@ -535,7 +535,7 @@ const s = StyleSheet.create({
 
   // Верхняя карточка
   topCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20,
+    backgroundColor: tokens.surface.white, borderRadius: 20, padding: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
@@ -548,13 +548,13 @@ const s = StyleSheet.create({
 
   // Нижняя карточка (2 столбца + дивайдер)
   bottomCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20,
+    backgroundColor: tokens.surface.white, borderRadius: 20, padding: 20,
     flexDirection: 'row', alignItems: 'stretch',
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
   col: { flex: 1, gap: 14 },
   colInput: {
-    fontSize: 28, fontFamily: 'Onest_600SemiBold', color: '#212121',
+    fontSize: 28, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
     letterSpacing: -0.56, padding: 0,
   },
   divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
@@ -575,7 +575,7 @@ const s = StyleSheet.create({
   },
   pillLg: { gap: 8 },
   pillCode: {
-    fontSize: 14, fontFamily: 'Onest_500Medium', color: '#212121',
+    fontSize: 14, fontFamily: 'Onest_500Medium', color: tokens.text.primary,
     textTransform: 'uppercase', letterSpacing: -0.56,
   },
   pillCodeLg: { fontSize: 16, letterSpacing: -0.64 },
@@ -590,7 +590,7 @@ const s = StyleSheet.create({
 
   // История
   histSection: { marginTop: 40, flex: 1 },
-  histTitle: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: '#212121', letterSpacing: -0.24, marginBottom: 12 },
+  histTitle: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.24, marginBottom: 12 },
   histHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   periodToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 10, paddingVertical: 4 },
@@ -604,9 +604,9 @@ const s = StyleSheet.create({
   tabActive: { backgroundColor: D.tabActiveBg },
   tabText: {
     fontSize: 14, fontFamily: 'Onest_500Medium', textTransform: 'uppercase',
-    letterSpacing: -0.56, color: 'rgba(33,33,33,0.5)',
+    letterSpacing: -0.56, color: hexToRgba(tokens.text.primary, 0.5),
   },
-  tabTextActive: { color: '#FFFFFF' },
+  tabTextActive: { color: tokens.text.inverse },
   bigRate: { fontSize: 24, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate, flexShrink: 0 },
   badge: {
     borderRadius: 35, padding: 8, gap: 10,
@@ -625,5 +625,5 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: D.resetBg, borderRadius: 35, paddingHorizontal: 20, paddingVertical: 12,
   },
-  loadHistBtnText: { color: '#FFF', fontFamily: 'Onest_700Bold', fontSize: 14 },
+  loadHistBtnText: { color: tokens.text.inverse, fontFamily: 'Onest_700Bold', fontSize: 14 },
 });

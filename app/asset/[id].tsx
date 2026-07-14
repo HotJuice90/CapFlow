@@ -301,7 +301,7 @@ export default function AssetScreen() {
             <FinCol
               icon="trending-up"
               iconColor="#586692"
-              iconBg="#EEF0FB"
+              iconBg={tokens.accent.soft}
               label={t.asset.accrued}
               value={formatMoney(derived.incomePerMonth, { currency: cur, kopecks: 'hide' })}
               sub="если ничего не менять"
@@ -310,7 +310,7 @@ export default function AssetScreen() {
             <FinCol
               icon="percent"
               iconColor="#C11818"
-              iconBg="#FCEEEE"
+              iconBg={hexToRgba(tokens.semantic.negative, 0.12)}
               label={t.asset.tax}
               value={formatMoney(derived.monthlyTax, { currency: cur, kopecks: 'hide' })}
               sub={derived.incomePerMonth > 0 ? `${formatPercent((derived.monthlyTax / derived.incomePerMonth) * 100)} от дохода` : 'нет дохода'}
@@ -318,11 +318,11 @@ export default function AssetScreen() {
             <View style={styles.finSep} />
             <FinCol
               icon="account-balance-wallet"
-              iconColor="#009933"
-              iconBg="#EAF6EE"
+              iconColor={tokens.semantic.positive}
+              iconBg={hexToRgba(tokens.semantic.positive, 0.12)}
               label={t.asset.net}
               value={formatMoney(derived.monthlyNet, { currency: cur, kopecks: 'hide' })}
-              valueColor="#009933"
+              valueColor={tokens.semantic.positive}
               sub="после налога"
             />
           </View>
@@ -495,7 +495,7 @@ function TimelineRow({
 
   const icon = entry.type === 'open' ? 'flag-outline' : entry.isCorrection ? 'wrench-outline' : isBalance ? (isUp ? 'arrow-up' : 'arrow-down') : isUp ? 'trending-up' : 'trending-down';
   const iconStyle = entry.type === 'open' ? styles.histIconOpen : entry.isCorrection ? styles.histIconCorrection : isUp ? styles.histIconUp : styles.histIconDown;
-  const iconColor = entry.type === 'open' ? tokens.accent.base : entry.isCorrection ? '#9A6DD7' : isUp ? tokens.semantic.positive : tokens.semantic.negative;
+  const iconColor = entry.type === 'open' ? tokens.accent.base : entry.isCorrection ? tokens.category.dfa : isUp ? tokens.semantic.positive : tokens.semantic.negative;
 
   const sub = (entry.type === 'open'
     ? 'Открытие'
@@ -595,7 +595,7 @@ function ActionItem({
   );
 }
 
-const SOFT_SHADOW = '0px 6px 18px rgba(48,69,62,0.05)';
+const SOFT_SHADOW = tokens.shadow.subtle;
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -608,34 +608,34 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     width: 44, height: 44, borderRadius: tokens.radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1, borderColor: tokens.surface.glassBorder,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.85), borderWidth: 1, borderColor: tokens.surface.glassBorder,
     alignItems: 'center', justifyContent: 'center',
   },
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  name: { fontSize: 24, lineHeight: 26, fontWeight: '600', color: '#212121', letterSpacing: -0.48 },
+  name: { fontSize: 24, lineHeight: 26, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.48 },
   subtitle: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: 6, letterSpacing: -0.28 },
 
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 12, marginBottom: tokens.spacing.lg },
   pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
-  pillText: { fontSize: 11, fontWeight: '500', color: 'rgba(33,33,33,0.8)' },
+  pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 
   softShadow: boxShadow(SOFT_SHADOW),
 
   hero: { marginBottom: tokens.spacing.xl, ...boxShadow(SOFT_SHADOW) },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
-  heroLabel: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24 },
-  heroAmount: { fontSize: 32, lineHeight: 34, fontWeight: '600', color: '#212121', letterSpacing: -0.64, marginTop: 8 },
+  heroLabel: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
+  heroAmount: { fontSize: 32, lineHeight: 34, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.64, marginTop: 8 },
   rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
   rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: '#586692' },
   ratePremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
-  ratePremium: { fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.4)' },
+  ratePremium: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4) },
 
   progressWrap: { marginTop: tokens.spacing.lg },
-  progressTrack: { height: 8, borderRadius: 4, backgroundColor: '#F0F3FA', overflow: 'hidden' },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: tokens.accent.soft, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   progressMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  progressMetaText: { fontSize: 12, color: 'rgba(33,33,33,0.4)', letterSpacing: -0.24 },
+  progressMetaText: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
   progressMetaPct: { fontSize: 12, fontWeight: '600', color: '#586692' },
 
   heroIncomeRow: {
@@ -645,10 +645,10 @@ const styles = StyleSheet.create({
     marginTop: tokens.spacing.lg,
     paddingTop: tokens.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#EAF2F9',
+    borderTopColor: tokens.surface.hairline,
   },
   heroIncomeLabel: { fontSize: 14, color: tokens.text.tertiary, letterSpacing: -0.28 },
-  heroIncomeValue: { fontSize: 17, fontWeight: '600', color: '#009933', letterSpacing: -0.17 },
+  heroIncomeValue: { fontSize: 17, fontWeight: '600', color: tokens.semantic.positive, letterSpacing: -0.17 },
   heroGraphWrap: { marginTop: tokens.spacing.lg },
 
   maturedBanner: {
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.semantic.warning, 0.1),
   },
   maturedBannerTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  maturedBannerTitle: { fontSize: 15, fontWeight: '700', color: '#212121' },
+  maturedBannerTitle: { fontSize: 15, fontWeight: '700', color: tokens.text.primary },
   maturedBannerActions: { flexDirection: 'row', gap: 8, marginTop: tokens.spacing.md },
   maturedActionBtn: {
     flex: 1,
@@ -673,44 +673,44 @@ const styles = StyleSheet.create({
   maturedActionText: { fontSize: 13, fontWeight: '600', color: tokens.accent.base },
 
   finCard: { marginBottom: tokens.spacing.lg, ...boxShadow(SOFT_SHADOW) },
-  finTitle: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: '#212121', letterSpacing: -0.36, marginBottom: tokens.spacing.lg },
+  finTitle: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36, marginBottom: tokens.spacing.lg },
 
-  lifetimeValue: { fontSize: 26, lineHeight: 28, fontWeight: '700', color: '#1FA971', letterSpacing: -0.52 },
-  lifetimeMeta: { fontSize: 12, color: 'rgba(33,33,33,0.4)', letterSpacing: -0.24, marginTop: 6 },
+  lifetimeValue: { fontSize: 26, lineHeight: 28, fontWeight: '700', color: tokens.semantic.positive, letterSpacing: -0.52 },
+  lifetimeMeta: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24, marginTop: 6 },
 
-  taxLifetimeDivider: { height: 1, backgroundColor: '#EAF2F9', marginTop: tokens.spacing.lg, marginBottom: tokens.spacing.md },
+  taxLifetimeDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginTop: tokens.spacing.lg, marginBottom: tokens.spacing.md },
   taxLifetimeRow: { flexDirection: 'row' },
-  taxLifetimeLabel: { fontSize: 12, color: 'rgba(33,33,33,0.4)', letterSpacing: -0.24 },
-  taxLifetimeValue: { fontSize: 16, fontWeight: '700', color: '#212121', letterSpacing: -0.32, marginTop: 4 },
+  taxLifetimeLabel: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
+  taxLifetimeValue: { fontSize: 16, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.32, marginTop: 4 },
   taxLifetimeValueWarn: { color: tokens.semantic.warning },
   finRow: { flexDirection: 'row', alignItems: 'stretch' },
   finCol: { flex: 1 },
-  finSep: { width: 1, backgroundColor: '#EAF2F9', marginHorizontal: 10 },
+  finSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: 10 },
   finColHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   finIcon: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  finColLabel: { fontSize: 12, color: 'rgba(33,33,33,0.5)', letterSpacing: -0.24, flexShrink: 1 },
-  finColValue: { fontSize: 17, lineHeight: 17, fontWeight: '600', color: '#212121', letterSpacing: -0.34, marginTop: 10 },
-  finColSub: { fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.22, marginTop: 5 },
+  finColLabel: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, flexShrink: 1 },
+  finColValue: { fontSize: 17, lineHeight: 17, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.34, marginTop: 10 },
+  finColSub: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.22, marginTop: 5 },
 
   finTotal: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: tokens.spacing.md,
     marginTop: tokens.spacing.lg,
-    backgroundColor: '#EAF6EE',
+    backgroundColor: hexToRgba(tokens.semantic.positive, 0.12),
     borderRadius: tokens.radius.md,
     paddingHorizontal: tokens.spacing.lg,
     paddingVertical: tokens.spacing.md,
   },
-  finTotalLabel: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.4)', letterSpacing: -0.24 },
-  finTotalValue: { fontSize: 20, lineHeight: 22, fontWeight: '700', color: '#009933', letterSpacing: -0.4, marginTop: 6 },
-  finTotalChip: { backgroundColor: '#FFFFFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
-  finTotalChipText: { fontSize: 11, fontWeight: '500', color: '#009933' },
+  finTotalLabel: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
+  finTotalValue: { fontSize: 20, lineHeight: 22, fontWeight: '700', color: tokens.semantic.positive, letterSpacing: -0.4, marginTop: 6 },
+  finTotalChip: { backgroundColor: tokens.surface.white, borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  finTotalChipText: { fontSize: 11, fontWeight: '500', color: tokens.semantic.positive },
 
   historyCard: { paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   historyHeader: { paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: tokens.surface.white },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   histIcon: {
     width: 32, height: 32, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
   histIconOpen: { backgroundColor: tokens.accent.soft },
   histIconUp: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.12) },
   histIconDown: { backgroundColor: hexToRgba(tokens.semantic.negative, 0.12) },
-  histIconCorrection: { backgroundColor: hexToRgba('#9A6DD7', 0.14) },
+  histIconCorrection: { backgroundColor: hexToRgba(tokens.category.dfa, 0.14) },
   histDate: { fontSize: 14, fontWeight: '500', color: tokens.text.primary },
   histSub: { fontSize: 12, color: tokens.text.tertiary, marginTop: 2 },
   histDelta: { fontSize: 14, fontWeight: '700' },
@@ -735,13 +735,13 @@ const styles = StyleSheet.create({
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   historyMoreText: { fontSize: 13, fontWeight: '600', color: tokens.accent.base },
 
-  forecastHint: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24, marginTop: -10, marginBottom: tokens.spacing.lg },
-  forecastValue: { fontSize: 16, lineHeight: 16, fontWeight: '600', color: '#009933', letterSpacing: -0.32, marginTop: 8 },
+  forecastHint: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: -10, marginBottom: tokens.spacing.lg },
+  forecastValue: { fontSize: 16, lineHeight: 16, fontWeight: '600', color: tokens.semantic.positive, letterSpacing: -0.32, marginTop: 8 },
 
   bankCard: boxShadow(SOFT_SHADOW),
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  bankName: { fontSize: 15, lineHeight: 15, fontWeight: '600', color: '#212121', letterSpacing: -0.3 },
-  bankHint: { fontSize: 12, lineHeight: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24, marginTop: 4 },
+  bankName: { fontSize: 15, lineHeight: 15, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.3 },
+  bankHint: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: 4 },
   bankOpen: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   bankOpenText: { fontSize: 14, fontWeight: '600', color: tokens.accent.base },
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: tokens.spacing.xl, paddingHorizontal: 4 },
@@ -755,6 +755,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...boxShadow(SOFT_SHADOW),
   },
-  actionIconDanger: { backgroundColor: '#FCEEEE' },
-  actionItemLabel: { fontSize: 11, fontWeight: '500', color: 'rgba(33,33,33,0.8)' },
+  actionIconDanger: { backgroundColor: hexToRgba(tokens.semantic.negative, 0.12) },
+  actionItemLabel: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 });

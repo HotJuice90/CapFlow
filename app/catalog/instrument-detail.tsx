@@ -84,10 +84,10 @@ export default function InstrumentDetailSheet() {
 }
 
 const s = StyleSheet.create({
-  sheet: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
+  sheet: { backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 18 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
-  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: '#212121' },
+  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary },
   orgName: { fontFamily: font.regular, fontSize: 13, color: tokens.text.tertiary, marginTop: 2 },
 
   list: { marginBottom: 16 },
@@ -102,7 +102,7 @@ const s = StyleSheet.create({
   },
   rowLast: { borderBottomWidth: 0 },
   rowLabel: { fontFamily: font.regular, fontSize: 14, color: tokens.text.secondary },
-  rowValue: { fontFamily: font.medium, fontSize: 14, color: '#212121', flexShrink: 1, textAlign: 'right' },
+  rowValue: { fontFamily: font.medium, fontSize: 14, color: tokens.text.primary, flexShrink: 1, textAlign: 'right' },
 
   hint: { fontFamily: font.regular, fontSize: 12, color: tokens.text.tertiary, textAlign: 'center', marginBottom: 16 },
 
@@ -113,5 +113,5 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  editText: { fontFamily: font.semibold, fontSize: 16, color: '#fff' },
+  editText: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.inverse },
 });

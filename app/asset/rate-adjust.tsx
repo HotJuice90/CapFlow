@@ -196,7 +196,7 @@ function HistoryRow({
           <MaterialIcons name="close" size={18} color={tokens.text.secondary} />
         </Pressable>
         <Pressable onPress={saveEdit} hitSlop={8} style={s.editBtnSave}>
-          <MaterialIcons name="check" size={18} color="#FFFFFF" />
+          <MaterialIcons name="check" size={18} color={tokens.text.inverse} />
         </Pressable>
       </View>
     </View>
@@ -266,10 +266,10 @@ function HistoryRow({
 }
 
 const s = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20 },
+  sheet: { flex: 1, backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20 },
   scroll: { flex: 1 },
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
-  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: '#212121', marginBottom: 12 },
+  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 12 },
 
   balanceBox: {
     alignItems: 'center',
@@ -290,8 +290,8 @@ const s = StyleSheet.create({
   },
   hint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginBottom: tokens.spacing.sm },
 
-  histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: '#fff' },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
+  histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: tokens.surface.white },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   histIcon: {
     width: 32, height: 32, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
@@ -339,5 +339,5 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   disabled: { backgroundColor: tokens.text.tertiary },
-  saveText: { color: '#FFFFFF', fontSize: tokens.typography.body, fontWeight: '700' },
+  saveText: { color: tokens.text.inverse, fontSize: tokens.typography.body, fontWeight: '700' },
 });

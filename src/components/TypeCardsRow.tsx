@@ -51,13 +51,13 @@ export function TypeCardsRow({
           >
             {/* глянцевый блик по диагонали */}
             <LinearGradient
-              colors={[hexToRgba('#FFFFFF', 0.24), hexToRgba('#FFFFFF', 0)]}
+              colors={[hexToRgba(tokens.text.inverse, 0.24), hexToRgba(tokens.text.inverse, 0)]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0.9, y: 0.9 }}
               style={StyleSheet.absoluteFill}
             />
             <View style={styles.iconBox}>
-              <MaterialCommunityIcons name={ICON_BY_TYPE[g.typeId] ?? 'bank-outline'} size={20} color="#FFFFFF" />
+              <MaterialCommunityIcons name={ICON_BY_TYPE[g.typeId] ?? 'bank-outline'} size={20} color={tokens.text.inverse} />
             </View>
             <Text style={styles.label} numberOfLines={1}>{g.label}</Text>
             <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
@@ -89,14 +89,14 @@ const styles = StyleSheet.create({
   },
   iconBox: {
     width: 34, height: 34, borderRadius: tokens.radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.22),
     alignItems: 'center', justifyContent: 'center',
     marginBottom: tokens.spacing.md,
   },
-  label: { color: 'rgba(255,255,255,0.85)', fontSize: tokens.typography.caption, fontWeight: '600' },
-  amount: { color: '#FFFFFF', fontSize: tokens.typography.title, fontWeight: '800', marginTop: 4 },
+  label: { color: hexToRgba(tokens.text.inverse, 0.85), fontSize: tokens.typography.caption, fontWeight: '600' },
+  amount: { color: tokens.text.inverse, fontSize: tokens.typography.title, fontWeight: '800', marginTop: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: tokens.spacing.md },
-  count: { color: 'rgba(255,255,255,0.75)', fontSize: tokens.typography.micro, flexShrink: 1 },
-  sharePill: { backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
-  shareText: { color: '#FFFFFF', fontSize: tokens.typography.micro, fontWeight: '800' },
+  count: { color: hexToRgba(tokens.text.inverse, 0.75), fontSize: tokens.typography.micro, flexShrink: 1 },
+  sharePill: { backgroundColor: hexToRgba(tokens.surface.white, 0.22), borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  shareText: { color: tokens.text.inverse, fontSize: tokens.typography.micro, fontWeight: '800' },
 });

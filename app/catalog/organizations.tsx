@@ -27,11 +27,11 @@ export const FILTER_ICON: Record<Filter, keyof typeof MaterialCommunityIcons.gly
 };
 export const FILTER_COLOR: Record<Filter, string> = {
   Все: tokens.accent.base,
-  Банк: '#3E63DD',
-  Агрегатор: '#10B3A3',
-  'Платформа ЦФА': '#9A6DD7',
-  Брокер: '#C98A2C',
-  Другое: '#5A6472',
+  Банк: tokens.orgType['Банк'],
+  Агрегатор: tokens.orgType['Агрегатор'],
+  'Платформа ЦФА': tokens.orgType['Платформа ЦФА'],
+  Брокер: tokens.orgType['Брокер'],
+  Другое: tokens.orgType['Другое'],
 };
 
 export default function OrganizationsScreen() {
@@ -94,8 +94,8 @@ export default function OrganizationsScreen() {
                   style={[styles.tabChip, active && { backgroundColor: color }]}
                   onPress={() => setActiveFilter(t)}
                 >
-                  <MaterialCommunityIcons name={FILTER_ICON[t]} size={16} color={active ? '#FFFFFF' : color} />
-                  <Text style={[styles.tabChipText, active ? { color: '#FFFFFF', fontFamily: font.semibold } : { color }]}>
+                  <MaterialCommunityIcons name={FILTER_ICON[t]} size={16} color={active ? tokens.text.inverse : color} />
+                  <Text style={[styles.tabChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
                     {t}
                   </Text>
                 </Pressable>
@@ -217,14 +217,14 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
   addBtn: {
     width: 44,
     height: 44,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.5),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: hexToRgba(tokens.surface.white, 0.5),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
   },
   tabChipText: { fontFamily: font.medium, fontSize: 13 },
 
@@ -251,17 +251,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 48,
     borderRadius: tokens.radius.pill,
-    backgroundColor: 'rgba(249,250,255,0.55)',
+    backgroundColor: tokens.surface.rowTint,
     marginTop: 5,
     marginBottom: tokens.spacing.md,
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    ...boxShadow(tokens.shadow.subtle),
   },
-  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: '#212121' },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: tokens.text.primary },
 
   sectionTitle: {
     fontFamily: font.semibold,
     fontSize: tokens.typography.title,
-    color: '#212121',
+    color: tokens.text.primary,
     letterSpacing: -0.2,
     marginTop: tokens.spacing.md,
     marginBottom: tokens.spacing.sm,
@@ -277,10 +277,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 11,
     backgroundColor: tokens.surface.white,
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    ...boxShadow(tokens.shadow.subtle),
   },
   rowLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowName: { flex: 1, fontFamily: font.medium, fontSize: 16, color: '#212121' },
+  rowName: { flex: 1, fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
   typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: tokens.radius.pill },
   typeChipLabel: { fontFamily: font.medium, fontSize: 12 },
 
@@ -288,6 +288,6 @@ const styles = StyleSheet.create({
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl, gap: tokens.spacing.sm },
-  emptyTitle: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  emptyTitle: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
   emptyHint: { fontFamily: font.regular, fontSize: 13, color: tokens.text.secondary, textAlign: 'center', paddingHorizontal: tokens.spacing.xl },
 });

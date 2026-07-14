@@ -34,7 +34,7 @@ export function AssetRow({ view }: { view: AssetView }) {
         <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={44} radius={tokens.radius.sm} />
       ) : (
         <View style={[styles.iconBox, { backgroundColor: organization.color }]}>
-          <MaterialCommunityIcons name={iconName} size={22} color="#FFFFFF" />
+          <MaterialCommunityIcons name={iconName} size={22} color={tokens.text.inverse} />
         </View>
       )}
 

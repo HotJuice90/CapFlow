@@ -42,11 +42,11 @@ export default function CurrencyPickerSheet() {
 }
 
 const s = StyleSheet.create({
-  sheet: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+  sheet: { backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
-  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: '#212121', marginBottom: 10 },
+  title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 10 },
   list: { maxHeight: 460 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  code: { fontFamily: font.semibold, fontSize: 16, color: '#212121' },
+  code: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
   name: { fontFamily: font.regular, fontSize: 13, color: tokens.text.secondary, marginTop: 2 },
 });

@@ -11,18 +11,13 @@ import { OrgLogo } from '@/components/BankLogo';
 import { TextField, SelectField, ColorField } from '@/components/form/fields';
 import { useData } from '@/state/DataContext';
 import { ORG_TYPES, type Organization } from '@/domain/types';
-import { BANKS } from '@/domain/banks';
+import { BANKS, BRAND_COLORS } from '@/domain/banks';
 import { FILTER_ICON, FILTER_COLOR } from './organizations';
 import { appAlert } from '@/lib/dialog';
 import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { tapBuzz, successBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
-
-const BRAND_COLORS = [
-  '#EF3124', '#FF5C00', '#F2A900', '#21A038', '#10B3A3',
-  '#3E63DD', '#0A2896', '#9A6DD7', '#E5478B', '#5A6472',
-];
 
 const TYPE_OPTIONS = ORG_TYPES.map((t) => ({ label: t, value: t, icon: FILTER_ICON[t], iconColor: FILTER_COLOR[t] }));
 
@@ -200,14 +195,14 @@ export default function OrganizationFormScreen() {
             style={[styles.modeChip, mode === 'catalog' && styles.modeChipActive]}
             onPress={() => setMode('catalog')}
           >
-            <MaterialCommunityIcons name="view-grid-outline" size={18} color={mode === 'catalog' ? '#FFFFFF' : tokens.accent.base} />
+            <MaterialCommunityIcons name="view-grid-outline" size={18} color={mode === 'catalog' ? tokens.text.inverse : tokens.accent.base} />
             <Text style={[styles.modeText, mode === 'catalog' && styles.modeTextActive]}>Из каталога</Text>
           </Pressable>
           <Pressable
             style={[styles.modeChip, mode === 'custom' && styles.modeChipActive]}
             onPress={() => setMode('custom')}
           >
-            <MaterialCommunityIcons name="pencil-outline" size={18} color={mode === 'custom' ? '#FFFFFF' : tokens.accent.base} />
+            <MaterialCommunityIcons name="pencil-outline" size={18} color={mode === 'custom' ? tokens.text.inverse : tokens.accent.base} />
             <Text style={[styles.modeText, mode === 'custom' && styles.modeTextActive]}>Своя</Text>
           </Pressable>
         </View>
@@ -239,7 +234,7 @@ export default function OrganizationFormScreen() {
                       <OrgLogo color={bank.color} logo={bank.id} size={bankTileW} radius={Math.round(bankTileW / 3.1)} variant={selected ? 'solid' : 'tint'} />
                       {selected ? (
                         <View style={styles.checkBadge}>
-                          <MaterialIcons name="check" size={11} color="#FFFFFF" />
+                          <MaterialIcons name="check" size={11} color={tokens.text.inverse} />
                         </View>
                       ) : null}
                     </View>
@@ -330,11 +325,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: tokens.spacing.xl,
   },
-  headerTitle: { fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  headerTitle: { fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
 
   modeRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
     borderRadius: 20,
     padding: 3,
     marginBottom: tokens.spacing.sm,
@@ -350,12 +345,12 @@ const styles = StyleSheet.create({
   },
   modeChipActive: { backgroundColor: tokens.accent.base },
   modeText: { fontFamily: font.medium, fontSize: 14, color: tokens.accent.base },
-  modeTextActive: { fontFamily: font.semibold, color: '#FFFFFF' },
+  modeTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
 
   section: {
     fontFamily: font.semibold,
     fontSize: 20,
-    color: '#212121',
+    color: tokens.text.primary,
     letterSpacing: -0.2,
     marginTop: tokens.spacing.xl,
     marginBottom: tokens.spacing.md,
@@ -368,11 +363,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 48,
     borderRadius: tokens.radius.pill,
-    backgroundColor: 'rgba(249,250,255,0.55)',
+    backgroundColor: tokens.surface.rowTint,
     marginBottom: tokens.spacing.lg,
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    ...boxShadow(tokens.shadow.subtle),
   },
-  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: '#212121' },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: tokens.text.primary },
 
   bankGrid: {
     flexDirection: 'row',
@@ -391,7 +386,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: tokens.accent.base,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: tokens.surface.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -408,10 +403,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 11,
     backgroundColor: tokens.surface.white,
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    ...boxShadow(tokens.shadow.subtle),
   },
   selectedLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  selectedName: { flex: 1, fontFamily: font.medium, fontSize: 16, color: '#212121' },
+  selectedName: { flex: 1, fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
   typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: tokens.radius.pill },
   typeChipLabel: { fontFamily: font.medium, fontSize: 12 },
 
@@ -447,7 +442,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.85),
     borderTopWidth: 1,
     borderTopColor: tokens.surface.hairline,
   },
@@ -458,5 +453,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   disabled: { backgroundColor: tokens.text.tertiary },
-  saveText: { color: '#FFFFFF', fontSize: tokens.typography.body, fontWeight: '700' },
+  saveText: { color: tokens.text.inverse, fontSize: tokens.typography.body, fontWeight: '700' },
 });

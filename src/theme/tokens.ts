@@ -18,21 +18,9 @@ const accent = {
 // --- Семантические цвета (цвет = смысл, не украшение) ---
 const semantic = {
   positive: '#1FA971', // рост — зелёный (не бирюза)
-  positiveBright: '#3DDC97', // яркий зелёный для крупных чисел на тёмном hero
   negative: '#E5484D',
   warning: '#F2A900',
   info: '#3E63DD',
-};
-
-// --- Тёмный hero (главный акцентный блок на главной) ---
-const hero = {
-  gradient: ['#2C3654', '#3A466B', '#222A44'] as const, // глубокий slate-индиго под бренд #62709C
-  start: { x: 0, y: 0 },
-  end: { x: 1, y: 1 },
-  glow: 'rgba(61,220,151,0.16)', // зелёное свечение под графиком
-  innerCard: 'rgba(255,255,255,0.07)', // под-карточки внутри hero
-  innerBorder: 'rgba(255,255,255,0.10)',
-  labelText: 'rgba(255,255,255,0.62)',
 };
 
 // --- Цвет на каждый ТИП инструмента (используется одинаково везде) ---
@@ -44,9 +32,18 @@ const category: Record<string, string> = {
   cash: '#F2A900', // Наличные/валюта — янтарь (после MVP)
 };
 
+// --- Цвет на каждый ТИП площадки (та же логика, что у category — считывается с виджета) ---
+const orgType: Record<string, string> = {
+  Банк: '#3E63DD',
+  Агрегатор: '#10B3A3',
+  'Платформа ЦФА': '#9A6DD7',
+  Брокер: '#C98A2C',
+  Другое: '#5A6472',
+};
+
 // --- Текст ---
 const text = {
-  primary: '#1A2520', // не чистый чёрный
+  primary: '#212121', // не чистый чёрный
   secondary: '#667085', // приглушённый серо-синий
   tertiary: '#98A2B7',
   inverse: '#FFFFFF',
@@ -58,7 +55,9 @@ const surface = {
   glass: 'rgba(255,255,255,0.92)', // «стекло» — полупрозрачная плашка
   glassBorder: 'rgba(255,255,255,0.70)',
   neutral: '#F5F8F6', // нейтральная подложка чипов/иконбоксов
-  hairline: '#EAEFF1', // тончайший разделитель
+  hairline: '#EAF2F9', // тончайший разделитель
+  rowTint: 'rgba(249,250,255,0.55)', // фон строк/плашек поверх карточек
+  tabOff: 'rgba(215,226,235,0.5)', // фон табов/тоглов на градиентном фоне экрана
 };
 
 // --- Фон экрана: диагональный градиент 168° (светло-серый → голубой → белый) ---
@@ -74,6 +73,7 @@ const backgroundGradient = {
 const shadow = {
   card: '0px 4px 10px rgba(48,69,62,0.10)',
   cardSoft: '0px 2px 8px rgba(48,69,62,0.07)',
+  subtle: '0px 3px 8px rgba(48,69,62,0.05)', // самая лёгкая тень строк/плашек
   floating: '0px 8px 24px rgba(48,69,62,0.14)',
 };
 
@@ -131,8 +131,8 @@ export const font = {
 export const tokens = {
   accent,
   semantic,
-  hero,
   category,
+  orgType,
   text,
   surface,
   backgroundGradient,

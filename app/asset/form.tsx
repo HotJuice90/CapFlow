@@ -42,10 +42,10 @@ import type {
   PayoutPeriod,
 } from '@/domain/types';
 import { ORG_TYPES } from '@/domain/types';
-import { BANKS } from '@/domain/banks';
+import { BANKS, BRAND_COLORS } from '@/domain/banks';
 import { TYPE_ICON } from '../catalog/instruments';
 import { ALL, FILTERS, FILTER_ICON, FILTER_COLOR, type Filter } from '../catalog/organizations';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercentSigned } from '@/format';
 import { tapBuzz, successBuzz } from '@/lib/haptics';
@@ -67,11 +67,6 @@ const TYPE_OPTIONS: { label: string; value: InstrumentTypeId }[] = [
   { label: 'ЦФА', value: 'dfa' },
 ];
 const ORG_TYPE_OPTIONS = ORG_TYPES.map((t) => ({ label: t, value: t, icon: FILTER_ICON[t], iconColor: FILTER_COLOR[t] }));
-const BRAND_COLORS = [
-  '#EF3124', '#FF5C00', '#F2A900', '#21A038', '#10B3A3',
-  '#3E63DD', '#0A2896', '#9A6DD7', '#E5478B', '#5A6472',
-];
-
 function behaviorFor(typeId: InstrumentTypeId): 'term' | 'perpetual' {
   return typeId === 'savings' ? 'perpetual' : 'term';
 }
@@ -512,8 +507,8 @@ export default function AssetFormScreen() {
                           style={[styles.tabChip, active && { backgroundColor: color }]}
                           onPress={() => setPlatformFilter(t)}
                         >
-                          <MaterialCommunityIcons name={FILTER_ICON[t]} size={15} color={active ? '#FFFFFF' : color} />
-                          <Text style={[styles.tabChipText, active ? { color: '#FFFFFF', fontFamily: font.semibold } : { color }]}>
+                          <MaterialCommunityIcons name={FILTER_ICON[t]} size={15} color={active ? tokens.text.inverse : color} />
+                          <Text style={[styles.tabChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
                             {t}
                           </Text>
                         </Pressable>
@@ -575,14 +570,14 @@ export default function AssetFormScreen() {
                     style={[styles.modeChip, orgMode === 'catalog' && styles.modeChipActive]}
                     onPress={() => setOrgMode('catalog')}
                   >
-                    <MaterialCommunityIcons name="view-grid-outline" size={17} color={orgMode === 'catalog' ? '#FFFFFF' : tokens.accent.base} />
+                    <MaterialCommunityIcons name="view-grid-outline" size={17} color={orgMode === 'catalog' ? tokens.text.inverse : tokens.accent.base} />
                     <Text style={[styles.modeText, orgMode === 'catalog' && styles.modeTextActive]}>Из каталога</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.modeChip, orgMode === 'custom' && styles.modeChipActive]}
                     onPress={() => setOrgMode('custom')}
                   >
-                    <MaterialCommunityIcons name="pencil-outline" size={17} color={orgMode === 'custom' ? '#FFFFFF' : tokens.accent.base} />
+                    <MaterialCommunityIcons name="pencil-outline" size={17} color={orgMode === 'custom' ? tokens.text.inverse : tokens.accent.base} />
                     <Text style={[styles.modeText, orgMode === 'custom' && styles.modeTextActive]}>Своя</Text>
                   </Pressable>
                 </View>
@@ -684,7 +679,7 @@ export default function AssetFormScreen() {
                             <MaterialCommunityIcons
                               name={TYPE_ICON[instr.typeId] ?? 'bank-outline'}
                               size={18}
-                              color={active ? '#FFFFFF' : tokens.accent.base}
+                              color={active ? tokens.text.inverse : tokens.accent.base}
                             />
                           </View>
                           <View style={{ flex: 1 }}>
@@ -733,8 +728,8 @@ export default function AssetFormScreen() {
                             style={[styles.typeChip, active && { backgroundColor: color }]}
                             onPress={() => setTypeId(opt.value)}
                           >
-                            <MaterialCommunityIcons name={TYPE_ICON[opt.value]} size={16} color={active ? '#FFFFFF' : color} />
-                            <Text style={[styles.typeChipText, active ? { color: '#FFFFFF', fontFamily: font.semibold } : { color }]}>
+                            <MaterialCommunityIcons name={TYPE_ICON[opt.value]} size={16} color={active ? tokens.text.inverse : color} />
+                            <Text style={[styles.typeChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
                               {opt.label}
                             </Text>
                           </Pressable>
@@ -886,7 +881,7 @@ function Sep() {
 }
 
 const styles = StyleSheet.create({
-  softCard: boxShadow('0px 6px 18px rgba(48,69,62,0.05)'),
+  softCard: boxShadow(tokens.shadow.subtle),
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -897,7 +892,7 @@ const styles = StyleSheet.create({
   section: {
     fontSize: tokens.typography.title,
     fontWeight: '600',
-    color: '#212121',
+    color: tokens.text.primary,
     letterSpacing: -0.2,
     marginTop: tokens.spacing.lg,
     marginBottom: tokens.spacing.md,
@@ -915,7 +910,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 18,
     marginRight: 8,
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
   },
   tabChipText: { fontFamily: font.medium, fontSize: 13 },
 
@@ -929,18 +924,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.lg,
     paddingVertical: tokens.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#EAF2F9',
+    borderBottomColor: tokens.surface.hairline,
   },
   searchInput: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary, paddingVertical: tokens.spacing.sm },
   bankList: { maxHeight: 300, paddingHorizontal: tokens.spacing.lg },
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#EAF2F9' },
-  bankName: { flex: 1, fontFamily: font.medium, fontSize: tokens.typography.body, color: '#212121' },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
+  bankName: { flex: 1, fontFamily: font.medium, fontSize: tokens.typography.body, color: tokens.text.primary },
   emptyHint: { fontFamily: font.regular, paddingVertical: tokens.spacing.lg, color: tokens.text.tertiary, textAlign: 'center' },
 
   // выбранная площадка — компактная строка (верт. паддинг = гориз., канон карточек)
   chosenRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.lg },
-  chosenName: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.body, color: '#212121' },
+  chosenName: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.body, color: tokens.text.primary },
   changeText: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.accent.base },
 
   // создание новой площадки (каталог/своя) — визуал как в форме «Новая площадка»
@@ -948,7 +943,7 @@ const styles = StyleSheet.create({
   backLinkText: { fontFamily: font.medium, fontSize: 13, color: tokens.text.tertiary },
   modeRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
     borderRadius: 20,
     padding: 3,
     marginHorizontal: tokens.spacing.lg,
@@ -965,7 +960,7 @@ const styles = StyleSheet.create({
   },
   modeChipActive: { backgroundColor: tokens.accent.base },
   modeText: { fontFamily: font.medium, fontSize: 14, color: tokens.accent.base },
-  modeTextActive: { fontFamily: font.semibold, color: '#FFFFFF' },
+  modeTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
 
   bankGrid: {
     flexDirection: 'row',
@@ -1012,7 +1007,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   confirmBtnDisabled: { backgroundColor: tokens.text.tertiary },
-  confirmBtnText: { color: '#FFFFFF', fontFamily: font.semibold, fontSize: 15 },
+  confirmBtnText: { color: tokens.text.inverse, fontFamily: font.semibold, fontSize: 15 },
 
   // продукт
   productRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
@@ -1022,10 +1017,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   productIconActive: { backgroundColor: tokens.accent.base },
-  productName: { fontFamily: font.semibold, fontSize: tokens.typography.body, color: '#212121' },
+  productName: { fontFamily: font.semibold, fontSize: tokens.typography.body, color: tokens.text.primary },
   productSub: { fontFamily: font.regular, fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
   radioOff: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#D8DFE9', marginRight: 1 },
-  newProductRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#EAF2F9' },
+  newProductRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
   newProductText: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.accent.base },
 
   // тип — цветные чипы во всю ширину экрана (как на экране «Инструмент»)
@@ -1038,7 +1033,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: 'rgba(215,226,235,0.5)',
+    backgroundColor: tokens.surface.tabOff,
   },
   typeChipText: { fontFamily: font.medium, fontSize: 14 },
   typeHint: { fontFamily: font.regular, fontSize: 12, color: tokens.text.tertiary, marginTop: 8 },
@@ -1060,7 +1055,7 @@ const styles = StyleSheet.create({
   previewLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
   previewValue: { fontSize: tokens.typography.body, fontWeight: '600', color: tokens.text.primary },
   previewAccent: { color: tokens.accent.base, fontWeight: '700', fontSize: tokens.typography.title },
-  sep: { height: 1, backgroundColor: '#EAF2F9' },
+  sep: { height: 1, backgroundColor: tokens.surface.hairline },
 
   footer: {
     position: 'absolute',
@@ -1069,7 +1064,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.85),
     borderTopWidth: 1,
     borderTopColor: tokens.surface.hairline,
   },
@@ -1080,5 +1075,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnDisabled: { backgroundColor: tokens.text.tertiary },
-  saveText: { color: '#FFFFFF', fontSize: tokens.typography.body, fontWeight: '700' },
+  saveText: { color: tokens.text.inverse, fontSize: tokens.typography.body, fontWeight: '700' },
 });

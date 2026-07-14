@@ -8,7 +8,7 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 import { formatDateFull } from '@/format/date';
 import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 
@@ -65,7 +65,7 @@ function RecordMark({ kind }: { kind: 'max' | 'min' }) {
 
 /** Иконка обновления из Figma — новая версия из двух отдельных заливок
  * (две дуги-стрелки), без общего контура с «дыркой» — раньше рисовалась криво. */
-function RefreshIcon({ size = 18, color = '#212121' }: { size?: number; color?: string }) {
+function RefreshIcon({ size = 18, color = tokens.text.primary }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 18 18">
       <Path
@@ -259,14 +259,14 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: '#212121', letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
   refreshBtn: {
     width: 44,
     height: 44,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.5),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: hexToRgba(tokens.surface.white, 0.5),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -290,8 +290,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: tokens.spacing.md,
   },
-  cardTitle: { fontFamily: font.semibold, fontSize: 20, color: '#212121', letterSpacing: -0.2 },
-  cardSubtitle: { fontFamily: font.regular, fontSize: 12, color: 'rgba(33,33,33,0.3)', letterSpacing: -0.24 },
+  cardTitle: { fontFamily: font.semibold, fontSize: 20, color: tokens.text.primary, letterSpacing: -0.2 },
+  cardSubtitle: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
 
   row: {
     flexDirection: 'row',
@@ -302,21 +302,21 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 12,
     paddingVertical: 10,
-    backgroundColor: 'rgba(249,250,255,0.55)',
-    ...boxShadow('0px 3px 8px rgba(74,85,104,0.04)'),
+    backgroundColor: tokens.surface.rowTint,
+    ...boxShadow(tokens.shadow.subtle),
   },
 
   rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
   iconBox: { width: 49, aspectRatio: 1, borderRadius: 18, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
-  iconUp: { backgroundColor: 'rgba(193,24,72,0.05)' },
-  iconDown: { backgroundColor: 'rgba(24,193,134,0.05)' },
-  iconFlat: { backgroundColor: 'rgba(102,147,169,0.05)' },
+  iconUp: { backgroundColor: hexToRgba(TREND_UP, 0.05) },
+  iconDown: { backgroundColor: hexToRgba(TREND_DOWN, 0.05) },
+  iconFlat: { backgroundColor: hexToRgba(TREND_FLAT, 0.05) },
   rowDate: { fontFamily: font.medium, fontSize: 16, color: tokens.text.secondary },
 
   rowRight: { alignItems: 'flex-end', gap: 4 },
   rateRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 3 },
-  rowRate: { fontFamily: font.semibold, fontSize: 18, lineHeight: 18, color: '#212121' },
+  rowRate: { fontFamily: font.semibold, fontSize: 18, lineHeight: 18, color: tokens.text.primary },
   recordMark: { marginTop: 1 },
   deltaPill: { backgroundColor: '#f9faff', borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 6 },
-  deltaText: { fontFamily: font.medium, fontSize: 11, lineHeight: 11, color: 'rgba(33,33,33,0.8)' },
+  deltaText: { fontFamily: font.medium, fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.8) },
 });

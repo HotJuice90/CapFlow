@@ -1,5 +1,6 @@
 import React, { Fragment } from 'react';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { tokens } from '@/theme';
 
 /**
  * «Скайлайн» — прямоугольные столбики внахлёст, силуэтом показывающие реальный
@@ -13,7 +14,7 @@ export function SkylineBars({
   data,
   width = 120,
   height = 56,
-  color = '#62709C',
+  color = tokens.accent.base,
   gap = 0,
 }: {
   data: number[];

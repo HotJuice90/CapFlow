@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
+import { tokens } from '@/theme';
 
 /**
  * Единый заголовок экрана: Onest SemiBold 34pt, letter-spacing -1%.
@@ -14,7 +15,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 34,
     fontFamily: 'Onest_600SemiBold',
-    color: '#212121',
+    color: tokens.text.primary,
     letterSpacing: -0.34, // -1%
     marginBottom: 16,
   },
