@@ -22,10 +22,12 @@ import Svg, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useData } from '@/state/DataContext';
+import { analyticsSummary } from '@/state/selectors';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
-import { CURRENCY_SYMBOL } from '@/format';
+import { CURRENCY_SYMBOL, formatMoney, formatPercent } from '@/format';
 import { timeAgo } from '@/format/date';
+import { calcTax } from '@/calc';
 import { tapBuzz } from '@/lib/haptics';
 import { Flag } from '@/components/Flag';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
@@ -69,6 +71,15 @@ const D = {
   badgePos: '#1A8A1A', badgePosBg: 'rgba(139,229,139,0.1)',
   badgeNeutral: '#7A828E', badgeNeutralBg: 'rgba(122,130,142,0.1)',
 };
+
+// ─── Калькулятор вклада ─────────────────────────────────────────────────────
+const DEP_PERIODS: { label: string; days: number }[] = [
+  { label: '7 дней', days: 7 },
+  { label: '1 мес', days: 30 },
+  { label: '3 мес', days: 91 },
+  { label: '6 мес', days: 182 },
+  { label: '1 год', days: 365 },
+];
 
 type Slots = [CurrencyCode, CurrencyCode, CurrencyCode];
 
@@ -221,6 +232,8 @@ export default function ConverterScreen() {
   const { width: screenW } = useWindowDimensions();
   const { data, refreshRates, backfillRateHistory } = useData();
 
+  const [mode, setMode] = useState<'currency' | 'deposit'>('currency');
+
   const [slots, setSlots] = useState<Slots>(() =>
     resolveDuplicates([data.settings.defaultCurrency, DEFAULT_SLOTS[1], DEFAULT_SLOTS[2]], 0),
   );
@@ -232,6 +245,13 @@ export default function ConverterScreen() {
   const [topCardH, setTopCardH] = useState(114);
   const [chartH, setChartH] = useState(220);
   const [histPeriod, setHistPeriod] = useState<'day' | 'month'>('day');
+
+  // Калькулятор вклада — сумма/ставка вводятся вручную (не привязаны к
+  // реальной площадке), срок — пресетами. Ставка по умолчанию = текущая
+  // ключевая, разумная отправная точка для прикидки.
+  const [depAmountText, setDepAmountText] = useState('100000');
+  const [depRateText, setDepRateText] = useState(() => String(data.params.keyRate).replace('.', ','));
+  const [depDays, setDepDays] = useState(30);
 
   const refs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
   const rates = data.rates as Record<CurrencyCode, number>;
@@ -383,6 +403,16 @@ export default function ConverterScreen() {
   const rateLabel = (c: CurrencyCode) =>
     `1 ${CURRENCY_SYMBOL[c]} = ${displayAmount(rates[c] ?? 0)} ${CURRENCY_SYMBOL.RUB}`;
 
+  // ── Калькулятор вклада: простой % (без капитализации — это прикидка, не
+  // расчёт конкретного продукта), налог честный — с учётом реально уже
+  // занятого лимита текущим портфелем (не с нуля).
+  const depAmount = parseRaw(depAmountText);
+  const depRate = parseRaw(depRateText);
+  const depGross = depAmount * (depRate / 100) * (depDays / 365);
+  const depLimitUsed = useMemo(() => analyticsSummary(data).selfAccrued, [data]);
+  const depTax = calcTax(depGross, data.params, depLimitUsed);
+  const depNet = depGross - depTax;
+
   // Поле ввода (используется и для верхней карточки, и для нижних столбцов)
   const AmountInput = (idx: number, big: boolean) => (
     <TextInput
@@ -413,6 +443,23 @@ export default function ConverterScreen() {
       >
         <ScreenTitle>Конвертер</ScreenTitle>
 
+        {/* ── Режим: валюты / калькулятор вклада ── */}
+        <View style={s.modeBar}>
+          {(['currency', 'deposit'] as const).map((m) => (
+            <Pressable
+              key={m}
+              style={[s.modeTab, mode === m && s.modeTabActive]}
+              onPress={() => { if (mode !== m) { tapBuzz(); setMode(m); } }}
+            >
+              <Text style={[s.modeTabText, mode === m && s.modeTabTextActive]}>
+                {m === 'currency' ? 'Валюты' : 'Вклад'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {mode === 'currency' ? (
+        <>
         {/* ── Карточки (поле 0 сверху, поля 1|2 снизу) + кнопка сброса ── */}
         <View style={s.cardsBlock}>
           {/* Верхнее поле */}
@@ -523,7 +570,119 @@ export default function ConverterScreen() {
             )}
           </View>
         </View>
+        </>
+        ) : (
+        <>
+        {/* ── Калькулятор вклада ── */}
+        <View style={s.cardsBlock}>
+          <View style={s.topCard}>
+            <View style={s.topLeft}>
+              <Text style={s.topLabel}>Сумма</Text>
+              <TextInput
+                style={s.bigInput}
+                value={depAmountText}
+                onChangeText={(t) => setDepAmountText(t.replace(/[^\d.,]/g, ''))}
+                keyboardType="decimal-pad"
+                placeholder="0"
+                placeholderTextColor={D.placeholder}
+                selectionColor={D.resetBg}
+              />
+            </View>
+            <Text style={s.depCurrencyStatic}>{CURRENCY_SYMBOL.RUB}</Text>
+          </View>
+
+          <View style={s.bottomCard}>
+            <View style={s.col}>
+              <Text style={s.depColLabel}>Ставка, % годовых</Text>
+              <TextInput
+                style={s.colInput}
+                value={depRateText}
+                onChangeText={(t) => setDepRateText(t.replace(/[^\d.,]/g, ''))}
+                keyboardType="decimal-pad"
+                placeholder="0"
+                placeholderTextColor={D.placeholder}
+                selectionColor={D.resetBg}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* ── Срок — пресеты, тот же визуальный язык, что таб-бар валют выше ── */}
+        <View style={s.depPeriodRow}>
+          {DEP_PERIODS.map((p) => (
+            <Pressable
+              key={p.days}
+              style={[s.depPeriodChip, depDays === p.days && s.depPeriodChipActive]}
+              onPress={() => { tapBuzz(); setDepDays(p.days); }}
+            >
+              <Text style={[s.depPeriodChipText, depDays === p.days && s.depPeriodChipTextActive]}>{p.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* ── Прогноз — та же карточка «доход/налог/чисто», что на детали актива ── */}
+        <View style={s.depResultCard}>
+          <Text style={s.histTitle}>Прогноз</Text>
+          <View style={s.depResultRow}>
+            <DepCol
+              icon="trending-up"
+              iconColor="#586692"
+              iconBg={tokens.accent.soft}
+              label="Доход"
+              value={formatMoney(Math.max(0, depGross), { currency: 'RUB', kopecks: 'hide' })}
+            />
+            <View style={s.depResultSep} />
+            <DepCol
+              icon="percent"
+              iconColor="#C11818"
+              iconBg={hexToRgba(tokens.semantic.negative, 0.12)}
+              label="Налог"
+              value={formatMoney(Math.max(0, depTax), { currency: 'RUB', kopecks: 'hide' })}
+            />
+            <View style={s.depResultSep} />
+            <DepCol
+              icon="account-balance-wallet"
+              iconColor={tokens.semantic.positive}
+              iconBg={hexToRgba(tokens.semantic.positive, 0.12)}
+              label="Чистыми"
+              value={formatMoney(Math.max(0, depNet), { currency: 'RUB', kopecks: 'hide' })}
+              valueColor={tokens.semantic.positive}
+            />
+          </View>
+          <Text style={s.depResultHint}>
+            {depAmount > 0 && depRate > 0
+              ? `${formatMoney(depAmount, { currency: 'RUB', kopecks: 'hide' })} под ${formatPercent(depRate, 1)} на ${DEP_PERIODS.find((p) => p.days === depDays)?.label ?? `${depDays} дн.`}`
+              : 'Заполните сумму и ставку'}
+          </Text>
+        </View>
+        </>
+        )}
       </View>
+    </View>
+  );
+}
+
+function DepCol({
+  icon, iconColor, iconBg, label, value, valueColor,
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  iconColor: string;
+  iconBg: string;
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
+  return (
+    <View style={s.depCol}>
+      <View style={s.depColHead}>
+        <View style={[s.depColIcon, { backgroundColor: iconBg }]}>
+          <MaterialIcons name={icon} size={13} color={iconColor} />
+        </View>
+        <Text style={s.depColHeadLabel} numberOfLines={1}>{label}</Text>
+      </View>
+      <Text style={[s.depColValue, valueColor ? { color: valueColor } : null]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -626,4 +785,35 @@ const s = StyleSheet.create({
     backgroundColor: D.resetBg, borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.sheet, paddingVertical: 12,
   },
   loadHistBtnText: { color: tokens.text.inverse, fontFamily: 'Onest_700Bold', fontSize: 14 },
+
+  // ── Переключатель режима (Валюты / Вклад) ──
+  modeBar: {
+    flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill,
+    padding: 1, marginBottom: tokens.spacing.lg, alignSelf: 'flex-start',
+  },
+  modeTab: { paddingHorizontal: tokens.spacing.xl, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill },
+  modeTabActive: { backgroundColor: tokens.surface.white, boxShadow: '0px 2px 6px rgba(48,69,62,0.08)' },
+  modeTabText: { fontSize: tokens.typography.label, fontFamily: 'Onest_500Medium', color: hexToRgba(tokens.text.primary, 0.5) },
+  modeTabTextActive: { color: tokens.text.primary, fontFamily: 'Onest_600SemiBold' },
+
+  // ── Калькулятор вклада ──
+  depCurrencyStatic: { fontSize: tokens.typography.title, fontFamily: 'Onest_600SemiBold', color: D.sourceLabel },
+  depColLabel: { fontSize: 14, fontFamily: 'Onest_500Medium', color: D.sourceLabel },
+  depPeriodRow: { flexDirection: 'row', gap: tokens.spacing.chip, marginTop: tokens.spacing.chip, flexWrap: 'wrap' },
+  depPeriodChip: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.white },
+  depPeriodChipActive: { backgroundColor: tokens.accent.light },
+  depPeriodChipText: { fontSize: 13, fontFamily: 'Onest_500Medium', color: tokens.text.secondary },
+  depPeriodChipTextActive: { color: tokens.text.inverse, fontFamily: 'Onest_600SemiBold' },
+  depResultCard: {
+    backgroundColor: tokens.surface.white, borderRadius: 20, padding: tokens.spacing.sheet,
+    marginTop: tokens.spacing.xl, boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
+  },
+  depResultRow: { flexDirection: 'row', alignItems: 'stretch', marginTop: tokens.spacing.md },
+  depResultSep: { width: 1, backgroundColor: D.divider, marginHorizontal: tokens.spacing.md },
+  depCol: { flex: 1, minWidth: 0 },
+  depColHead: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip, marginBottom: tokens.spacing.chip },
+  depColIcon: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  depColHeadLabel: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, flexShrink: 1 },
+  depColValue: { fontSize: 17, lineHeight: 17, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.34, marginTop: tokens.spacing.chip },
+  depResultHint: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), marginTop: tokens.spacing.md, letterSpacing: -0.24 },
 });
