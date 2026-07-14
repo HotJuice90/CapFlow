@@ -441,19 +441,22 @@ export default function ConverterScreen() {
       <View
         style={{ flex: 1, paddingTop: tokens.spacing.screenTop, paddingHorizontal: 16, paddingBottom: insets.bottom + 66 }}
       >
-        {/* ── Заголовок + режим: валюты / калькулятор вклада ── */}
+        {/* ── Заголовок + режим: валюты / калькулятор вклада (иконки — не зависит
+            от длины слова заголовка, в отличие от текстовых пилюль) ── */}
         <View style={s.titleRow}>
           <ScreenTitle>Калькулятор</ScreenTitle>
           <View style={s.modeBar}>
-            {(['currency', 'deposit'] as const).map((m) => (
+            {([
+              { key: 'currency' as const, icon: 'swap-horiz' as const },
+              { key: 'deposit' as const, icon: 'savings' as const },
+            ]).map(({ key, icon }) => (
               <Pressable
-                key={m}
-                style={[s.modeTab, mode === m && s.modeTabActive]}
-                onPress={() => { if (mode !== m) { tapBuzz(); setMode(m); } }}
+                key={key}
+                style={[s.modeTab, mode === key && s.modeTabActive]}
+                onPress={() => { if (mode !== key) { tapBuzz(); setMode(key); } }}
+                hitSlop={4}
               >
-                <Text style={[s.modeTabText, mode === m && s.modeTabTextActive]}>
-                  {m === 'currency' ? 'Валюты' : 'Вклад'}
-                </Text>
+                <MaterialIcons name={icon} size={20} color={mode === key ? tokens.text.inverse : hexToRgba(tokens.text.primary, 0.5)} />
               </Pressable>
             ))}
           </View>
@@ -790,12 +793,13 @@ const s = StyleSheet.create({
   // ── Заголовок + переключатель режима (Валюты / Вклад), в один ряд ──
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   modeBar: {
-    flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill, padding: 1,
+    flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill, padding: 2, gap: 2,
   },
-  modeTab: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill },
-  modeTabActive: { backgroundColor: tokens.surface.white, boxShadow: '0px 2px 6px rgba(48,69,62,0.08)' },
-  modeTabText: { fontSize: tokens.typography.label, fontFamily: 'Onest_500Medium', color: hexToRgba(tokens.text.primary, 0.5) },
-  modeTabTextActive: { color: tokens.text.primary, fontFamily: 'Onest_600SemiBold' },
+  modeTab: {
+    width: 36, height: 36, borderRadius: tokens.radius.pill,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  modeTabActive: { backgroundColor: tokens.accent.base },
 
   // ── Калькулятор вклада ──
   depCurrencyStatic: { fontSize: tokens.typography.title, fontFamily: 'Onest_600SemiBold', color: D.sourceLabel },
