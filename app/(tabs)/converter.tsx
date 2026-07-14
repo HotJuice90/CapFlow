@@ -22,12 +22,10 @@ import Svg, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useData } from '@/state/DataContext';
-import { analyticsSummary } from '@/state/selectors';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
 import { CURRENCY_SYMBOL, formatMoney } from '@/format';
 import { timeAgo } from '@/format/date';
-import { calcTax } from '@/calc';
 import { tapBuzz } from '@/lib/haptics';
 import { Flag } from '@/components/Flag';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
@@ -408,16 +406,16 @@ export default function ConverterScreen() {
   const rateLabel = (c: CurrencyCode) =>
     `1 ${CURRENCY_SYMBOL[c]} = ${displayAmount(rates[c] ?? 0)} ${CURRENCY_SYMBOL.RUB}`;
 
-  // ── Калькулятор вклада: это прикидка, не расчёт конкретного продукта —
-  // капитализация приближённая (ежедневная), налог честный — с учётом реально
-  // уже занятого лимита текущим портфелем (не с нуля).
+  // ── Калькулятор вклада: одноразовая прикидка, не расчёт конкретного продукта
+  // и не привязана к реальному портфелю — капитализация приближённая
+  // (ежедневная), налог плоской ставкой без необлагаемого лимита (лимит зависит
+  // от остального портфеля за год, тут это только сбивало бы с толку).
   const depAmount = parseRaw(depAmountText);
   const depRate = parseRaw(depRateText);
   const depGross = depMode === 'compound'
     ? depAmount * (Math.pow(1 + depRate / 100 / 365, depDays) - 1)
     : depAmount * (depRate / 100) * (depDays / 365);
-  const depLimitUsed = useMemo(() => analyticsSummary(data).selfAccrued, [data]);
-  const depTax = calcTax(depGross, data.params, depLimitUsed);
+  const depTax = Math.max(0, depGross) * (data.params.taxRate / 100);
 
   // Поле ввода (используется и для верхней карточки, и для нижних столбцов)
   const AmountInput = (idx: number, big: boolean) => (
