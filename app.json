@@ -2,14 +2,14 @@
   "expo": {
     "name": "CapFlow",
     "slug": "capflow",
-    "version": "0.8.18",
+    "version": "0.8.19",
     "scheme": "capflow",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "android": {
       "package": "com.capflow.app",
-      "versionCode": 30
+      "versionCode": 31
     },
     "ios": {
       "supportsTablet": false,
