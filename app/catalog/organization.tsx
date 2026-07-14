@@ -170,7 +170,7 @@ export default function OrganizationFormScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: 80,
+          paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + 100,
         }}
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: tokens.spacing.xl,
   },
-  headerTitle: { fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
 
   modeRow: {
     flexDirection: 'row',
@@ -339,8 +339,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: tokens.spacing.chip,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: 17,
   },
   modeChipActive: { backgroundColor: tokens.accent.base },
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     marginBottom: tokens.spacing.lg,
     ...boxShadow(tokens.shadow.subtle),
   },
-  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: tokens.text.primary },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: tokens.typography.labelLg, color: tokens.text.primary },
 
   bankGrid: {
     flexDirection: 'row',
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: tokens.spacing.tight,
     marginTop: tokens.spacing.xl,
     borderRadius: 20,
     paddingHorizontal: 11,
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   },
   selectedLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   selectedName: { flex: 1, fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: tokens.radius.pill },
+  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill },
   typeChipLabel: { fontFamily: font.medium, fontSize: 12 },
 
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
@@ -424,15 +424,15 @@ const styles = StyleSheet.create({
   uploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     alignSelf: 'flex-start',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: 16,
     backgroundColor: tokens.accent.soft,
   },
   uploadText: { fontFamily: font.medium, fontSize: 14, color: tokens.accent.base },
-  removePhotoBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  removePhotoBtn: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip, paddingHorizontal: 4 },
   removePhotoText: { fontFamily: font.regular, fontSize: 13, color: tokens.text.tertiary },
 
   footer: {

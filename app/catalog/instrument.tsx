@@ -129,7 +129,7 @@ export default function InstrumentFormScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: 80,
+          paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + 100,
         }}
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: tokens.spacing.lg,
   },
-  headerTitle: { fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
 
   section: {
     fontFamily: font.semibold,
@@ -279,14 +279,14 @@ const styles = StyleSheet.create({
   typeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: 20,
     backgroundColor: tokens.surface.tabOff,
   },
   typeChipText: { fontFamily: font.medium, fontSize: 14 },
-  typeHint: { fontFamily: font.regular, fontSize: 12, color: tokens.text.tertiary, marginTop: 8 },
+  typeHint: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary, marginTop: 8 },
 
   toggleRow: {
     flexDirection: 'row',

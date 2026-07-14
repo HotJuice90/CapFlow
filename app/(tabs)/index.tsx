@@ -118,7 +118,7 @@ export default function HomeScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: 80,
+          paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + 90,
         }}
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
   listInner: { paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.xs },
   divider: { height: 1, backgroundColor: tokens.surface.hairline },
-  archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: tokens.spacing.md },
+  archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing.chip, paddingVertical: tokens.spacing.md },
   archiveLinkText: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, fontWeight: '500' },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md },
   eventName: { fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.primary },

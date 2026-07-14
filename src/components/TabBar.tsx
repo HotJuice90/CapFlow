@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderRadius: 35,
+    borderRadius: tokens.radius.pillSmall,
     paddingHorizontal: 28,
     paddingVertical: 18,
     boxShadow: '0px 8px 24px rgba(48,69,62,0.16)',

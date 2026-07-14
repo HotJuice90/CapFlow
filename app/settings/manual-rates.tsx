@@ -135,10 +135,10 @@ function RateRow({
 }
 
 const s = StyleSheet.create({
-  sheet: { backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
-  grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
+  sheet: { backgroundColor: tokens.surface.white, paddingHorizontal: tokens.spacing.sheet, paddingTop: 8, paddingBottom: 24 },
+  grabber: { width: 40, height: 4, borderRadius: tokens.radius.grabber, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
   title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 4 },
-  hint: { fontFamily: font.regular, fontSize: 12, color: tokens.text.tertiary, marginBottom: 12 },
+  hint: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary, marginBottom: 12 },
   list: { maxHeight: 380 },
   row: {
     flexDirection: 'row',
@@ -150,7 +150,7 @@ const s = StyleSheet.create({
   },
   rowLast: { borderBottomWidth: 0 },
   code: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary },
-  name: { fontFamily: font.regular, fontSize: 12, color: tokens.text.tertiary, marginTop: 2 },
+  name: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary, marginTop: 2 },
   valueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   resetBtn: { width: 20, height: 20, borderRadius: 10, backgroundColor: tokens.surface.neutral, alignItems: 'center', justifyContent: 'center' },
   valueInput: { fontFamily: font.semibold, fontSize: 16, color: tokens.text.primary, minWidth: 60, padding: 0 },

@@ -211,8 +211,8 @@ const styles = StyleSheet.create({
     left: 0,
     backgroundColor: 'rgba(249,250,255,0.6)',
     borderRadius: 100,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: tokens.spacing.tight,
+    paddingVertical: tokens.spacing.chip,
   },
   axisLabelText: { fontSize: 11, fontFamily: font.medium, color: '#8A99C4' },
 });

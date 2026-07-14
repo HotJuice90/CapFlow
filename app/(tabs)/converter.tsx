@@ -409,7 +409,7 @@ export default function ConverterScreen() {
       />
 
       <View
-        style={{ flex: 1, paddingTop: 80, paddingHorizontal: 16, paddingBottom: insets.bottom + 66 }}
+        style={{ flex: 1, paddingTop: tokens.spacing.screenTop, paddingHorizontal: 16, paddingBottom: insets.bottom + 66 }}
       >
         <ScreenTitle>Конвертер</ScreenTitle>
 
@@ -531,11 +531,11 @@ export default function ConverterScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  cardsBlock: { gap: 6, position: 'relative' },
+  cardsBlock: { gap: tokens.spacing.chip, position: 'relative' },
 
   // Верхняя карточка
   topCard: {
-    backgroundColor: tokens.surface.white, borderRadius: 20, padding: 20,
+    backgroundColor: tokens.surface.white, borderRadius: 20, padding: tokens.spacing.sheet,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
@@ -548,7 +548,7 @@ const s = StyleSheet.create({
 
   // Нижняя карточка (2 столбца + дивайдер)
   bottomCard: {
-    backgroundColor: tokens.surface.white, borderRadius: 20, padding: 20,
+    backgroundColor: tokens.surface.white, borderRadius: 20, padding: tokens.spacing.sheet,
     flexDirection: 'row', alignItems: 'stretch',
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
@@ -564,13 +564,13 @@ const s = StyleSheet.create({
   resetBtn: {
     position: 'absolute', right: 0,
     backgroundColor: D.resetBg, borderWidth: 6, borderColor: D.resetBorder,
-    borderRadius: 35, padding: 8, zIndex: 10,
+    borderRadius: tokens.radius.pillSmall, padding: 8, zIndex: 10,
   },
 
   // Чип валюты
   pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: D.chipBg, borderRadius: 35,
+    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip,
+    backgroundColor: D.chipBg, borderRadius: tokens.radius.pillSmall,
     paddingLeft: 4, paddingRight: 8, paddingVertical: 4, alignSelf: 'flex-start',
   },
   pillLg: { gap: 8 },
@@ -583,33 +583,33 @@ const s = StyleSheet.create({
   // Строка обновления
   footerRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 10, marginTop: 10,
+    paddingHorizontal: tokens.spacing.tight, marginTop: tokens.spacing.tight,
   },
   footerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   updatedText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: D.updated, letterSpacing: -0.26 },
 
   // История
   histSection: { marginTop: 40, flex: 1 },
-  histTitle: { fontSize: 24, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.24, marginBottom: 12 },
+  histTitle: { fontSize: tokens.typography.header, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.24, marginBottom: 12 },
   histHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  periodToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 10, paddingVertical: 4 },
+  periodToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: tokens.spacing.tight, paddingVertical: 4 },
   periodToggleText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: D.updated, letterSpacing: -0.26 },
   // Пилюля — тот же размер, что раньше вмещал ровно 4 валюты; остальные скроллятся внутри неё.
   // overflow:hidden именно на этой обёртке — иначе скролл обрезает контент прямоугольно,
   // а не по скруглению пилюли.
-  tabBarClip: { width: 204, borderRadius: 35, overflow: 'hidden' },
+  tabBarClip: { width: 204, borderRadius: tokens.radius.pillSmall, overflow: 'hidden' },
   tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, padding: 1 },
-  tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 35 },
+  tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pillSmall },
   tabActive: { backgroundColor: D.tabActiveBg },
   tabText: {
     fontSize: 14, fontFamily: 'Onest_500Medium', textTransform: 'uppercase',
     letterSpacing: -0.56, color: hexToRgba(tokens.text.primary, 0.5),
   },
   tabTextActive: { color: tokens.text.inverse },
-  bigRate: { fontSize: 24, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate, flexShrink: 0 },
+  bigRate: { fontSize: tokens.typography.header, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate, flexShrink: 0 },
   badge: {
-    borderRadius: 35, padding: 8, gap: 10,
+    borderRadius: tokens.radius.pillSmall, padding: 8, gap: tokens.spacing.tight,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
   },
   badgeText: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', letterSpacing: -0.14 },
@@ -623,7 +623,7 @@ const s = StyleSheet.create({
   },
   loadHistBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: D.resetBg, borderRadius: 35, paddingHorizontal: 20, paddingVertical: 12,
+    backgroundColor: D.resetBg, borderRadius: tokens.radius.pillSmall, paddingHorizontal: tokens.spacing.sheet, paddingVertical: 12,
   },
   loadHistBtnText: { color: tokens.text.inverse, fontFamily: 'Onest_700Bold', fontSize: 14 },
 });

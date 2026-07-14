@@ -76,7 +76,7 @@ export default function SettingsScreen() {
   return (
     <ScreenBackground>
       <ScrollView
-        contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + 90 }}
+        contentContainerStyle={{ paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + 90 }}
         showsVerticalScrollIndicator={false}
       >
         <ScreenTitle>{t.settings.title}</ScreenTitle>

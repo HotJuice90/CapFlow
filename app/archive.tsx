@@ -85,7 +85,7 @@ export default function ArchiveScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: 80,
+          paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + 40,
         }}
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
 
   hint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginBottom: tokens.spacing.sm },
 

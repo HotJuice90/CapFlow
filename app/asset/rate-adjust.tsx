@@ -266,9 +266,9 @@ function HistoryRow({
 }
 
 const s = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20 },
+  sheet: { flex: 1, backgroundColor: tokens.surface.white, paddingHorizontal: tokens.spacing.sheet, paddingTop: 8, paddingBottom: 20 },
   scroll: { flex: 1 },
-  grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
+  grabber: { width: 40, height: 4, borderRadius: tokens.radius.grabber, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
   title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 12 },
 
   balanceBox: {

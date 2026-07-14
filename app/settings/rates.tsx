@@ -28,7 +28,7 @@ export default function RatesScreen() {
   return (
     <ScreenBackground>
       <ScrollView
-        contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
+        contentContainerStyle={{ paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   refreshBtn: {
     width: 44,
     height: 44,

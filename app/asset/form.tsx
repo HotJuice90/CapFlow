@@ -905,7 +905,7 @@ const styles = StyleSheet.create({
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     paddingVertical: 9,
     borderRadius: 17,
   },
@@ -987,15 +987,15 @@ const styles = StyleSheet.create({
   uploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     alignSelf: 'flex-start',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: 16,
     backgroundColor: tokens.accent.soft,
   },
   uploadText: { fontFamily: font.medium, fontSize: 14, color: tokens.accent.base },
-  removePhotoBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  removePhotoBtn: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip, paddingHorizontal: 4 },
   removePhotoText: { fontFamily: font.regular, fontSize: 13, color: tokens.text.tertiary },
 
   confirmBtn: {
@@ -1029,14 +1029,14 @@ const styles = StyleSheet.create({
   typeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: 20,
     backgroundColor: tokens.surface.tabOff,
   },
   typeChipText: { fontFamily: font.medium, fontSize: 14 },
-  typeHint: { fontFamily: font.regular, fontSize: 12, color: tokens.text.tertiary, marginTop: 8 },
+  typeHint: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary, marginTop: 8 },
 
   toggleRow: {
     flexDirection: 'row',

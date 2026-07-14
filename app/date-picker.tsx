@@ -290,11 +290,11 @@ const s = StyleSheet.create({
     backgroundColor: tokens.surface.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: 20,
+    paddingHorizontal: tokens.spacing.sheet,
     paddingTop: 8,
   },
-  dragZone: { paddingVertical: 10, marginBottom: 8, marginTop: -8 },
-  grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center' },
+  dragZone: { paddingVertical: tokens.spacing.tight, marginBottom: 8, marginTop: -8 },
+  grabber: { width: 40, height: 4, borderRadius: tokens.radius.grabber, backgroundColor: '#E5E8EE', alignSelf: 'center' },
 
   headRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary },
@@ -315,7 +315,7 @@ const s = StyleSheet.create({
   dayCircle: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   daySelected: { backgroundColor: tokens.accent.base, borderRadius: 19 },
   dayToday: { borderWidth: 1.5, borderColor: tokens.accent.base, borderRadius: 19 },
-  dayText: { fontFamily: font.medium, fontSize: 15, color: tokens.text.primary },
+  dayText: { fontFamily: font.medium, fontSize: tokens.typography.labelLg, color: tokens.text.primary },
   dayTextSelected: { fontFamily: font.semibold, color: tokens.text.inverse },
 
   wheelWrap: { height: YEAR_ITEM_HEIGHT * 5, justifyContent: 'center' },
@@ -336,6 +336,6 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: tokens.surface.hairline,
   },
-  cancelText: { fontFamily: font.medium, fontSize: 15, color: tokens.text.tertiary },
-  okText: { fontFamily: font.semibold, fontSize: 15, color: tokens.accent.base },
+  cancelText: { fontFamily: font.medium, fontSize: tokens.typography.labelLg, color: tokens.text.tertiary },
+  okText: { fontFamily: font.semibold, fontSize: tokens.typography.labelLg, color: tokens.accent.base },
 });

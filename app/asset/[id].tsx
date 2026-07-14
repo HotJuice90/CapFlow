@@ -613,18 +613,18 @@ const styles = StyleSheet.create({
   },
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  name: { fontSize: 24, lineHeight: 26, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.48 },
-  subtitle: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: 6, letterSpacing: -0.28 },
+  name: { fontSize: tokens.typography.header, lineHeight: 26, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.48 },
+  subtitle: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: tokens.spacing.chip, letterSpacing: -0.28 },
 
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 12, marginBottom: tokens.spacing.lg },
-  pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
   pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 
   softShadow: boxShadow(SOFT_SHADOW),
 
   hero: { marginBottom: tokens.spacing.xl, ...boxShadow(SOFT_SHADOW) },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
-  heroLabel: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
+  heroLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   heroAmount: { fontSize: 32, lineHeight: 34, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.64, marginTop: 8 },
   rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
   rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: '#586692' },
@@ -635,8 +635,8 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: tokens.accent.soft, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   progressMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  progressMetaText: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
-  progressMetaPct: { fontSize: 12, fontWeight: '600', color: '#586692' },
+  progressMetaText: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
+  progressMetaPct: { fontSize: tokens.typography.hint, fontWeight: '600', color: '#586692' },
 
   heroIncomeRow: {
     flexDirection: 'row',
@@ -658,15 +658,15 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.semantic.warning, 0.1),
   },
   maturedBannerTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  maturedBannerTitle: { fontSize: 15, fontWeight: '700', color: tokens.text.primary },
+  maturedBannerTitle: { fontSize: tokens.typography.labelLg, fontWeight: '700', color: tokens.text.primary },
   maturedBannerActions: { flexDirection: 'row', gap: 8, marginTop: tokens.spacing.md },
   maturedActionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: tokens.spacing.chip,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: tokens.radius.pill,
     backgroundColor: tokens.surface.white,
   },
@@ -676,11 +676,11 @@ const styles = StyleSheet.create({
   finTitle: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36, marginBottom: tokens.spacing.lg },
 
   lifetimeValue: { fontSize: 26, lineHeight: 28, fontWeight: '700', color: tokens.semantic.positive, letterSpacing: -0.52 },
-  lifetimeMeta: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24, marginTop: 6 },
+  lifetimeMeta: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24, marginTop: 6 },
 
   taxLifetimeDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginTop: tokens.spacing.lg, marginBottom: tokens.spacing.md },
   taxLifetimeRow: { flexDirection: 'row' },
-  taxLifetimeLabel: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
+  taxLifetimeLabel: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
   taxLifetimeValue: { fontSize: 16, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.32, marginTop: 4 },
   taxLifetimeValueWarn: { color: tokens.semantic.warning },
   finRow: { flexDirection: 'row', alignItems: 'stretch' },
@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
   finSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: 10 },
   finColHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   finIcon: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  finColLabel: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, flexShrink: 1 },
+  finColLabel: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, flexShrink: 1 },
   finColValue: { fontSize: 17, lineHeight: 17, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.34, marginTop: 10 },
   finColSub: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.22, marginTop: 5 },
 
@@ -702,9 +702,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.lg,
     paddingVertical: tokens.spacing.md,
   },
-  finTotalLabel: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
+  finTotalLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
   finTotalValue: { fontSize: 20, lineHeight: 22, fontWeight: '700', color: tokens.semantic.positive, letterSpacing: -0.4, marginTop: 6 },
-  finTotalChip: { backgroundColor: tokens.surface.white, borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  finTotalChip: { backgroundColor: tokens.surface.white, borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
   finTotalChipText: { fontSize: 11, fontWeight: '500', color: tokens.semantic.positive },
 
   historyCard: { paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
@@ -721,11 +721,11 @@ const styles = StyleSheet.create({
   histIconDown: { backgroundColor: hexToRgba(tokens.semantic.negative, 0.12) },
   histIconCorrection: { backgroundColor: hexToRgba(tokens.category.dfa, 0.14) },
   histDate: { fontSize: 14, fontWeight: '500', color: tokens.text.primary },
-  histSub: { fontSize: 12, color: tokens.text.tertiary, marginTop: 2 },
+  histSub: { fontSize: tokens.typography.hint, color: tokens.text.tertiary, marginTop: 2 },
   histDelta: { fontSize: 14, fontWeight: '700' },
   histDeltaUp: { color: tokens.semantic.positive },
   histDeltaDown: { color: tokens.semantic.negative },
-  histBalance: { fontSize: 12, color: tokens.text.tertiary, marginTop: 2 },
+  histBalance: { fontSize: tokens.typography.hint, color: tokens.text.tertiary, marginTop: 2 },
 
   historyMore: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
@@ -735,13 +735,13 @@ const styles = StyleSheet.create({
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   historyMoreText: { fontSize: 13, fontWeight: '600', color: tokens.accent.base },
 
-  forecastHint: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: -10, marginBottom: tokens.spacing.lg },
+  forecastHint: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: -10, marginBottom: tokens.spacing.lg },
   forecastValue: { fontSize: 16, lineHeight: 16, fontWeight: '600', color: tokens.semantic.positive, letterSpacing: -0.32, marginTop: 8 },
 
   bankCard: boxShadow(SOFT_SHADOW),
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  bankName: { fontSize: 15, lineHeight: 15, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.3 },
-  bankHint: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: 4 },
+  bankName: { fontSize: tokens.typography.labelLg, lineHeight: 15, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.3 },
+  bankHint: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: 4 },
   bankOpen: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   bankOpenText: { fontSize: 14, fontWeight: '600', color: tokens.accent.base },
   actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: tokens.spacing.xl, paddingHorizontal: 4 },

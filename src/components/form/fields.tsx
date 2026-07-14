@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.caption,
     color: tokens.text.secondary,
     fontWeight: '500',
-    marginBottom: 6,
+    marginBottom: tokens.spacing.chip,
   },
   hint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 4 },
   input: {

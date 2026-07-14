@@ -38,7 +38,7 @@ export default function CapitalScreen() {
   return (
     <ScreenBackground>
       <ScrollView
-        contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
+        contentContainerStyle={{ paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -81,7 +81,7 @@ export default function CapitalScreen() {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, marginBottom: tokens.spacing.xl },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
 
   row: {
     flexDirection: 'row',
@@ -95,17 +95,17 @@ const styles = StyleSheet.create({
   },
   rowLeft: { flex: 1, paddingRight: 12 },
   rowLabel: { fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
-  rowHint: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 2 },
+  rowHint: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 2 },
   valueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   valueInput: { fontFamily: font.semibold, fontSize: 18, color: tokens.text.primary, minWidth: 60, padding: 0 },
   suffix: { fontFamily: font.regular, fontSize: 16, color: tokens.text.tertiary },
 
   footnote: {
     fontFamily: font.regular,
-    fontSize: 12,
+    fontSize: tokens.typography.hint,
     color: hexToRgba(tokens.text.primary, 0.4),
     lineHeight: 18,
     marginTop: tokens.spacing.lg,
-    paddingHorizontal: 10,
+    paddingHorizontal: tokens.spacing.tight,
   },
 });

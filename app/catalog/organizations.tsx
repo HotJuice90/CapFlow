@@ -64,7 +64,7 @@ export default function OrganizationsScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: 80,
+          paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + tokens.spacing.xxl,
         }}
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   addBtn: {
     width: 44,
     height: 44,
@@ -236,9 +236,9 @@ const styles = StyleSheet.create({
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: 20,
     backgroundColor: tokens.surface.tabOff,
   },
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     marginBottom: tokens.spacing.md,
     ...boxShadow(tokens.shadow.subtle),
   },
-  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: tokens.text.primary },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: tokens.typography.labelLg, color: tokens.text.primary },
 
   sectionTitle: {
     fontFamily: font.semibold,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: tokens.spacing.tight,
     borderRadius: 20,
     paddingHorizontal: 11,
     paddingVertical: 11,
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   },
   rowLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   rowName: { flex: 1, fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: tokens.radius.pill },
+  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill },
   typeChipLabel: { fontFamily: font.medium, fontSize: 12 },
 
   swipeHint: { width: 88, alignItems: 'center', justifyContent: 'center' },

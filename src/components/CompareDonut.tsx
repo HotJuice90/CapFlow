@@ -141,6 +141,6 @@ export function CompareDonut({
 
 const styles = StyleSheet.create({
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  centerLabel: { fontSize: 24, lineHeight: 26, fontFamily: font.bold },
-  centerSub: { fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, marginTop: 2 },
+  centerLabel: { fontSize: tokens.typography.header, lineHeight: 26, fontFamily: font.bold },
+  centerSub: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, marginTop: 2 },
 });

@@ -234,7 +234,7 @@ export default function KeyRateScreen() {
         renderItem={({ item }) => <HistoryRow row={item} />}
         ItemSeparatorComponent={() => <View style={{ height: 4 }} />}
         ListHeaderComponent={ListHeader}
-        contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
+        contentContainerStyle={{ paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
         showsVerticalScrollIndicator={false}
         // История редко превышает пару экранов — держим окно шире дефолта,
         // чтобы скролл не «мигал» пустыми плашками при быстрой прокрутке.
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   refreshBtn: {
     width: 44,
     height: 44,
@@ -287,11 +287,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingHorizontal: tokens.spacing.tight,
     marginBottom: tokens.spacing.md,
   },
   cardTitle: { fontFamily: font.semibold, fontSize: 20, color: tokens.text.primary, letterSpacing: -0.2 },
-  cardSubtitle: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
+  cardSubtitle: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
 
   row: {
     flexDirection: 'row',
@@ -301,12 +301,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingLeft: 8,
     paddingRight: 12,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.tight,
     backgroundColor: tokens.surface.rowTint,
     ...boxShadow(tokens.shadow.subtle),
   },
 
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.tight, alignSelf: 'stretch' },
   iconBox: { width: 49, aspectRatio: 1, borderRadius: 18, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   iconUp: { backgroundColor: hexToRgba(TREND_UP, 0.05) },
   iconDown: { backgroundColor: hexToRgba(TREND_DOWN, 0.05) },

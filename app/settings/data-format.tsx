@@ -29,7 +29,7 @@ export default function DataFormatScreen() {
   return (
     <ScreenBackground>
       <ScrollView
-        contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
+        contentContainerStyle={{ paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -78,7 +78,7 @@ export default function DataFormatScreen() {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, marginBottom: tokens.spacing.xl },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
 
   preview: {
     borderRadius: 20,
@@ -87,5 +87,5 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.surface.rowTint,
   },
   previewValue: { fontFamily: font.semibold, fontSize: 20, color: tokens.text.primary, letterSpacing: -0.4 },
-  previewHint: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 4 },
+  previewHint: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 4 },
 });

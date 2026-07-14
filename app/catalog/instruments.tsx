@@ -98,7 +98,7 @@ export default function InstrumentsScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: 80,
+          paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + tokens.spacing.xxl,
         }}
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   addBtn: {
     width: 44,
     height: 44,
@@ -270,9 +270,9 @@ const styles = StyleSheet.create({
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.tight,
     borderRadius: 20,
     backgroundColor: tokens.surface.tabOff,
   },
@@ -286,11 +286,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: tokens.spacing.tight,
   },
   groupLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  groupName: { fontFamily: font.semibold, fontSize: 15, color: tokens.text.primary },
-  groupCount: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.35) },
+  groupName: { fontFamily: font.semibold, fontSize: tokens.typography.labelLg, color: tokens.text.primary },
+  groupCount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.35) },
 
   list: { gap: 4 },
   row: {
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   },
   typeIcon: { width: 44, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   rowName: { fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
-  rowSubtitle: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 2 },
+  rowSubtitle: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 2 },
 
   swipeHint: { width: 88, alignItems: 'center', justifyContent: 'center' },
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },

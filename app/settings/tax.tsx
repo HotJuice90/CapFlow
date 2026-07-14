@@ -23,7 +23,7 @@ export default function TaxScreen() {
   return (
     <ScreenBackground>
       <ScrollView
-        contentContainerStyle={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
+        contentContainerStyle={{ paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH, paddingBottom: insets.bottom + tokens.spacing.xl }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: tokens.spacing.xl },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, flex: 1 },
   backBtn: { width: 24 },
-  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: 24, color: tokens.text.primary, letterSpacing: -0.24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
 
   list: { gap: 8 },
   row: {
@@ -160,18 +160,18 @@ const styles = StyleSheet.create({
   },
   rowLeft: { flex: 1, paddingRight: 12 },
   rowLabel: { fontFamily: font.medium, fontSize: 16, color: tokens.text.primary },
-  rowHint: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 2 },
+  rowHint: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 2 },
   valueWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   valueInput: { fontFamily: font.semibold, fontSize: 18, color: tokens.text.primary, minWidth: 50, padding: 0 },
   suffix: { fontFamily: font.regular, fontSize: 16, color: tokens.text.tertiary },
 
   footnote: {
     fontFamily: font.regular,
-    fontSize: 12,
+    fontSize: tokens.typography.hint,
     color: hexToRgba(tokens.text.primary, 0.4),
     lineHeight: 18,
     marginTop: tokens.spacing.lg,
-    paddingHorizontal: 10,
+    paddingHorizontal: tokens.spacing.tight,
   },
 
   section: {
@@ -192,9 +192,9 @@ const styles = StyleSheet.create({
   },
   yearHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   yearLabel: { fontFamily: font.semibold, fontSize: 18, color: tokens.text.primary },
-  yearHint: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4) },
+  yearHint: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4) },
   yearStats: { flexDirection: 'row', gap: 16 },
-  statLabel: { fontFamily: font.regular, fontSize: 12, color: hexToRgba(tokens.text.primary, 0.4) },
-  statValue: { fontFamily: font.semibold, fontSize: 15, color: tokens.text.primary, marginTop: 2 },
+  statLabel: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4) },
+  statValue: { fontFamily: font.semibold, fontSize: tokens.typography.labelLg, color: tokens.text.primary, marginTop: 2 },
   statValueAccent: { color: tokens.semantic.negative },
 });

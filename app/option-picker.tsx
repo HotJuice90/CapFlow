@@ -149,8 +149,8 @@ export default function OptionPickerSheet() {
 }
 
 const s = StyleSheet.create({
-  sheet: { backgroundColor: tokens.surface.white, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
-  grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
+  sheet: { backgroundColor: tokens.surface.white, paddingHorizontal: tokens.spacing.sheet, paddingTop: 8, paddingBottom: 16 },
+  grabber: { width: 40, height: 4, borderRadius: tokens.radius.grabber, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
   title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 10 },
 
   searchRow: {
@@ -161,9 +161,9 @@ const s = StyleSheet.create({
     height: 44,
     borderRadius: tokens.radius.pill,
     backgroundColor: tokens.surface.neutral,
-    marginBottom: 10,
+    marginBottom: tokens.spacing.tight,
   },
-  searchInput: { flex: 1, fontFamily: font.regular, fontSize: 15, color: tokens.text.primary },
+  searchInput: { flex: 1, fontFamily: font.regular, fontSize: tokens.typography.labelLg, color: tokens.text.primary },
 
   // Скролл бleedит до края шита (минус паддинг шита компенсирован тут же).
   filterWrap: { marginHorizontal: -20, marginBottom: 10 },
@@ -171,7 +171,7 @@ const s = StyleSheet.create({
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.spacing.chip,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
@@ -193,5 +193,5 @@ const s = StyleSheet.create({
   sub: { fontFamily: font.regular, fontSize: 13, color: tokens.text.secondary, marginTop: 2 },
   empty: { fontFamily: font.regular, paddingVertical: 24, color: tokens.text.tertiary, textAlign: 'center' },
   createRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
-  createText: { fontFamily: font.semibold, fontSize: 15, color: tokens.accent.base },
+  createText: { fontFamily: font.semibold, fontSize: tokens.typography.labelLg, color: tokens.accent.base },
 });

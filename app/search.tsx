@@ -58,7 +58,7 @@ export default function SearchScreen() {
 
   return (
     <ScreenBackground>
-      <View style={{ paddingTop: 80, paddingHorizontal: tokens.spacing.screenH, flex: 1 }}>
+      <View style={{ paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH, flex: 1 }}>
         <View style={styles.searchBar}>
           <MaterialIcons name="search" size={22} color={tokens.text.tertiary} />
           <TextInput
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     marginBottom: tokens.spacing.lg,
     ...boxShadow(tokens.shadow.subtle),
   },
-  input: { flex: 1, fontFamily: font.regular, fontSize: 15, color: tokens.text.primary, padding: 0 },
+  input: { flex: 1, fontFamily: font.regular, fontSize: tokens.typography.labelLg, color: tokens.text.primary, padding: 0 },
   cancel: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   empty: { textAlign: 'center', color: tokens.text.tertiary, marginTop: tokens.spacing.xxl },
   group: { fontSize: tokens.typography.label, fontWeight: '600', color: tokens.text.secondary, marginBottom: tokens.spacing.sm, marginTop: tokens.spacing.md },

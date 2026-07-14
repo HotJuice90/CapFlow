@@ -184,7 +184,7 @@ export default function CalendarScreen() {
     <ScreenBackground>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: 80,
+          paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
           paddingBottom: insets.bottom + 90,
         }}
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 16 },
   stat: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
-  statLabel: { fontSize: 12, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), marginTop: 6, letterSpacing: -0.24, textAlign: 'center' },
+  statLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), marginTop: tokens.spacing.chip, letterSpacing: -0.24, textAlign: 'center' },
   statSep: { width: 1, height: 30, backgroundColor: tokens.surface.hairline },
 
   dayCard: { marginTop: tokens.spacing.lg, ...boxShadow(tokens.shadow.subtle) },
@@ -452,20 +452,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingHorizontal: 20,
+    paddingHorizontal: tokens.spacing.sheet,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: tokens.surface.hairline,
   },
-  dayHeaderDate: { fontSize: 24, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.24 },
-  dayHeaderCount: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.3), marginTop: 4, letterSpacing: -0.24 },
+  dayHeaderDate: { fontSize: tokens.typography.header, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.24 },
+  dayHeaderCount: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.3), marginTop: 4, letterSpacing: -0.24 },
   dayHeaderRight: { alignItems: 'flex-end', alignSelf: 'stretch', justifyContent: 'space-between' },
   dayHeaderAmount: { fontSize: 20, fontWeight: '700', color: tokens.semantic.positive },
-  dayHeaderSub: { fontSize: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
+  dayHeaderSub: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   negative: { color: tokens.semantic.negative },
 
   dayEmpty: { fontSize: tokens.typography.label, color: tokens.text.tertiary, padding: tokens.spacing.lg, textAlign: 'center' },
-  dayList: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  dayList: { paddingHorizontal: 16, paddingTop: tokens.spacing.tight, paddingBottom: 8 },
 
   rowWrap: { paddingVertical: 16 },
   row: { flexDirection: 'row', gap: 12 },
@@ -473,14 +473,14 @@ const styles = StyleSheet.create({
   iconFallback: { width: 44, height: 44, borderRadius: 16 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.sm },
   rowName: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
-  rowSub: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: 6, letterSpacing: -0.28 },
+  rowSub: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: tokens.spacing.chip, letterSpacing: -0.28 },
   rowAmount: { fontSize: 17, fontWeight: '600', color: '#586692', letterSpacing: -0.17 },
 
   // Полоска-баннер под строкой — показывается только в дни реальной выплаты/погашения.
   // Цвет универсальный (зелёный «рост»), не завязан на бренд-цвет банка.
   // Рамка рисуется SVG-обводкой поверх (см. EarnedStripe) — тут только контент.
   earnedStripe: {
-    marginTop: 10,
+    marginTop: tokens.spacing.tight,
     marginLeft: 56,
     borderRadius: tokens.radius.xs,
   },
@@ -488,17 +488,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingHorizontal: tokens.spacing.tight,
     paddingVertical: 7,
     borderRadius: tokens.radius.xs,
     backgroundColor: hexToRgba(tokens.semantic.positive, 0.08),
   },
   earnedStripeLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  earnedStripeText: { fontSize: 12, fontWeight: '500', color: tokens.text.secondary, letterSpacing: -0.12 },
+  earnedStripeText: { fontSize: tokens.typography.hint, fontWeight: '500', color: tokens.text.secondary, letterSpacing: -0.12 },
   earnedStripeAmount: { fontSize: 13, fontWeight: '700', letterSpacing: -0.13, color: tokens.semantic.positive },
 
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 10 },
-  pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
   pillPct: { paddingHorizontal: 8 },
   pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 
