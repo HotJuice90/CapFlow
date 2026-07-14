@@ -441,25 +441,23 @@ export default function ConverterScreen() {
       <View
         style={{ flex: 1, paddingTop: tokens.spacing.screenTop, paddingHorizontal: 16, paddingBottom: insets.bottom + 66 }}
       >
-        {/* ── Заголовок + режим: валюты / калькулятор вклада (иконки — не зависит
-            от длины слова заголовка, в отличие от текстовых пилюль) ── */}
-        <View style={s.titleRow}>
-          <ScreenTitle>Калькулятор</ScreenTitle>
-          <View style={s.modeBar}>
-            {([
-              { key: 'currency' as const, icon: 'swap-horiz' as const },
-              { key: 'deposit' as const, icon: 'savings' as const },
-            ]).map(({ key, icon }) => (
-              <Pressable
-                key={key}
-                style={[s.modeTab, mode === key && s.modeTabActive]}
-                onPress={() => { if (mode !== key) { tapBuzz(); setMode(key); } }}
-                hitSlop={4}
-              >
-                <MaterialIcons name={icon} size={20} color={mode === key ? tokens.text.inverse : hexToRgba(tokens.text.primary, 0.5)} />
-              </Pressable>
-            ))}
-          </View>
+        <ScreenTitle>Калькулятор</ScreenTitle>
+
+        {/* ── Режим: валюты / вклад — на всю ширину, текстом (иконки-кружки
+            терялись на фоне карточек, тут акцент виден однозначно) ── */}
+        <View style={s.modeBar}>
+          {([
+            { key: 'currency' as const, label: 'Валюты' },
+            { key: 'deposit' as const, label: 'Вклад' },
+          ]).map(({ key, label }) => (
+            <Pressable
+              key={key}
+              style={[s.modeTab, mode === key && s.modeTabActive]}
+              onPress={() => { if (mode !== key) { tapBuzz(); setMode(key); } }}
+            >
+              <Text style={[s.modeTabText, mode === key && s.modeTabTextActive]}>{label}</Text>
+            </Pressable>
+          ))}
         </View>
 
         {mode === 'currency' ? (
@@ -607,6 +605,13 @@ export default function ConverterScreen() {
                 placeholderTextColor={D.placeholder}
                 selectionColor={D.resetBg}
               />
+            </View>
+
+            <View style={s.divider} />
+
+            <View style={s.col}>
+              <Text style={s.depColLabel}>Срок</Text>
+              <Text style={s.colInput}>{DEP_PERIODS.find((p) => p.days === depDays)?.label ?? `${depDays} дн.`}</Text>
             </View>
           </View>
         </View>
@@ -790,16 +795,20 @@ const s = StyleSheet.create({
   },
   loadHistBtnText: { color: tokens.text.inverse, fontFamily: 'Onest_700Bold', fontSize: 14 },
 
-  // ── Заголовок + переключатель режима (Валюты / Вклад), в один ряд ──
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // ── Переключатель режима (Валюты / Вклад) — на всю ширину, под заголовком ──
   modeBar: {
-    flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill, padding: 2, gap: 2,
+    flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill,
+    padding: 2, gap: 2, marginBottom: tokens.spacing.lg,
   },
   modeTab: {
-    width: 36, height: 36, borderRadius: tokens.radius.pill,
+    flex: 1, paddingVertical: 10, borderRadius: tokens.radius.pill,
     alignItems: 'center', justifyContent: 'center',
   },
   modeTabActive: { backgroundColor: tokens.accent.base },
+  modeTabText: {
+    fontSize: 14, fontFamily: 'Onest_500Medium', color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.28,
+  },
+  modeTabTextActive: { color: tokens.text.inverse, fontFamily: 'Onest_600SemiBold' },
 
   // ── Калькулятор вклада ──
   depCurrencyStatic: { fontSize: tokens.typography.title, fontFamily: 'Onest_600SemiBold', color: D.sourceLabel },
