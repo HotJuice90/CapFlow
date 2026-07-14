@@ -564,13 +564,13 @@ const s = StyleSheet.create({
   resetBtn: {
     position: 'absolute', right: 0,
     backgroundColor: D.resetBg, borderWidth: 6, borderColor: D.resetBorder,
-    borderRadius: tokens.radius.pillSmall, padding: 8, zIndex: 10,
+    borderRadius: tokens.radius.pill, padding: 8, zIndex: 10,
   },
 
   // Чип валюты
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip,
-    backgroundColor: D.chipBg, borderRadius: tokens.radius.pillSmall,
+    backgroundColor: D.chipBg, borderRadius: tokens.radius.pill,
     paddingLeft: 4, paddingRight: 8, paddingVertical: 4, alignSelf: 'flex-start',
   },
   pillLg: { gap: 8 },
@@ -598,9 +598,9 @@ const s = StyleSheet.create({
   // Пилюля — тот же размер, что раньше вмещал ровно 4 валюты; остальные скроллятся внутри неё.
   // overflow:hidden именно на этой обёртке — иначе скролл обрезает контент прямоугольно,
   // а не по скруглению пилюли.
-  tabBarClip: { width: 204, borderRadius: tokens.radius.pillSmall, overflow: 'hidden' },
+  tabBarClip: { width: 204, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, padding: 1 },
-  tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pillSmall },
+  tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pill },
   tabActive: { backgroundColor: D.tabActiveBg },
   tabText: {
     fontSize: 14, fontFamily: 'Onest_500Medium', textTransform: 'uppercase',
@@ -609,7 +609,7 @@ const s = StyleSheet.create({
   tabTextActive: { color: tokens.text.inverse },
   bigRate: { fontSize: tokens.typography.header, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: D.bigRate, flexShrink: 0 },
   badge: {
-    borderRadius: tokens.radius.pillSmall, padding: 8, gap: tokens.spacing.tight,
+    borderRadius: tokens.radius.pill, padding: 8, gap: tokens.spacing.tight,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
   },
   badgeText: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', letterSpacing: -0.14 },
@@ -623,7 +623,7 @@ const s = StyleSheet.create({
   },
   loadHistBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: D.resetBg, borderRadius: tokens.radius.pillSmall, paddingHorizontal: tokens.spacing.sheet, paddingVertical: 12,
+    backgroundColor: D.resetBg, borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.sheet, paddingVertical: 12,
   },
   loadHistBtnText: { color: tokens.text.inverse, fontFamily: 'Onest_700Bold', fontSize: 14 },
 });
