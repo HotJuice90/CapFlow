@@ -441,21 +441,22 @@ export default function ConverterScreen() {
       <View
         style={{ flex: 1, paddingTop: tokens.spacing.screenTop, paddingHorizontal: 16, paddingBottom: insets.bottom + 66 }}
       >
-        <ScreenTitle>Конвертер</ScreenTitle>
-
-        {/* ── Режим: валюты / калькулятор вклада ── */}
-        <View style={s.modeBar}>
-          {(['currency', 'deposit'] as const).map((m) => (
-            <Pressable
-              key={m}
-              style={[s.modeTab, mode === m && s.modeTabActive]}
-              onPress={() => { if (mode !== m) { tapBuzz(); setMode(m); } }}
-            >
-              <Text style={[s.modeTabText, mode === m && s.modeTabTextActive]}>
-                {m === 'currency' ? 'Валюты' : 'Вклад'}
-              </Text>
-            </Pressable>
-          ))}
+        {/* ── Заголовок + режим: валюты / калькулятор вклада ── */}
+        <View style={s.titleRow}>
+          <ScreenTitle>Калькулятор</ScreenTitle>
+          <View style={s.modeBar}>
+            {(['currency', 'deposit'] as const).map((m) => (
+              <Pressable
+                key={m}
+                style={[s.modeTab, mode === m && s.modeTabActive]}
+                onPress={() => { if (mode !== m) { tapBuzz(); setMode(m); } }}
+              >
+                <Text style={[s.modeTabText, mode === m && s.modeTabTextActive]}>
+                  {m === 'currency' ? 'Валюты' : 'Вклад'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {mode === 'currency' ? (
@@ -786,12 +787,12 @@ const s = StyleSheet.create({
   },
   loadHistBtnText: { color: tokens.text.inverse, fontFamily: 'Onest_700Bold', fontSize: 14 },
 
-  // ── Переключатель режима (Валюты / Вклад) ──
+  // ── Заголовок + переключатель режима (Валюты / Вклад), в один ряд ──
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   modeBar: {
-    flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill,
-    padding: 1, marginBottom: tokens.spacing.lg, alignSelf: 'flex-start',
+    flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill, padding: 1,
   },
-  modeTab: { paddingHorizontal: tokens.spacing.xl, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill },
+  modeTab: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill },
   modeTabActive: { backgroundColor: tokens.surface.white, boxShadow: '0px 2px 6px rgba(48,69,62,0.08)' },
   modeTabText: { fontSize: tokens.typography.label, fontFamily: 'Onest_500Medium', color: hexToRgba(tokens.text.primary, 0.5) },
   modeTabTextActive: { color: tokens.text.primary, fontFamily: 'Onest_600SemiBold' },
