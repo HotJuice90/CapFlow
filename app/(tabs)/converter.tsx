@@ -25,7 +25,7 @@ import { useData } from '@/state/DataContext';
 import { analyticsSummary } from '@/state/selectors';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
-import { CURRENCY_SYMBOL, formatMoney, formatPercent } from '@/format';
+import { CURRENCY_SYMBOL, formatMoney } from '@/format';
 import { timeAgo } from '@/format/date';
 import { calcTax } from '@/calc';
 import { tapBuzz } from '@/lib/haptics';
@@ -79,6 +79,10 @@ const DEP_PERIODS: { label: string; days: number }[] = [
   { label: '3 мес', days: 91 },
   { label: '6 мес', days: 182 },
   { label: '1 год', days: 365 },
+];
+const DEP_MODES: { key: 'simple' | 'compound'; label: string }[] = [
+  { key: 'simple', label: 'Простой %' },
+  { key: 'compound', label: 'Капитализация' },
 ];
 
 type Slots = [CurrencyCode, CurrencyCode, CurrencyCode];
@@ -252,6 +256,7 @@ export default function ConverterScreen() {
   const [depAmountText, setDepAmountText] = useState('100000');
   const [depRateText, setDepRateText] = useState(() => String(data.params.keyRate).replace('.', ','));
   const [depDays, setDepDays] = useState(30);
+  const [depMode, setDepMode] = useState<'simple' | 'compound'>('simple');
 
   const refs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
   const rates = data.rates as Record<CurrencyCode, number>;
@@ -403,15 +408,16 @@ export default function ConverterScreen() {
   const rateLabel = (c: CurrencyCode) =>
     `1 ${CURRENCY_SYMBOL[c]} = ${displayAmount(rates[c] ?? 0)} ${CURRENCY_SYMBOL.RUB}`;
 
-  // ── Калькулятор вклада: простой % (без капитализации — это прикидка, не
-  // расчёт конкретного продукта), налог честный — с учётом реально уже
-  // занятого лимита текущим портфелем (не с нуля).
+  // ── Калькулятор вклада: это прикидка, не расчёт конкретного продукта —
+  // капитализация приближённая (ежедневная), налог честный — с учётом реально
+  // уже занятого лимита текущим портфелем (не с нуля).
   const depAmount = parseRaw(depAmountText);
   const depRate = parseRaw(depRateText);
-  const depGross = depAmount * (depRate / 100) * (depDays / 365);
+  const depGross = depMode === 'compound'
+    ? depAmount * (Math.pow(1 + depRate / 100 / 365, depDays) - 1)
+    : depAmount * (depRate / 100) * (depDays / 365);
   const depLimitUsed = useMemo(() => analyticsSummary(data).selfAccrued, [data]);
   const depTax = calcTax(depGross, data.params, depLimitUsed);
-  const depNet = depGross - depTax;
 
   // Поле ввода (используется и для верхней карточки, и для нижних столбцов)
   const AmountInput = (idx: number, big: boolean) => (
@@ -629,69 +635,30 @@ export default function ConverterScreen() {
           ))}
         </View>
 
-        {/* ── Прогноз — та же карточка «доход/налог/чисто», что на детали актива ── */}
+        {/* ── Начисление — простой % или капитализация ── */}
+        <View style={s.depPeriodRow}>
+          {DEP_MODES.map((m) => (
+            <Pressable
+              key={m.key}
+              style={[s.depPeriodChip, depMode === m.key && s.depPeriodChipActive]}
+              onPress={() => { tapBuzz(); setDepMode(m.key); }}
+            >
+              <Text style={[s.depPeriodChipText, depMode === m.key && s.depPeriodChipTextActive]}>{m.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* ── Результат — один явный акцент (доход), налог доп. инфой ниже ── */}
         <View style={s.depResultCard}>
-          <Text style={s.histTitle}>Прогноз</Text>
-          <View style={s.depResultRow}>
-            <DepCol
-              icon="trending-up"
-              iconColor="#586692"
-              iconBg={tokens.accent.soft}
-              label="Доход"
-              value={formatMoney(Math.max(0, depGross), { currency: 'RUB', kopecks: 'hide' })}
-            />
-            <View style={s.depResultSep} />
-            <DepCol
-              icon="percent"
-              iconColor="#C11818"
-              iconBg={hexToRgba(tokens.semantic.negative, 0.12)}
-              label="Налог"
-              value={formatMoney(Math.max(0, depTax), { currency: 'RUB', kopecks: 'hide' })}
-            />
-            <View style={s.depResultSep} />
-            <DepCol
-              icon="account-balance-wallet"
-              iconColor={tokens.semantic.positive}
-              iconBg={hexToRgba(tokens.semantic.positive, 0.12)}
-              label="Чистыми"
-              value={formatMoney(Math.max(0, depNet), { currency: 'RUB', kopecks: 'hide' })}
-              valueColor={tokens.semantic.positive}
-            />
-          </View>
-          <Text style={s.depResultHint}>
-            {depAmount > 0 && depRate > 0
-              ? `${formatMoney(depAmount, { currency: 'RUB', kopecks: 'hide' })} под ${formatPercent(depRate, 1)} на ${DEP_PERIODS.find((p) => p.days === depDays)?.label ?? `${depDays} дн.`}`
-              : 'Заполните сумму и ставку'}
+          <Text style={s.depResultLabel}>Доход за срок</Text>
+          <Text style={s.depResultValue}>{formatMoney(Math.max(0, depGross), { currency: 'RUB', kopecks: 'hide' })}</Text>
+          <Text style={s.depResultTaxHint}>
+            {depTax > 0 ? `Возможный налог: ${formatMoney(depTax, { currency: 'RUB', kopecks: 'hide' })}` : 'Налог: не облагается'}
           </Text>
         </View>
         </>
         )}
       </View>
-    </View>
-  );
-}
-
-function DepCol({
-  icon, iconColor, iconBg, label, value, valueColor,
-}: {
-  icon: keyof typeof MaterialIcons.glyphMap;
-  iconColor: string;
-  iconBg: string;
-  label: string;
-  value: string;
-  valueColor?: string;
-}) {
-  return (
-    <View style={s.depCol}>
-      <View style={s.depColHead}>
-        <View style={[s.depColIcon, { backgroundColor: iconBg }]}>
-          <MaterialIcons name={icon} size={13} color={iconColor} />
-        </View>
-        <Text style={s.depColHeadLabel} numberOfLines={1}>{label}</Text>
-      </View>
-      <Text style={[s.depColValue, valueColor ? { color: valueColor } : null]} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
     </View>
   );
 }
@@ -818,16 +785,13 @@ const s = StyleSheet.create({
   depPeriodChipActive: { backgroundColor: tokens.accent.light },
   depPeriodChipText: { fontSize: 13, fontFamily: 'Onest_500Medium', color: tokens.text.secondary },
   depPeriodChipTextActive: { color: tokens.text.inverse, fontFamily: 'Onest_600SemiBold' },
+  // Полупрозрачная плашка (как строки в «Настройках» — tokens.surface.rowTint),
+  // не карточка-бенто: один явный акцент (доход), налог — доп. инфа мельче под ним.
   depResultCard: {
-    backgroundColor: tokens.surface.white, borderRadius: 20, padding: tokens.spacing.sheet,
-    marginTop: tokens.spacing.xl, boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
+    backgroundColor: tokens.surface.rowTint, borderRadius: 20, padding: tokens.spacing.sheet,
+    marginTop: tokens.spacing.md, boxShadow: '0px 4px 14px rgba(48,69,62,0.05)',
   },
-  depResultRow: { flexDirection: 'row', alignItems: 'stretch', marginTop: tokens.spacing.md },
-  depResultSep: { width: 1, backgroundColor: D.divider, marginHorizontal: tokens.spacing.md },
-  depCol: { flex: 1, minWidth: 0 },
-  depColHead: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip, marginBottom: tokens.spacing.chip },
-  depColIcon: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  depColHeadLabel: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, flexShrink: 1 },
-  depColValue: { fontSize: 17, lineHeight: 17, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.34, marginTop: tokens.spacing.chip },
-  depResultHint: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), marginTop: tokens.spacing.md, letterSpacing: -0.24 },
+  depResultLabel: { fontSize: 14, fontFamily: 'Onest_500Medium', color: D.sourceLabel },
+  depResultValue: { fontSize: 32, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.64, marginTop: 4 },
+  depResultTaxHint: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), marginTop: tokens.spacing.chip, letterSpacing: -0.24 },
 });
