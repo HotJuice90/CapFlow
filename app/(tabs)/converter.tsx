@@ -31,6 +31,9 @@ import { Flag } from '@/components/Flag';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { ScreenTitle } from '@/components/ScreenTitle';
 import { Toggle } from '@/components/Toggle';
+import WalletAddIcon from '../../assets/icons/converter/wallet-add.svg';
+import ArrowDownIcon from '../../assets/icons/converter/arrow-down.svg';
+import RotateLeftIcon from '../../assets/icons/converter/rotate-left.svg';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -219,7 +222,7 @@ function CurrencyPill({ currency, large = false, editable = true, onPress }: {
       <Flag code={currency} size={large ? 32 : 28} />
       <Text style={[s.pillCode, large && s.pillCodeLg]}>{currency}</Text>
       {editable ? (
-        <MaterialIcons name="keyboard-arrow-down" size={large ? 14 : 12} color={hexToRgba(tokens.text.primary, 0.45)} />
+        <ArrowDownIcon width={12} height={12} color={tokens.text.tertiary} />
       ) : null}
     </Pressable>
   );
@@ -336,6 +339,11 @@ export default function ConverterScreen() {
     tapBuzz();
     setAmountText('');
     setActiveIdx(0);
+  };
+
+  const resetDeposit = () => {
+    tapBuzz();
+    setDepAmountText('');
   };
 
   const openPicker = (slotIdx: number) => {
@@ -510,7 +518,7 @@ export default function ConverterScreen() {
 
           {/* Кнопка сброса показаний */}
           <Pressable style={[s.resetBtn, { top: topCardH - 22 }]} onPress={resetAmounts} hitSlop={8}>
-            <MaterialIcons name="close" size={20} color={tokens.text.inverse} />
+            <RotateLeftIcon width={20} height={20} color={tokens.text.inverse} />
           </Pressable>
         </View>
 
@@ -591,7 +599,7 @@ export default function ConverterScreen() {
         <>
         {/* ── Калькулятор вклада ── */}
         <View style={s.cardsBlock}>
-          <View style={s.topCard}>
+          <View style={s.topCard} onLayout={(e) => setTopCardH(e.nativeEvent.layout.height)}>
             <View style={s.topLeft}>
               <Text style={s.topLabel}>Сумма</Text>
               <TextInput
@@ -606,6 +614,11 @@ export default function ConverterScreen() {
             </View>
             <Text style={s.depCurrencyStatic}>{CURRENCY_SYMBOL.RUB}</Text>
           </View>
+
+          {/* Кнопка сброса — тот же rotate-left, что у валют */}
+          <Pressable style={[s.resetBtn, { top: topCardH - 22 }]} onPress={resetDeposit} hitSlop={8}>
+            <RotateLeftIcon width={20} height={20} color={tokens.text.inverse} />
+          </Pressable>
 
           <View style={s.bottomCard}>
             <View style={s.col}>
@@ -661,14 +674,18 @@ export default function ConverterScreen() {
           <Text style={s.depResultTitle}>Доход за срок</Text>
           <View style={s.depCapRow}>
             <Text style={s.depCapLabel}>Капит.</Text>
-            <Toggle value={depMode === 'compound'} onChange={(v) => { tapBuzz(); setDepMode(v ? 'compound' : 'simple'); }} />
+            <Toggle
+              value={depMode === 'compound'}
+              onChange={(v) => { tapBuzz(); setDepMode(v ? 'compound' : 'simple'); }}
+              offColor={tokens.surface.tabOff}
+            />
           </View>
         </View>
 
         {/* ── Результат — полупрозрачная строка (как в «Настройках»), налог доп. инфой ── */}
         <View style={s.depResultCard}>
           <View style={s.depResultIcon}>
-            <MaterialIcons name="savings" size={22} color={tokens.semantic.positive} />
+            <WalletAddIcon width={22} height={22} color={tokens.semantic.positive} />
           </View>
           <View style={s.depResultRight}>
             <Text style={s.depResultValue}>{formatMoney(Math.max(0, depGross), { currency: 'RUB', kopecks: 'hide' })}</Text>
