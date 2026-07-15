@@ -778,7 +778,7 @@ const s = StyleSheet.create({
   tab: { paddingHorizontal: tokens.spacing.tight, paddingVertical: 8, borderRadius: tokens.radius.pill },
   tabActive: { backgroundColor: D.tabActiveBg },
   tabText: {
-    fontSize: 14, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: tokens.text.tertiary,
+    fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: tokens.text.tertiary,
   },
   tabTextActive: { color: tokens.text.inverse },
   bigRate: { fontSize: tokens.typography.header, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24, flexShrink: 0 },
@@ -808,12 +808,15 @@ const s = StyleSheet.create({
     flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill,
     marginBottom: tokens.spacing.lg,
   },
+  // Высота бара в Figma зафиксирована (42px) — держим её явно, а не через
+  // paddingVertical+lineHeight, иначе нативный lineHeight Onest (заметно
+  // больше fontSize без explicit override) даёт непредсказуемую высоту.
   modeTab: {
-    flex: 1, paddingVertical: 12, borderRadius: tokens.radius.pill,
+    flex: 1, height: 42, borderRadius: tokens.radius.pill,
     alignItems: 'center', justifyContent: 'center',
   },
   modeTabActive: { backgroundColor: tokens.accent.base },
-  modeTabText: { fontSize: 14, fontFamily: 'Onest_500Medium', color: tokens.accent.base },
+  modeTabText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.accent.base },
   modeTabTextActive: { color: tokens.text.inverse, fontFamily: 'Onest_600SemiBold' },
 
   // ── Калькулятор вклада ──
