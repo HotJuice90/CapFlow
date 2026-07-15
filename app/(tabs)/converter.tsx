@@ -715,9 +715,9 @@ const s = StyleSheet.create({
   },
   topCardTight: { borderRadius: tokens.radius.md },
   topLeft: { flex: 1, gap: 16, paddingRight: 12 },
-  topLabel: { fontSize: 14, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
+  topLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
   bigInput: {
-    fontSize: tokens.typography.display, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
+    fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
     letterSpacing: -0.34, padding: 0,
   },
 
@@ -729,11 +729,11 @@ const s = StyleSheet.create({
   },
   col: { flex: 1, gap: 14 },
   colInput: {
-    fontSize: 26, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
+    fontSize: 26, lineHeight: 28, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
     letterSpacing: -0.52, padding: 0,
   },
   divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
-  rateHint: { fontSize: 14, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
+  rateHint: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
 
   // Кнопка сброса
   resetBtn: {
@@ -750,10 +750,10 @@ const s = StyleSheet.create({
   },
   pillLg: { gap: 8 },
   pillCode: {
-    fontSize: 14, fontFamily: 'Onest_500Medium', color: tokens.text.primary,
+    fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.primary,
     textTransform: 'uppercase', letterSpacing: -0.56,
   },
-  pillCodeLg: { fontSize: 16, letterSpacing: -0.64 },
+  pillCodeLg: { fontSize: 16, lineHeight: 18, letterSpacing: -0.64 },
 
   // Строка обновления
   footerRow: {
@@ -761,15 +761,15 @@ const s = StyleSheet.create({
     paddingHorizontal: tokens.spacing.tight, marginTop: tokens.spacing.tight,
   },
   footerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  updatedText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
+  updatedText: { fontSize: 13, lineHeight: 15, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
 
   // История
   histSection: { marginTop: 40, flex: 1 },
-  histTitle: { fontSize: tokens.typography.header, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.24, marginBottom: 12 },
+  histTitle: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.24, marginBottom: 12 },
   histHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   periodToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: tokens.spacing.tight, paddingVertical: 4 },
-  periodToggleText: { fontSize: 13, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
+  periodToggleText: { fontSize: 13, lineHeight: 15, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
   // Пилюля — тот же размер, что раньше вмещал ровно 4 валюты; остальные скроллятся внутри неё.
   // overflow:hidden именно на этой обёртке — иначе скролл обрезает контент прямоугольно,
   // а не по скруглению пилюли.
@@ -781,12 +781,12 @@ const s = StyleSheet.create({
     fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: tokens.text.tertiary,
   },
   tabTextActive: { color: tokens.text.inverse },
-  bigRate: { fontSize: tokens.typography.header, lineHeight: 24, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24, flexShrink: 0 },
+  bigRate: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24, flexShrink: 0 },
   badge: {
     borderRadius: tokens.radius.pill, padding: 8, gap: tokens.spacing.tight,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
   },
-  badgeText: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', letterSpacing: -0.14 },
+  badgeText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', letterSpacing: -0.14 },
 
   // График
   chartWrap: { marginTop: 0, overflow: 'hidden', flex: 1 },
@@ -820,18 +820,18 @@ const s = StyleSheet.create({
   modeTabTextActive: { color: tokens.text.inverse, fontFamily: 'Onest_600SemiBold' },
 
   // ── Калькулятор вклада ──
-  depCurrencyStatic: { fontSize: tokens.typography.header, fontFamily: 'Onest_600SemiBold', color: tokens.text.tertiary, letterSpacing: -0.24 },
-  depColLabel: { fontSize: 14, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
+  depCurrencyStatic: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.tertiary, letterSpacing: -0.24 },
+  depColLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
   depColGroup: { gap: tokens.spacing.lg },
   // Быстрые пресеты под ставкой/сроком — мелкие чипы, скроллятся, если не влезли.
   depChipsRow: { flexDirection: 'row', gap: 2 },
   depChip: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral },
-  depChipText: { fontSize: tokens.typography.micro, fontFamily: 'Onest_400Regular', color: tokens.text.secondary },
+  depChipText: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: 'Onest_400Regular', color: tokens.text.secondary },
 
   depResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: tokens.spacing.tight, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.lg },
-  depResultTitle: { fontSize: tokens.typography.header, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.48 },
+  depResultTitle: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.48 },
   depCapRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  depCapLabel: { fontSize: 14, fontFamily: 'Onest_500Medium', color: tokens.text.secondary },
+  depCapLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.secondary },
 
   // Полупрозрачная строка (как в «Настройках» — tokens.surface.rowTint), не
   // карточка-бенто: иконка слева, один явный акцент (доход) + налог доп. инфой справа.
@@ -846,6 +846,6 @@ const s = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.semantic.positive, 0.05),
   },
   depResultRight: { alignItems: 'flex-end', gap: tokens.spacing.chip },
-  depResultValue: { fontSize: tokens.typography.header, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24 },
-  depResultTaxHint: { fontSize: 13, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
+  depResultValue: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24 },
+  depResultTaxHint: { fontSize: 13, lineHeight: 15, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
 });
