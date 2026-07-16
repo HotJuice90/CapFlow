@@ -302,15 +302,16 @@ export default function AnalyticsScreen() {
               </View>
             </View>
 
-            {/* По инструментам — «сосуды» с жидкостью по типу (перекликается с
+            {/* Состав портфеля — «сосуды» с жидкостью по типу (перекликается с
                 бокалом в «Можно разместить» ниже): компактно в ряд, при
                 добавлении новых типов колонки просто станут уже, а не
                 растянут карточку по высоте. */}
-            <Text style={[styles.section, { marginTop: tokens.spacing.xxl + tokens.spacing.lg }]}>По инструментам</Text>
+            <Text style={[styles.section, { marginTop: tokens.spacing.xxl + tokens.spacing.lg }]}>Состав портфеля</Text>
             <Card>
               <View style={styles.vesselRow}>
                 {byType.groups.map((g) => (
                   <View key={g.key} style={styles.vesselCol}>
+                    <Text style={styles.vesselLabel} numberOfLines={2}>{g.label}</Text>
                     <View style={styles.vessel}>
                       <LinearGradient
                         colors={[hexToRgba(g.color, 0.55), g.color]}
@@ -322,7 +323,6 @@ export default function AnalyticsScreen() {
                       <MaterialIcons name={typeIcon(g.key)} size={26} color={hexToRgba(g.color, 0.4)} />
                     </View>
                     <Text style={styles.vesselPct}>{Math.round(g.share * 100)}%</Text>
-                    <Text style={styles.vesselLabel} numberOfLines={2}>{g.label}</Text>
                   </View>
                 ))}
               </View>
@@ -739,8 +739,8 @@ const styles = StyleSheet.create({
   heroRateDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   heroRateArrow: { fontSize: 10 },
   heroRateDeltaText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: tokens.text.tertiary },
-  vesselRow: { flexDirection: 'row', gap: 10 },
-  vesselCol: { flex: 1, alignItems: 'center' },
+  vesselRow: { flexDirection: 'row', gap: 4 },
+  vesselCol: { flex: 1, alignItems: 'center', gap: 12 },
   vessel: {
     width: '100%',
     height: 76,
@@ -760,8 +760,8 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.surface.white, 0.25),
     transform: [{ rotate: '-18deg' }],
   },
-  vesselPct: { fontSize: tokens.typography.labelLg, lineHeight: 17, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 8 },
-  vesselLabel: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.22, textAlign: 'center', marginTop: 2 },
+  vesselPct: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
+  vesselLabel: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: tokens.text.tertiary, textAlign: 'center' },
   orgCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
