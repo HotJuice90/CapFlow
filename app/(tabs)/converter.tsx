@@ -728,7 +728,7 @@ const s = StyleSheet.create({
   bigInput: {
     fontSize: tokens.typography.display, lineHeight: tokens.typography.display, height: tokens.typography.display,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.34, padding: 0, textAlignVertical: 'center',
+    letterSpacing: -0.34, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
   },
 
   // Нижняя карточка (2 столбца + дивайдер). col: gap между чипом валюты и
@@ -744,7 +744,7 @@ const s = StyleSheet.create({
   colInput: {
     fontSize: 26, lineHeight: 26, height: 26,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.52, padding: 0, textAlignVertical: 'center',
+    letterSpacing: -0.52, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
   },
   divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
   rateHint: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
