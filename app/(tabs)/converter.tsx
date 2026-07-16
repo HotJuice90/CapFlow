@@ -180,10 +180,12 @@ function AreaChart({ data, width, height }: { data: number[]; width: number; hei
   const dataMin = Math.min(...data);
   const dataMax = Math.max(...data);
   const span = (dataMax - dataMin) || 1;
-  // Воздух сверху и снизу: данные занимают ~70% высоты — колебания пологие, не пики.
-  const headroom = span * 0.21;
-  const lo = dataMin - headroom;
-  const range = span + headroom * 2;
+  // Воздух снизу больше, чем сверху — график подтянут ближе к цифрам над ним,
+  // а не висит по центру блока.
+  const topHeadroom = span * 0.08;
+  const bottomHeadroom = span * 0.21;
+  const lo = dataMin - bottomHeadroom;
+  const range = span + topHeadroom + bottomHeadroom;
   const pad = 7;
 
   const pts = data.map((v, i) => ({
@@ -690,9 +692,9 @@ export default function ConverterScreen() {
             <WalletAddIcon width={22} height={22} color={tokens.semantic.positive} />
           </View>
           <View style={s.depResultRight}>
-            <Text style={s.depResultValue}>{formatMoney(Math.max(0, depGross), { currency: 'RUB', kopecks: 'hide' })}</Text>
+            <Text style={s.depResultValue}>{formatMoney(Math.max(0, depGross), { currency: 'RUB' })}</Text>
             <Text style={s.depResultTaxHint}>
-              {depTax > 0 ? `Возможный налог: ${formatMoney(depTax, { currency: 'RUB', kopecks: 'hide' })}` : 'Налог: не облагается'}
+              {depTax > 0 ? `Возможный налог: ${formatMoney(depTax, { currency: 'RUB' })}` : 'Налог: не облагается'}
             </Text>
           </View>
         </View>
@@ -784,10 +786,14 @@ const s = StyleSheet.create({
   // а не по скруглению пилюли.
   tabBarClip: { width: 204, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, padding: 1 },
-  tab: { paddingHorizontal: tokens.spacing.tight, paddingVertical: 8, borderRadius: tokens.radius.pill },
+  tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pill },
   tabActive: { backgroundColor: D.tabActiveBg },
+  // letterSpacing -0.56 — не декоративный, а часть расчёта ширины: tabBarClip
+  // (204px) откалиброван ровно под 4 валюты с этим трекингом, без него текст
+  // шире и «хвост» пятой валюты вылезает из-под обрезки.
   tabText: {
-    fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: tokens.text.tertiary,
+    fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase',
+    letterSpacing: -0.56, color: tokens.text.tertiary,
   },
   tabTextActive: { color: tokens.text.inverse },
   bigRate: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24, flexShrink: 0 },
