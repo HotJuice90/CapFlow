@@ -28,7 +28,6 @@ import {
   avgLockDuration,
   taxByInstrument,
   taxByOrganization,
-  type DistGroup,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned, pluralDays } from '@/format';
@@ -73,26 +72,6 @@ export default function AnalyticsScreen() {
   const [insightSeed] = useState(() => Math.random());
   const activeInsight = ins.length > 0 ? ins[Math.floor(insightSeed * ins.length)] : undefined;
   const byType = useMemo(() => distributionByType(data), [data]);
-  // Максимум 4 карточки в «Составе портфеля» — если типов больше, самые
-  // мелкие по капиталу схлопываем в одну «Другие» (сохраняя топ-3).
-  const typeGroups = useMemo<DistGroup[]>(() => {
-    const groups = byType.groups;
-    if (groups.length <= 4) return groups;
-    const head = groups.slice(0, 3);
-    const tail = groups.slice(3);
-    const other: DistGroup = {
-      key: 'other',
-      label: 'Другие',
-      color: tokens.text.tertiary,
-      capital: tail.reduce((sum, g) => sum + g.capital, 0),
-      incomePerDay: tail.reduce((sum, g) => sum + g.incomePerDay, 0),
-      incomePerMonth: tail.reduce((sum, g) => sum + g.incomePerMonth, 0),
-      avgRate: 0,
-      share: tail.reduce((sum, g) => sum + g.share, 0),
-      count: tail.reduce((sum, g) => sum + g.count, 0),
-    };
-    return [...head, other];
-  }, [byType.groups]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const heroDays = HERO_PERIODS.find((p) => p.key === heroPeriod)!.days;
   const capSeries = useMemo(() => capitalHistorySeries(data, heroDays), [data, heroDays]);
@@ -324,13 +303,13 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* Состав портфеля — «сосуды» с жидкостью по типу (перекликается с
-                бокалом в «Можно разместить» ниже): компактно в ряд, при
-                добавлении новых типов колонки просто станут уже, а не
-                растянут карточку по высоте. */}
+                бокалом в «Можно разместить» ниже). Ширина колонки зафиксирована
+                (107 — минимум из Figma, рассчитан под 3 карточки в ряд), при
+                4+ типах лишнее уезжает в горизонтальный скролл, а не сжимается. */}
             <Text style={[styles.section, { marginTop: tokens.spacing.xxl + tokens.spacing.lg }]}>Состав портфеля</Text>
             <Card>
-              <View style={styles.vesselRow}>
-                {typeGroups.map((g) => (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.vesselRow}>
+                {byType.groups.map((g) => (
                   <View key={g.key} style={styles.vesselCol}>
                     <Text style={styles.vesselLabel} numberOfLines={2}>{VESSEL_LABEL[g.key] ?? g.label}</Text>
                     <View style={styles.vessel}>
@@ -346,7 +325,7 @@ export default function AnalyticsScreen() {
                     <Text style={styles.vesselPct}>{Math.round(g.share * 100)}%</Text>
                   </View>
                 ))}
-              </View>
+              </ScrollView>
             </Card>
 
             {/* Размещение капитала — строки по площадкам + единая пропорциональная полоса */}
@@ -767,8 +746,10 @@ const styles = StyleSheet.create({
   heroRateDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   heroRateArrow: { fontSize: 10 },
   heroRateDeltaText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: tokens.text.tertiary },
-  vesselRow: { flexDirection: 'row', gap: 4 },
-  vesselCol: { flex: 1, alignItems: 'center', gap: 12 },
+  vesselRow: { flexDirection: 'row', gap: 4, width: '100%' },
+  // Фикс. ширина (107 — минимум из Figma, под 3 карточки в строке без сжатия);
+  // если карточек 3 или меньше — flexGrow растягивает их вместе на всю ширину.
+  vesselCol: { width: 107, flexGrow: 1, alignItems: 'center', gap: 12 },
   vessel: {
     width: '100%',
     height: 76,
