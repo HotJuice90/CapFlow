@@ -123,6 +123,16 @@ function parseRaw(text: string): number {
   return parseFloat(text.replace(/\s/g, '').replace(',', '.')) || 0;
 }
 
+/** Живая группировка тысяч прямо во время ввода (целую часть — по 3 цифры),
+ *  дробную часть после запятой/точки не трогаем. */
+function groupWhileTyping(text: string): string {
+  const sepIdx = text.search(/[.,]/);
+  const intPart = (sepIdx === -1 ? text : text.slice(0, sepIdx)).replace(/\s/g, '');
+  const rest = sepIdx === -1 ? '' : text.slice(sepIdx);
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return grouped + rest;
+}
+
 /** Не даём выбрать одинаковые валюты: конфликтный слот получает первую свободную. */
 function resolveDuplicates(next: Slots, changedIdx: number): Slots {
   for (let j = 0; j < 3; j++) {
@@ -327,13 +337,13 @@ export default function ConverterScreen() {
 
   const handleChange = (idx: number, text: string) => {
     if (idx !== activeIdx) setActiveIdx(idx);
-    setAmountText(text.replace(/[^\d.,]/g, ''));
+    setAmountText(groupWhileTyping(text.replace(/[^\d.,]/g, '')));
   };
 
   const handleFocus = (idx: number) => {
     if (idx === activeIdx) return;
     // переносим текущее значение в фокусируемое поле (в его валюте)
-    setAmountText(toEditable(valueFor(idx)));
+    setAmountText(groupWhileTyping(toEditable(valueFor(idx))));
     setActiveIdx(idx);
   };
 
@@ -609,7 +619,7 @@ export default function ConverterScreen() {
               <TextInput
                 style={s.bigInput}
                 value={depAmountText}
-                onChangeText={(t) => setDepAmountText(t.replace(/[^\d.,]/g, ''))}
+                onChangeText={(t) => setDepAmountText(groupWhileTyping(t.replace(/[^\d.,]/g, '')))}
                 keyboardType="decimal-pad"
                 placeholder="0"
                 placeholderTextColor={D.placeholder}
