@@ -260,9 +260,10 @@ export default function ConverterScreen() {
   // Калькулятор вклада — сумма/ставка/срок вводятся вручную (не привязаны к
   // реальной площадке), чипы под ставкой и сроком — быстрые пресеты, которые
   // просто подставляют значение в то же поле. Сумма по умолчанию пустая
-  // (плейсхолдер «0»), ставка — текущая ключевая, срок — 30 дней.
+  // (плейсхолдер «0»), ставка — 12% (популярная по факту, не ключевая — её
+  // банки не дают), срок — 30 дней.
   const [depAmountText, setDepAmountText] = useState('');
-  const [depRateText, setDepRateText] = useState(() => String(data.params.keyRate).replace('.', ','));
+  const [depRateText, setDepRateText] = useState('12');
   const [depDaysText, setDepDaysText] = useState('30');
   const [depMode, setDepMode] = useState<'simple' | 'compound'>('simple');
 
