@@ -343,7 +343,7 @@ export default function AnalyticsScreen() {
                 {byOrg.groups.map((g, i) => {
                   const org = data.organizations.find((o) => o.id === g.key);
                   return (
-                    <View key={g.key}>
+                    <View key={g.key} style={i > 0 ? styles.orgItemWithSep : undefined}>
                       {i > 0 ? <View style={styles.orgSep} /> : null}
                       <View style={styles.orgRow}>
                         <OrgLogo color={g.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
@@ -796,6 +796,10 @@ const styles = StyleSheet.create({
   // Группа строк площадок — gap:10 между строкой/разделителем/строкой (было
   // marginVertical:16 на разделителе — вдвое больше, чем в Figma).
   orgGroup: { gap: 10 },
+  // Разделитель и строка под ним — в одной обёртке (нужен общий key), без
+  // своего gap тут было бы 10px только НАД разделителем (от orgGroup) и 0
+  // ПОД ним — нужно 10 с обеих сторон.
+  orgItemWithSep: { gap: 10 },
   orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: 6 },
