@@ -870,9 +870,11 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.surface.tabOff,
     marginBottom: tokens.spacing.xl,
   },
-  taxTabSegment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: tokens.radius.pill },
+  taxTabSegment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: tokens.radius.pill },
   taxTabSegmentActive: { backgroundColor: tokens.accent.light },
-  taxTabSegmentText: { fontSize: tokens.typography.label, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.14 },
+  // lineHeight не был задан явно — нативный интерлиньяж Onest раздувал таб
+  // выше паддинга, из-за чего он казался «толще», чем 10px на самом деле.
+  taxTabSegmentText: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.14 },
   taxTabSegmentTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
   taxRowIconBox: { width: 34, height: 34, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
   taxByInstrumentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
