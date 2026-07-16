@@ -66,6 +66,11 @@ export default function AnalyticsScreen() {
 
   const summary = useMemo(() => analyticsSummary(data), [data]);
   const ins = useMemo(() => insights(data), [data]);
+  // Один случайный инсайт из всех подходящих сейчас — выбирается один раз за
+  // сессию (при монтировании экрана), а не на каждый ре-рендер, иначе
+  // мигало бы при любом изменении данных.
+  const [insightSeed] = useState(() => Math.random());
+  const activeInsight = ins.length > 0 ? ins[Math.floor(insightSeed * ins.length)] : undefined;
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const heroDays = HERO_PERIODS.find((p) => p.key === heroPeriod)!.days;
@@ -222,7 +227,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* Инсайт — тёплая карточка-подсказка (лампочка), фон картинкой из Figma */}
-            {ins[0] ? (
+            {activeInsight ? (
               <ImageBackground
                 source={require('../../assets/decor/insight-bg.png')}
                 style={styles.insight}
@@ -230,12 +235,12 @@ export default function AnalyticsScreen() {
                 resizeMode="cover"
               >
                 <View style={styles.insightIcon}>
-                  <MaterialIcons name={ins[0].icon as keyof typeof MaterialIcons.glyphMap} size={22} color={tokens.semantic.warning} />
+                  <MaterialIcons name={activeInsight.icon as keyof typeof MaterialIcons.glyphMap} size={22} color={tokens.semantic.warning} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.insightTag}><Text style={styles.insightTagText}>ИНСАЙТ</Text></View>
-                  <Text style={styles.insightTitle}>{ins[0].title}</Text>
-                  <Text style={styles.insightText}>{ins[0].text}</Text>
+                  <Text style={styles.insightTitle}>{activeInsight.title}</Text>
+                  <Text style={styles.insightText}>{activeInsight.text}</Text>
                 </View>
               </ImageBackground>
             ) : null}
