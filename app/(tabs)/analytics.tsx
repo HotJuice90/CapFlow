@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
   insightTagText: { fontSize: 9, lineHeight: 11, fontFamily: font.regular, color: tokens.semantic.warning },
   insightTitle: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary },
   insightText: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 6 },
-  section: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.xxl, marginBottom: tokens.spacing.md },
+  section: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 36, marginBottom: tokens.spacing.md, paddingLeft: 10 },
   paceCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
