@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
   // своего gap тут было бы 10px только НАД разделителем (от orgGroup) и 0
   // ПОД ним — нужно 10 с обеих сторон.
   orgItemWithSep: { gap: 10 },
-  orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: 6 },
   orgAmount: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
