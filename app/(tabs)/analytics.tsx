@@ -60,7 +60,7 @@ const GRAPH_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 // в ряд: экран − поля страницы (16×2) − паддинг карточки (16×2) − 2 зазора
 // между колонками (4×2), делённое на 3. Меньше этого — уже не минимум, а
 // сжатие; при 4+ типах контент естественно станет шире и появится скролл.
-const VESSEL_COL_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2 - 4 * 2) / 3;
+const VESSEL_COL_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2 - 6 * 2) / 3;
 
 export default function AnalyticsScreen() {
   const { data } = useData();
