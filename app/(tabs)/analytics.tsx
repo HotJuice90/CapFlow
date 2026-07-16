@@ -255,7 +255,9 @@ export default function AnalyticsScreen() {
                 (было/стало) сам показывает пропорцию роста/просадки, темп —
                 числом в центре. Слева/справа — абсолютные цифры периодов.
                 Никакого графика-тренда — он уже есть в хиро выше. */}
-            <Text style={styles.section}>Темп дохода</Text>
+            {/* Прямо под инсайтом, без своего верхнего отступа секции (40px) —
+                инсайт уже даёт нужный зазор своим marginBottom. */}
+            <Text style={[styles.section, { marginTop: 0 }]}>Темп дохода</Text>
             <View style={styles.paceCard}>
               <View style={styles.paceRow}>
                 <View style={styles.paceSide}>
@@ -661,7 +663,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.lg,
     paddingBottom: tokens.spacing.lg,
     paddingTop: tokens.spacing.md,
-    marginBottom: tokens.spacing.lg,
+    // Симметрично верхнему зазору (heroSummaryCard.marginBottom) — у инсайта
+    // нет своего заголовка, поэтому обычный 40px отступ секции тут не нужен.
+    marginBottom: tokens.spacing.xl,
     overflow: 'hidden',
   },
   insightBg: { borderRadius: tokens.radius.lg },
@@ -685,7 +689,7 @@ const styles = StyleSheet.create({
   insightTagText: { fontSize: 9, lineHeight: 11, fontFamily: font.regular, color: tokens.semantic.warning },
   insightTitle: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary },
   insightText: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 6 },
-  section: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 40, marginBottom: tokens.spacing.lg, paddingLeft: 8 },
+  section: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 40, marginBottom: 14, paddingLeft: 8 },
   paceCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
