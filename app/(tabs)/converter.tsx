@@ -626,7 +626,7 @@ export default function ConverterScreen() {
                 selectionColor={D.resetBg}
               />
             </View>
-            <Text style={s.depCurrencyStatic}>{CURRENCY_SYMBOL.RUB}</Text>
+            <Text style={s.depCurrencyStatic}>{CURRENCY_SYMBOL[base]}</Text>
           </View>
 
           {/* Кнопка сброса — тот же rotate-left, что у валют */}
@@ -702,9 +702,9 @@ export default function ConverterScreen() {
             <WalletAddIcon width={22} height={22} color={tokens.semantic.positive} />
           </View>
           <View style={s.depResultRight}>
-            <Text style={s.depResultValue}>{formatMoney(Math.max(0, depGross), { currency: 'RUB' })}</Text>
+            <Text style={s.depResultValue}>{formatMoney(Math.max(0, depGross), { currency: base })}</Text>
             <Text style={s.depResultTaxHint}>
-              {depTax > 0 ? `Возможный налог: ${formatMoney(depTax, { currency: 'RUB' })}` : 'Налог: не облагается'}
+              {depTax > 0 ? `Возможный налог: ${formatMoney(depTax, { currency: base })}` : 'Налог: не облагается'}
             </Text>
           </View>
         </View>
@@ -785,7 +785,7 @@ const s = StyleSheet.create({
   updatedText: { fontSize: 13, lineHeight: 15, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
 
   // История
-  histSection: { marginTop: 40, flex: 1 },
+  histSection: { marginTop: tokens.spacing.xxl, flex: 1 },
   histTitle: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.2, marginBottom: 12 },
   histHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
@@ -808,10 +808,10 @@ const s = StyleSheet.create({
   tabTextActive: { color: tokens.text.inverse },
   bigRate: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24, flexShrink: 0 },
   badge: {
-    borderRadius: tokens.radius.pill, padding: 8, gap: tokens.spacing.tight,
+    borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.chip, paddingVertical: tokens.spacing.xs, gap: tokens.spacing.chip,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
   },
-  badgeText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', letterSpacing: -0.14 },
+  badgeText: { fontSize: 12, lineHeight: 14, fontFamily: 'Onest_500Medium', letterSpacing: -0.12 },
 
   // График
   chartWrap: { marginTop: 0, overflow: 'hidden', flex: 1 },
@@ -852,7 +852,7 @@ const s = StyleSheet.create({
   depChip: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral },
   depChipText: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: 'Onest_400Regular', color: tokens.text.secondary },
 
-  depResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: tokens.spacing.tight, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.lg },
+  depResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: tokens.spacing.tight, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
   depResultTitle: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.2 },
   depCapRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   depCapLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.secondary },
