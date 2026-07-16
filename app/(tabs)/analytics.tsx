@@ -627,9 +627,20 @@ export default function AnalyticsScreen() {
             <Text style={styles.section}>Эффективность</Text>
             <View style={styles.effGrid}>
               {effTiles.map((t) => (
-                <View key={t.key} style={[styles.effTile, { backgroundColor: hexToRgba(t.color, 0.08) }]}>
-                  <View style={[styles.effTileIconBox, { backgroundColor: hexToRgba(t.color, 0.16) }]}>
-                    <MaterialIcons name={t.icon} size={16} color={t.color} />
+                <View key={t.key} style={styles.effTile}>
+                  {/* Едва заметный градиент цвета иконки — из противоположного
+                      (нижне-правого) угла к иконке, а не сплошная заливка. */}
+                  <LinearGradient
+                    colors={['transparent', hexToRgba(t.color, 0.1)]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={styles.effTileHeaderRow}>
+                    <View style={[styles.effTileIconBox, { backgroundColor: hexToRgba(t.color, 0.16) }]}>
+                      <MaterialIcons name={t.icon} size={16} color={t.color} />
+                    </View>
+                    <Text style={styles.effTileLabel} numberOfLines={2}>{t.label}</Text>
                   </View>
                   <Text
                     style={[styles.effTileValue, t.valueColor ? { color: t.valueColor } : null]}
@@ -638,7 +649,6 @@ export default function AnalyticsScreen() {
                   >
                     {t.value}
                   </Text>
-                  <Text style={styles.effTileLabel} numberOfLines={1}>{t.label}</Text>
                   {t.sub ? <Text style={styles.effTileSub} numberOfLines={1}>{t.sub}</Text> : null}
                 </View>
               ))}
@@ -904,11 +914,15 @@ const styles = StyleSheet.create({
   // Сетка плиток-статов — сознательно другой паттерн, чем построчные списки
   // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
   effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  effTile: { flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 12, gap: 8 },
+  effTile: {
+    flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 12, gap: 10,
+    backgroundColor: '#F9FAFF', overflow: 'hidden',
+  },
+  effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip },
   effTileIconBox: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  effTileLabel: { flex: 1, fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.medium, color: tokens.text.secondary },
   effTileValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
-  effTileLabel: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.medium, color: tokens.text.secondary },
-  effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: -4 },
+  effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: -6 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
