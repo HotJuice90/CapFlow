@@ -28,6 +28,7 @@ import {
   avgLockDuration,
   taxByInstrument,
   taxByOrganization,
+  type DistGroup,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned, pluralDays } from '@/format';
@@ -72,6 +73,26 @@ export default function AnalyticsScreen() {
   const [insightSeed] = useState(() => Math.random());
   const activeInsight = ins.length > 0 ? ins[Math.floor(insightSeed * ins.length)] : undefined;
   const byType = useMemo(() => distributionByType(data), [data]);
+  // Максимум 4 карточки в «Составе портфеля» — если типов больше, самые
+  // мелкие по капиталу схлопываем в одну «Другие» (сохраняя топ-3).
+  const typeGroups = useMemo<DistGroup[]>(() => {
+    const groups = byType.groups;
+    if (groups.length <= 4) return groups;
+    const head = groups.slice(0, 3);
+    const tail = groups.slice(3);
+    const other: DistGroup = {
+      key: 'other',
+      label: 'Другие',
+      color: tokens.text.tertiary,
+      capital: tail.reduce((sum, g) => sum + g.capital, 0),
+      incomePerDay: tail.reduce((sum, g) => sum + g.incomePerDay, 0),
+      incomePerMonth: tail.reduce((sum, g) => sum + g.incomePerMonth, 0),
+      avgRate: 0,
+      share: tail.reduce((sum, g) => sum + g.share, 0),
+      count: tail.reduce((sum, g) => sum + g.count, 0),
+    };
+    return [...head, other];
+  }, [byType.groups]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const heroDays = HERO_PERIODS.find((p) => p.key === heroPeriod)!.days;
   const capSeries = useMemo(() => capitalHistorySeries(data, heroDays), [data, heroDays]);
@@ -309,7 +330,7 @@ export default function AnalyticsScreen() {
             <Text style={[styles.section, { marginTop: tokens.spacing.xxl + tokens.spacing.lg }]}>Состав портфеля</Text>
             <Card>
               <View style={styles.vesselRow}>
-                {byType.groups.map((g) => (
+                {typeGroups.map((g) => (
                   <View key={g.key} style={styles.vesselCol}>
                     <Text style={styles.vesselLabel} numberOfLines={2}>{g.label}</Text>
                     <View style={styles.vessel}>
@@ -320,7 +341,7 @@ export default function AnalyticsScreen() {
                         style={[styles.vesselFill, { height: `${Math.max(g.share * 100, 10)}%` }]}
                       />
                       <View style={styles.vesselShine} />
-                      <MaterialIcons name={typeIcon(g.key)} size={26} color={hexToRgba(g.color, 0.4)} />
+                      <MaterialCommunityIcons name={typeIcon(g.key)} size={26} color={hexToRgba(g.color, 0.4)} />
                     </View>
                     <Text style={styles.vesselPct}>{Math.round(g.share * 100)}%</Text>
                   </View>
@@ -609,13 +630,15 @@ export default function AnalyticsScreen() {
   );
 }
 
-function typeIcon(typeId: string): keyof typeof MaterialIcons.glyphMap {
+// Те же иконки, что и везде в приложении для типа инструмента (AssetRow,
+// TypeCardsRow, каталог, поиск) — MaterialCommunityIcons, не свой набор.
+function typeIcon(typeId: string): keyof typeof MaterialCommunityIcons.glyphMap {
   switch (typeId) {
-    case 'savings': return 'savings';
-    case 'deposit': return 'account-balance';
-    case 'bond': return 'receipt-long';
-    case 'dfa': return 'stars';
-    default: return 'category';
+    case 'savings': return 'piggy-bank-outline';
+    case 'deposit': return 'bank-outline';
+    case 'bond': return 'certificate-outline';
+    case 'dfa': return 'chart-line';
+    default: return 'dots-horizontal';
   }
 }
 
