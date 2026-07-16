@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
   taxCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
-    padding: 20,
+    padding: 16,
     ...boxShadow(tokens.shadow.card),
   },
   taxHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
@@ -842,7 +842,9 @@ const styles = StyleSheet.create({
   // (14pt Medium, gap 10 до суммы). Тут акцент на воздух, как просили.
   taxLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
   taxValue: { fontSize: tokens.typography.header, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.24, marginTop: 10 },
-  taxRatePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: hexToRgba(tokens.category.dfa, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
+  // Шеврон справа визуально «весит» больше текста — при равном паддинге
+  // с обеих сторон казалось, что справа лишний пробел, поджал.
+  taxRatePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: hexToRgba(tokens.category.dfa, 0.12), borderRadius: tokens.radius.pill, paddingLeft: tokens.spacing.tight, paddingRight: tokens.spacing.chip, paddingVertical: 6 },
   taxRatePillText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.semibold, color: tokens.category.dfa, letterSpacing: -0.13 },
   taxBarWrap: { marginTop: tokens.spacing.lg },
   taxTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden' },
