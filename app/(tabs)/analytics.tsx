@@ -506,7 +506,7 @@ export default function AnalyticsScreen() {
 
               {taxAssetRows.length > 0 || taxOrgRows.length > 0 ? (
                 <>
-                  <View style={styles.taxSep} />
+                  <View style={styles.taxSepToTabs} />
                   <View style={styles.taxTabPillWrap}>
                     <Pressable
                       style={[styles.taxTabSegment, taxTab === 'assets' && styles.taxTabSegmentActive]}
@@ -856,7 +856,10 @@ const styles = StyleSheet.create({
   taxPaceRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   taxPaceText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
   taxSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
-  taxTileRow: { flexDirection: 'row', gap: 8 },
+  // Именно разделитель перед табами Активы/Площадки — на 2px меньше зазора,
+  // чем обычный taxSep.
+  taxSepToTabs: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 18 },
+  taxTileRow: { flexDirection: 'row', gap: 4 },
   taxTileWide: { flex: 1, flexDirection: 'row', backgroundColor: hexToRgba('#909497', 0.08), borderRadius: tokens.radius.sm, padding: 10 },
   taxTilePaid: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.08), borderRadius: tokens.radius.sm, paddingHorizontal: 12, paddingVertical: 10 },
   taxTileCol: { flex: 1 },
@@ -884,7 +887,7 @@ const styles = StyleSheet.create({
   taxFixedLock: { marginRight: 6 },
   taxByInstrumentValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
   taxByInstrumentSubValue: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 4 },
-  taxByInstrumentSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sm },
+  taxByInstrumentSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: tokens.spacing.sm },
   rowLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
   rowSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
