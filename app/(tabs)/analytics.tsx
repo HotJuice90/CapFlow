@@ -795,11 +795,11 @@ const styles = StyleSheet.create({
   },
   // Группа строк площадок — gap:10 между строкой/разделителем/строкой (было
   // marginVertical:16 на разделителе — вдвое больше, чем в Figma).
-  orgGroup: { gap: 10 },
+  orgGroup: { gap: 12 },
   // Разделитель и строка под ним — в одной обёртке (нужен общий key), без
   // своего gap тут было бы 10px только НАД разделителем (от orgGroup) и 0
   // ПОД ним — нужно 10 с обеих сторон.
-  orgItemWithSep: { gap: 10 },
+  orgItemWithSep: { gap: 12 },
   orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: tokens.spacing.xs },
