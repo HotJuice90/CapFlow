@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-18deg' }],
   },
   vesselPct: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary },
-  vesselLabel: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: tokens.text.tertiary, textAlign: 'center' },
+  vesselLabel: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.5), textAlign: 'center' },
   orgCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
