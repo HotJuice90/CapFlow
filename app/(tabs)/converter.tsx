@@ -80,6 +80,7 @@ const DEP_PERIODS: { label: string; days: number }[] = [
   { label: '6 мес.', days: 182 },
   { label: '1 год', days: 365 },
 ];
+const DEP_RATE_PRESETS = [10, 11, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16];
 
 /** Компактный процент без лишних нулей, для быстрых чипов ставки. */
 function fmtPct(n: number): string {
@@ -258,18 +259,12 @@ export default function ConverterScreen() {
 
   // Калькулятор вклада — сумма/ставка/срок вводятся вручную (не привязаны к
   // реальной площадке), чипы под ставкой и сроком — быстрые пресеты, которые
-  // просто подставляют значение в то же поле. Ставка по умолчанию = текущая
-  // ключевая, разумная отправная точка для прикидки.
-  const [depAmountText, setDepAmountText] = useState('100000');
+  // просто подставляют значение в то же поле. Сумма по умолчанию пустая
+  // (плейсхолдер «0»), ставка — текущая ключевая, срок — 30 дней.
+  const [depAmountText, setDepAmountText] = useState('');
   const [depRateText, setDepRateText] = useState(() => String(data.params.keyRate).replace('.', ','));
   const [depDaysText, setDepDaysText] = useState('30');
   const [depMode, setDepMode] = useState<'simple' | 'compound'>('simple');
-
-  const depRatePresets = useMemo(() => {
-    const k = data.params.keyRate;
-    const raw = [k - 2, k, k + 2, k + 4].filter((r) => r > 0);
-    return Array.from(new Set(raw.map((r) => Math.round(r * 2) / 2)));
-  }, [data.params.keyRate]);
 
   const refs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
   const rates = data.rates as Record<CurrencyCode, number>;
@@ -640,7 +635,7 @@ export default function ConverterScreen() {
                   selectionColor={D.resetBg}
                 />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.depChipsRow}>
-                  {depRatePresets.map((r) => (
+                  {DEP_RATE_PRESETS.map((r) => (
                     <Pressable key={r} style={s.depChip} onPress={() => { tapBuzz(); setDepRateText(fmtPct(r).replace('%', '')); }}>
                       <Text style={s.depChipText}>{fmtPct(r)}</Text>
                     </Pressable>
