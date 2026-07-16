@@ -233,7 +233,7 @@ export default function AnalyticsScreen() {
                   <MaterialIcons name={ins[0].icon as keyof typeof MaterialIcons.glyphMap} size={22} color={tokens.semantic.warning} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <View style={styles.insightTag}><Text style={styles.insightTagText}>Инсайт</Text></View>
+                  <View style={styles.insightTag}><Text style={styles.insightTagText}>ИНСАЙТ</Text></View>
                   <Text style={styles.insightTitle}>{ins[0].title}</Text>
                   <Text style={styles.insightText}>{ins[0].text}</Text>
                 </View>
