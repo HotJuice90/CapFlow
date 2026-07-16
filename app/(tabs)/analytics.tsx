@@ -157,7 +157,7 @@ export default function AnalyticsScreen() {
                   <View
                     style={[
                       styles.heroGrowthPill,
-                      { backgroundColor: periodGrowthPct >= 0 ? hexToRgba(tokens.semantic.positive, 0.12) : hexToRgba(tokens.semantic.negative, 0.12) },
+                      { backgroundColor: periodGrowthPct >= 0 ? hexToRgba(tokens.semantic.positive, 0.1) : hexToRgba(tokens.semantic.negative, 0.1) },
                     ]}
                   >
                     <Text style={[styles.heroGrowthText, { color: periodGrowthPct >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
@@ -202,19 +202,19 @@ export default function AnalyticsScreen() {
 
               <View style={styles.heroRateCell}>
                 <Text style={styles.heroRateLabel} numberOfLines={1}>Средняя ставка</Text>
-                <View style={styles.heroRateValueBlock}>
+                <View style={styles.heroRatePillBg}>
                   <Text style={styles.heroRateValue} numberOfLines={1} adjustsFontSizeToFit>
                     {formatPercent(summary.avgRate)}
                   </Text>
                   <Pressable
-                    style={[
-                      styles.heroRatePill,
-                      { backgroundColor: summary.premiumToKeyRate >= 0 ? hexToRgba(tokens.semantic.positive, 0.1) : hexToRgba(tokens.semantic.negative, 0.1) },
-                    ]}
+                    style={styles.heroRateDeltaRow}
                     onPress={() => { tapBuzz(); router.push('/settings/key-rate'); }}
                   >
-                    <Text style={[styles.heroRatePillText, { color: summary.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]} numberOfLines={1}>
-                      {summary.premiumToKeyRate >= 0 ? '▲' : '▼'} {formatPercentSigned(summary.premiumToKeyRate)} КС
+                    <Text style={[styles.heroRateArrow, { color: summary.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                      {summary.premiumToKeyRate >= 0 ? '↑' : '↓'}
+                    </Text>
+                    <Text style={styles.heroRateDeltaText} numberOfLines={1}>
+                      {formatPercentSigned(summary.premiumToKeyRate)} КС
                     </Text>
                   </Pressable>
                 </View>
@@ -684,10 +684,10 @@ const styles = StyleSheet.create({
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   heroCapitalBlock: { gap: 8, marginBottom: 6 },
   heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
+  heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
   heroGrowthPill: { borderRadius: tokens.radius.pill, paddingHorizontal: 7, paddingVertical: 3 },
-  heroGrowthText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
-  heroValue: { fontSize: tokens.typography.metricLg, lineHeight: 42, fontFamily: font.semibold, color: tokens.text.secondary, letterSpacing: -0.8 },
+  heroGrowthText: { fontSize: tokens.typography.hint, lineHeight: 13, fontFamily: font.medium },
+  heroValue: { fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.34 },
   heroSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -711,15 +711,21 @@ const styles = StyleSheet.create({
   heroPeriodChipActive: { backgroundColor: tokens.accent.light },
   heroPeriodText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.26 },
   heroPeriodTextActive: { color: tokens.text.inverse },
-  heroEarnedValue: { fontSize: tokens.typography.metric, lineHeight: 34, fontFamily: font.semibold, letterSpacing: -0.64 },
-  heroEarnedLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: '#909497', marginTop: 4 },
+  heroEarnedValue: { fontSize: 26, lineHeight: 28, fontFamily: font.semibold, letterSpacing: -0.24 },
+  heroEarnedLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   heroDivider: { width: 1, alignSelf: 'stretch', backgroundColor: tokens.surface.hairline },
-  heroRateCell: { alignItems: 'center', justifyContent: 'space-between', paddingTop: 7 },
-  heroRateLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: '#909497', letterSpacing: -0.24 },
-  heroRateValueBlock: { alignItems: 'center', gap: tokens.spacing.tight, marginTop: 12 },
-  heroRateValue: { fontSize: tokens.typography.header, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary },
-  heroRatePill: { borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 8 },
-  heroRatePillText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.medium, letterSpacing: -0.12 },
+  heroRateCell: { alignItems: 'center', gap: 12, paddingTop: 7 },
+  heroRateLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24 },
+  // Тонированная плашка вокруг ставки+дельты — в Figma это не голые числа,
+  // а единый блок с подложкой (accent.light@0.1).
+  heroRatePillBg: {
+    alignItems: 'flex-end', gap: 6, backgroundColor: hexToRgba(tokens.accent.light, 0.1),
+    borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  heroRateValue: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: font.semibold, color: '#586692', letterSpacing: -0.24 },
+  heroRateDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  heroRateArrow: { fontSize: 10 },
+  heroRateDeltaText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: tokens.text.tertiary },
   vesselRow: { flexDirection: 'row', gap: 10 },
   vesselCol: { flex: 1, alignItems: 'center' },
   vessel: {
