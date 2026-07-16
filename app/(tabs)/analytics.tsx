@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.semantic.warning, 0.05),
     borderRadius: tokens.radius.pill,
     paddingHorizontal: 8,
-    paddingTop: 6,
+    paddingTop: 12,
     paddingBottom: 4,
     marginBottom: 4,
   },
