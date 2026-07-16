@@ -56,6 +56,12 @@ const HERO_PERIODS: { key: HeroPeriod; label: string; days: number | 'all' | 'ye
 // только с обычным полем страницы по бокам (без доп. паддинга плашки).
 const GRAPH_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 
+// Точная ширина колонки «Состав портфеля», рассчитанная под ровно 3 карточки
+// в ряд: экран − поля страницы (16×2) − паддинг карточки (16×2) − 2 зазора
+// между колонками (4×2), делённое на 3. Меньше этого — уже не минимум, а
+// сжатие; при 4+ типах контент естественно станет шире и появится скролл.
+const VESSEL_COL_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2 - 4 * 2) / 3;
+
 export default function AnalyticsScreen() {
   const { data } = useData();
   const insets = useSafeAreaInsets();
@@ -753,7 +759,7 @@ const styles = StyleSheet.create({
   vesselRow: { flexDirection: 'row', gap: 4, flexGrow: 1, minWidth: '100%' },
   // Фикс. ширина (107 — минимум из Figma, под 3 карточки в строке без сжатия);
   // если карточек 3 или меньше — flexGrow растягивает их вместе на всю ширину.
-  vesselCol: { flex: 1, minWidth: 107, alignItems: 'center', gap: 12 },
+  vesselCol: { flex: 1, minWidth: VESSEL_COL_W, alignItems: 'center', gap: 12 },
   vessel: {
     width: '100%',
     height: 76,
