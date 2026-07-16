@@ -789,8 +789,7 @@ const styles = StyleSheet.create({
   orgCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 24,
+    padding: 16,
     ...boxShadow(tokens.shadow.card),
   },
   // Группа строк площадок — gap:10 между строкой/разделителем/строкой (было
