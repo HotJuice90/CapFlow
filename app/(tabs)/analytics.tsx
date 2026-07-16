@@ -221,18 +221,23 @@ export default function AnalyticsScreen() {
               </View>
             </View>
 
-            {/* Инсайт */}
+            {/* Инсайт — тёплая карточка-подсказка (лампочка), фон картинкой из Figma */}
             {ins[0] ? (
-              <View style={styles.insight}>
+              <ImageBackground
+                source={require('../../assets/decor/insight-bg.png')}
+                style={styles.insight}
+                imageStyle={styles.insightBg}
+                resizeMode="cover"
+              >
                 <View style={styles.insightIcon}>
-                  <MaterialIcons name={ins[0].icon as keyof typeof MaterialIcons.glyphMap} size={22} color="#7C4DD6" />
+                  <MaterialIcons name={ins[0].icon as keyof typeof MaterialIcons.glyphMap} size={22} color={tokens.semantic.warning} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.insightTag}><Text style={styles.insightTagText}>Инсайт</Text></View>
                   <Text style={styles.insightTitle}>{ins[0].title}</Text>
                   <Text style={styles.insightText}>{ins[0].text}</Text>
                 </View>
-              </View>
+              </ImageBackground>
             ) : null}
 
             {/* Темп дохода — «перетягивание каната»: пончик из двух сегментов
@@ -629,32 +634,33 @@ const styles = StyleSheet.create({
   insight: {
     flexDirection: 'row',
     gap: tokens.spacing.md,
-    alignItems: 'flex-start',
-    backgroundColor: '#F9F7FE',
+    alignItems: 'center',
     borderRadius: tokens.radius.lg,
     padding: tokens.spacing.lg,
     marginBottom: tokens.spacing.lg,
-    ...boxShadow(tokens.shadow.cardSoft),
+    overflow: 'hidden',
   },
+  insightBg: { borderRadius: tokens.radius.lg },
   insightIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: tokens.radius.sm,
-    backgroundColor: hexToRgba('#7C4DD6', 0.12),
+    width: 44,
+    height: 44,
+    borderRadius: tokens.radius.md,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.7),
     alignItems: 'center',
     justifyContent: 'center',
   },
   insightTag: {
     alignSelf: 'flex-start',
-    backgroundColor: hexToRgba('#7C4DD6', 0.12),
+    backgroundColor: hexToRgba(tokens.semantic.warning, 0.05),
     borderRadius: tokens.radius.pill,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingTop: 6,
+    paddingBottom: 4,
     marginBottom: 4,
   },
-  insightTagText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.semibold, color: '#7C4DD6', letterSpacing: -0.11 },
-  insightTitle: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.28 },
-  insightText: { fontSize: tokens.typography.caption, lineHeight: 18, fontFamily: font.regular, color: tokens.text.secondary, marginTop: 3, letterSpacing: -0.13 },
+  insightTagText: { fontSize: 9, lineHeight: 11, fontFamily: font.regular, color: tokens.semantic.warning },
+  insightTitle: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary },
+  insightText: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 6 },
   section: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
   paceCard: {
     backgroundColor: '#F9FAFF',
