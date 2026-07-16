@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Dimensions, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Pattern as SvgPattern, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
@@ -66,10 +66,14 @@ export default function AnalyticsScreen() {
 
   const summary = useMemo(() => analyticsSummary(data), [data]);
   const ins = useMemo(() => insights(data), [data]);
-  // Один случайный инсайт из всех подходящих сейчас — выбирается один раз за
-  // сессию (при монтировании экрана), а не на каждый ре-рендер, иначе
-  // мигало бы при любом изменении данных.
-  const [insightSeed] = useState(() => Math.random());
+  // Один случайный инсайт из всех подходящих сейчас — перевыбирается при
+  // каждом заходе на вкладку (useFocusEffect), а не при любом ре-рендере
+  // (иначе мигало бы при любом изменении данных, тайм-скролле и т.п.).
+  // Таб-экраны в expo-router не размонтируются при переключении вкладок —
+  // поэтому просто «один раз при монтировании» сработал бы только на
+  // перезапуск приложения, не на каждый визит.
+  const [insightSeed, setInsightSeed] = useState(() => Math.random());
+  useFocusEffect(useCallback(() => { setInsightSeed(Math.random()); }, []));
   const activeInsight = ins.length > 0 ? ins[Math.floor(insightSeed * ins.length)] : undefined;
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
