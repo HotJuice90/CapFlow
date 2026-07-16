@@ -212,15 +212,19 @@ function AreaChart({ data, width, height }: { data: number[]; width: number; hei
   );
 }
 
-// ─── Currency pill (flag + code + chevron) ────────────────────────────────────
+// ─── Currency pill (flag + code + chevron) ─────────────────────────────────────
+// В Figma верхний и нижние чипы — один и тот же размер (флаг 28px, текст 16px),
+// отдельного «крупного» варианта нет.
 
-function CurrencyPill({ currency, large = false, editable = true, onPress }: {
-  currency: CurrencyCode; large?: boolean; editable?: boolean; onPress?: () => void;
+function CurrencyPill({ currency, editable = true, onPress }: {
+  currency: CurrencyCode; editable?: boolean; onPress?: () => void;
 }) {
   return (
-    <Pressable style={[s.pill, large && s.pillLg]} onPress={editable ? onPress : undefined} hitSlop={8}>
-      <Flag code={currency} size={large ? 32 : 28} />
-      <Text style={[s.pillCode, large && s.pillCodeLg]}>{currency}</Text>
+    <Pressable style={s.pill} onPress={editable ? onPress : undefined} hitSlop={8}>
+      <View style={s.pillIconRow}>
+        <Flag code={currency} size={28} />
+        <Text style={s.pillCode}>{currency}</Text>
+      </View>
       {editable ? (
         <ArrowDownIcon width={12} height={12} color={tokens.text.tertiary} />
       ) : null}
@@ -485,10 +489,8 @@ export default function ConverterScreen() {
         <>
         {/* ── Карточки (поле 0 сверху, поля 1|2 снизу) + кнопка сброса ── */}
         <View style={s.cardsBlock}>
-          {/* Верхнее поле — в Figma у карточки суммы валют радиус меньше (md),
-              чем у карточки суммы вклада (lg) и нижней двухколоночной (lg) */}
           <Pressable
-            style={[s.topCard, s.topCardTight]}
+            style={s.topCard}
             onPress={() => refs[0].current?.focus()}
             onLayout={(e) => setTopCardH(e.nativeEvent.layout.height)}
           >
@@ -496,23 +498,27 @@ export default function ConverterScreen() {
               <Text style={s.topLabel}>{CURRENCY_NAME[slots[0]]}</Text>
               {AmountInput(0, true)}
             </View>
-            <CurrencyPill currency={slots[0]} large editable={false} />
+            <CurrencyPill currency={slots[0]} editable={false} />
           </Pressable>
 
           {/* Нижние два поля */}
           <View style={s.bottomCard}>
             <Pressable style={s.col} onPress={() => refs[1].current?.focus()}>
               <CurrencyPill currency={slots[1]} onPress={() => openPicker(1)} />
-              {AmountInput(1, false)}
-              <Text style={s.rateHint}>{rateLabel(slots[1])}</Text>
+              <View style={s.colValueGroup}>
+                {AmountInput(1, false)}
+                <Text style={s.rateHint}>{rateLabel(slots[1])}</Text>
+              </View>
             </Pressable>
 
             <View style={s.divider} />
 
             <Pressable style={s.col} onPress={() => refs[2].current?.focus()}>
               <CurrencyPill currency={slots[2]} onPress={() => openPicker(2)} />
-              {AmountInput(2, false)}
-              <Text style={s.rateHint}>{rateLabel(slots[2])}</Text>
+              <View style={s.colValueGroup}>
+                {AmountInput(2, false)}
+                <Text style={s.rateHint}>{rateLabel(slots[2])}</Text>
+              </View>
             </Pressable>
           </View>
 
@@ -706,30 +712,32 @@ export default function ConverterScreen() {
 const s = StyleSheet.create({
   cardsBlock: { gap: tokens.spacing.chip, position: 'relative' },
 
-  // Верхняя карточка — фон «стекло» (surface.glass), радиус lg по умолчанию
-  // (topCardTight переопределяет на md для карточки суммы валют, см. Figma)
+  // Верхняя карточка — фон «стекло» (surface.glass), радиус lg — как у нижней.
   topCard: {
     backgroundColor: tokens.surface.glass, borderRadius: tokens.radius.lg, padding: tokens.spacing.sheet,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
-  topCardTight: { borderRadius: tokens.radius.md },
-  topLeft: { flex: 1, gap: 16, paddingRight: 12 },
+  topLeft: { flex: 1, gap: 20, paddingRight: 12 },
   topLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
+  // Без явного lineHeight — на Android число «прыгает» между плейсхолдером
+  // и введённым значением, если lineHeight зажат вплотную к fontSize.
   bigInput: {
-    fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
+    fontSize: tokens.typography.display, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
     letterSpacing: -0.34, padding: 0,
   },
 
-  // Нижняя карточка (2 столбца + дивайдер)
+  // Нижняя карточка (2 столбца + дивайдер). col: gap между чипом валюты и
+  // группой (число+курс) — 20; colValueGroup: gap внутри группы — 12.
   bottomCard: {
     backgroundColor: tokens.surface.glass, borderRadius: tokens.radius.lg, padding: tokens.spacing.sheet,
     flexDirection: 'row', alignItems: 'stretch',
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
-  col: { flex: 1, gap: 14 },
+  col: { flex: 1, gap: 20 },
+  colValueGroup: { gap: 12 },
   colInput: {
-    fontSize: 26, lineHeight: 28, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
+    fontSize: 26, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
     letterSpacing: -0.52, padding: 0,
   },
   divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
@@ -742,18 +750,18 @@ const s = StyleSheet.create({
     borderRadius: tokens.radius.pill, padding: 8, zIndex: 10,
   },
 
-  // Чип валюты
+  // Чип валюты — один размер везде (флаг 28px, текст 16px), внешний gap 10
+  // (до стрелки), внутренний gap 8 (флаг-текст) — как в Figma.
   pill: {
-    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip,
+    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.tight,
     backgroundColor: D.chipBg, borderRadius: tokens.radius.pill,
     paddingLeft: 4, paddingRight: 8, paddingVertical: 4, alignSelf: 'flex-start',
   },
-  pillLg: { gap: 8 },
+  pillIconRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pillCode: {
-    fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.primary,
-    textTransform: 'uppercase', letterSpacing: -0.56,
+    fontSize: 16, lineHeight: 18, fontFamily: 'Onest_500Medium', color: tokens.text.primary,
+    textTransform: 'uppercase', letterSpacing: -0.64,
   },
-  pillCodeLg: { fontSize: 16, lineHeight: 18, letterSpacing: -0.64 },
 
   // Строка обновления
   footerRow: {
