@@ -746,10 +746,14 @@ const styles = StyleSheet.create({
   heroRateDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   heroRateArrow: { fontSize: 10 },
   heroRateDeltaText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: tokens.text.tertiary },
-  vesselRow: { flexDirection: 'row', gap: 4, width: '100%' },
+  // minWidth:'100%' (не width!) — контейнер растягивается на всю ширину,
+  // когда контента мало (карточки делят место поровну), но НЕ мешает ему
+  // стать шире экрана, когда карточек много — иначе скролл в ScrollView
+  // просто не включался бы (width жёстко обрезал контент).
+  vesselRow: { flexDirection: 'row', gap: 4, flexGrow: 1, minWidth: '100%' },
   // Фикс. ширина (107 — минимум из Figma, под 3 карточки в строке без сжатия);
   // если карточек 3 или меньше — flexGrow растягивает их вместе на всю ширину.
-  vesselCol: { width: 107, flexGrow: 1, alignItems: 'center', gap: 12 },
+  vesselCol: { flex: 1, minWidth: 107, alignItems: 'center', gap: 12 },
   vessel: {
     width: '100%',
     height: 76,
