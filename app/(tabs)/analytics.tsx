@@ -317,16 +317,18 @@ export default function AnalyticsScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.vesselRow}>
                 {byType.groups.map((g) => (
                   <View key={g.key} style={styles.vesselCol}>
-                    <Text style={styles.vesselLabel} numberOfLines={2}>{VESSEL_LABEL[g.key] ?? g.label}</Text>
-                    <View style={styles.vessel}>
-                      <LinearGradient
-                        colors={[hexToRgba(g.color, 0.55), g.color]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                        style={[styles.vesselFill, { height: `${Math.max(g.share * 100, 10)}%` }]}
-                      />
-                      <View style={styles.vesselShine} />
-                      <MaterialCommunityIcons name={typeIcon(g.key)} size={26} color={hexToRgba(g.color, 0.4)} />
+                    <View style={styles.vesselTop}>
+                      <Text style={styles.vesselLabel} numberOfLines={2}>{VESSEL_LABEL[g.key] ?? g.label}</Text>
+                      <View style={styles.vessel}>
+                        <LinearGradient
+                          colors={[hexToRgba(g.color, 0.55), g.color]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                          style={[styles.vesselFill, { height: `${Math.max(g.share * 100, 10)}%` }]}
+                        />
+                        <View style={styles.vesselShine} />
+                        <MaterialCommunityIcons name={typeIcon(g.key)} size={26} color={hexToRgba(g.color, 0.4)} />
+                      </View>
                     </View>
                     <Text style={styles.vesselPct}>{Math.round(g.share * 100)}%</Text>
                   </View>
@@ -756,10 +758,11 @@ const styles = StyleSheet.create({
   // когда контента мало (карточки делят место поровну), но НЕ мешает ему
   // стать шире экрана, когда карточек много — иначе скролл в ScrollView
   // просто не включался бы (width жёстко обрезал контент).
-  vesselRow: { flexDirection: 'row', gap: 4, flexGrow: 1, minWidth: '100%' },
+  vesselRow: { flexDirection: 'row', gap: 6, flexGrow: 1, minWidth: '100%' },
   // Фикс. ширина (107 — минимум из Figma, под 3 карточки в строке без сжатия);
   // если карточек 3 или меньше — flexGrow растягивает их вместе на всю ширину.
   vesselCol: { flex: 1, minWidth: VESSEL_COL_W, alignItems: 'center', gap: 12 },
+  vesselTop: { width: '100%', alignItems: 'center', gap: 10 },
   vessel: {
     width: '100%',
     height: 76,
@@ -779,7 +782,7 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.surface.white, 0.25),
     transform: [{ rotate: '-18deg' }],
   },
-  vesselPct: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
+  vesselPct: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary },
   vesselLabel: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: tokens.text.tertiary, textAlign: 'center' },
   orgCard: {
     backgroundColor: '#F9FAFF',
