@@ -4,6 +4,7 @@ import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
 import { uid } from '@/utils/id';
+import { CURRENCY_SYMBOL } from '@/format';
 
 const CURRENCY_COLOR: Record<string, string> = {
   RUB: '#62709C',
@@ -824,6 +825,37 @@ export function insights(data: AppData, now: Date = new Date()): Insight[] {
         icon: 'trending-down',
         title: 'Доходность ниже ключевой',
         text: `Средняя ставка портфеля ниже ключевой на ${Math.abs(s.premiumToKeyRate).toFixed(1).replace('.', ',')}%. Возможно, стоит пересмотреть инструменты.`,
+      });
+    }
+  }
+
+  // 4. свободный капитал простаивает — только если задан вручную «капитал вне
+  // активов» и там реально лежит заметная доля (от 10%), иначе шум.
+  const manualTotal = manualTotalCapitalConverted(data);
+  if (manualTotal && manualTotal > 0) {
+    const orgTotal = distributionByOrg(data, now).total;
+    const free = Math.max(0, manualTotal - orgTotal);
+    if (free / manualTotal >= 0.1) {
+      out.push({
+        icon: 'savings',
+        title: 'Есть свободный капитал',
+        text: `${Math.round(free).toLocaleString('ru-RU')} ${CURRENCY_SYMBOL[data.settings.defaultCurrency]} ещё не работает — можно разместить и получать доход.`,
+      });
+    }
+  }
+
+  // 5. концентрация в одной площадке — риск, что всё в одном месте. Только
+  // если площадок хотя бы 2 (иначе «риск» — это просто факт, что у вас один
+  // банк, не инсайт) и на лидера приходится больше 60%.
+  const orgDist = distributionByOrg(data, now);
+  if (orgDist.groups.length >= 2 && orgDist.total > 0) {
+    const top = orgDist.groups[0]; // groups уже отсортированы по капиталу (см. distribution())
+    const topShare = top.capital / orgDist.total;
+    if (topShare >= 0.6) {
+      out.push({
+        icon: 'warning',
+        title: 'Капитал сосредоточен в одном месте',
+        text: `${Math.round(topShare * 100)}% в «${top.label}» — если с площадкой что-то случится, риск выше.`,
       });
     }
   }
