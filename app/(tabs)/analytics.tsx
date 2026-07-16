@@ -339,26 +339,28 @@ export default function AnalyticsScreen() {
             {/* Размещение капитала — строки по площадкам + единая пропорциональная полоса */}
             <Text style={styles.section}>Размещение капитала</Text>
             <View style={styles.orgCard}>
-              {byOrg.groups.map((g, i) => {
-                const org = data.organizations.find((o) => o.id === g.key);
-                return (
-                  <View key={g.key}>
-                    {i > 0 ? <View style={styles.orgSep} /> : null}
-                    <View style={styles.orgRow}>
-                      <OrgLogo color={g.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
-                      <View style={styles.orgInfo}>
-                        <Text style={styles.orgAmount} numberOfLines={1}>
-                          {formatMoney(g.capital, { currency: cur })}
-                        </Text>
-                        <Text style={styles.orgName} numberOfLines={1}>{g.label}</Text>
-                      </View>
-                      <View style={styles.orgPctChip}>
-                        <Text style={styles.orgPctText}>{Math.round(orgShare(g.capital) * 100)}%</Text>
+              <View style={styles.orgGroup}>
+                {byOrg.groups.map((g, i) => {
+                  const org = data.organizations.find((o) => o.id === g.key);
+                  return (
+                    <View key={g.key}>
+                      {i > 0 ? <View style={styles.orgSep} /> : null}
+                      <View style={styles.orgRow}>
+                        <OrgLogo color={g.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
+                        <View style={styles.orgInfo}>
+                          <Text style={styles.orgAmount} numberOfLines={1}>
+                            {formatMoney(g.capital, { currency: cur })}
+                          </Text>
+                          <Text style={styles.orgName} numberOfLines={1}>{g.label}</Text>
+                        </View>
+                        <View style={styles.orgPctChip}>
+                          <Text style={styles.orgPctText}>{Math.round(orgShare(g.capital) * 100)}%</Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
 
               {/* key меняется вместе с составом сегментов (площадки + есть/нет
                   свободного капитала) — форсирует чистый ремаунт полосы. Без
@@ -791,14 +793,19 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     ...boxShadow(tokens.shadow.card),
   },
+  // Группа строк площадок — gap:10 между строкой/разделителем/строкой (было
+  // marginVertical:16 на разделителе — вдвое больше, чем в Figma).
+  orgGroup: { gap: 10 },
   orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  orgSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 16 },
+  orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: 6 },
-  orgAmount: { fontSize: tokens.typography.title, lineHeight: 22, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.4 },
-  orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.28 },
-  orgPctChip: { width: 50, height: 50, borderRadius: 12, backgroundColor: tokens.surface.white, alignItems: 'center', justifyContent: 'center' },
-  orgPctText: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.semibold, color: '#586692' },
-  allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.md },
+  orgAmount: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
+  orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
+  orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
+  orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
+  // marginTop 24 — то же расстояние, что Figma держит между всеми тремя
+  // секциями карточки (gap-[24px] на контейнере): строки → полоса → плашка.
+  allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.xl },
   allocationSegment: { borderRadius: 4 },
   freeCapSegment: { overflow: 'hidden' },
   freeCapCard: {
@@ -807,16 +814,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderRadius: 16,
     padding: 16,
-    marginTop: 16,
+    marginTop: tokens.spacing.xl,
     backgroundColor: hexToRgba('#7143AE', 0.08),
     overflow: 'hidden',
   },
   freeCapBg: { borderRadius: 16 },
   freeCapInfo: { gap: 6 },
-  freeCapValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: '#7143AE', letterSpacing: -0.36 },
-  freeCapLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.28 },
-  freeCapPctChip: { width: 40, height: 40, borderRadius: 12, backgroundColor: hexToRgba(tokens.surface.white, 0.5), alignItems: 'center', justifyContent: 'center' },
-  freeCapPctText: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: '#586692' },
+  freeCapValue: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: font.semibold, color: '#7143AE', letterSpacing: -0.2 },
+  freeCapLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
+  freeCapPctChip: { width: 44, height: 44, borderRadius: 12, backgroundColor: hexToRgba(tokens.surface.white, 0.5), alignItems: 'center', justifyContent: 'center' },
+  freeCapPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   taxCard: {
     backgroundColor: '#F9FAFF',
     borderRadius: 20,
