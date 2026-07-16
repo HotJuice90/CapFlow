@@ -579,10 +579,19 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* Эффективность — ставка и премия к ключевой переехали в хиро,
-                тут остаётся то, что туда не влезло по смыслу. */}
+                тут остаётся то, что туда не влезло по смыслу. Иконки-боксы и
+                фон карточки — тот же язык, что у списка «Налоги» и строк
+                площадок в «Размещении капитала» (Figma тут была 1:1 старая
+                вёрстка приложения, без переосмысления). */}
             <Text style={styles.section}>Эффективность</Text>
-            <Card>
-              <Row label="Доход на 1 млн (год)" value={formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' })} />
+            <View style={styles.effCard}>
+              <Row
+                label="Доход на 1 млн (год)"
+                value={formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' })}
+                icon="trending-up"
+                iconColor={tokens.accent.base}
+                iconBg={hexToRgba(tokens.accent.base, 0.1)}
+              />
               {summary.topInstrument ? (
                 <>
                   <Sep />
@@ -590,30 +599,59 @@ export default function AnalyticsScreen() {
                     label="Самый доходный"
                     sub={summary.topInstrument.name}
                     value={`+${formatMoney(summary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' })}/д`}
+                    valueColor={tokens.semantic.positive}
+                    icon="emoji-events"
+                    iconColor={tokens.semantic.positive}
+                    iconBg={hexToRgba(tokens.semantic.positive, 0.1)}
                   />
                 </>
               ) : null}
               {manualTotalCapital ? (
                 <>
                   <Sep />
-                  <Row label="Задействовано" value={formatMoney(byOrg.total, { currency: cur, kopecks: 'hide' })} />
+                  <Row
+                    label="Задействовано"
+                    value={formatMoney(byOrg.total, { currency: cur, kopecks: 'hide' })}
+                    icon="account-balance-wallet"
+                    iconColor={tokens.accent.base}
+                    iconBg={hexToRgba(tokens.accent.base, 0.1)}
+                  />
                   <Sep />
-                  <Row label="Свободно" value={formatMoney(freeCapital, { currency: cur, kopecks: 'hide' })} />
+                  <Row
+                    label="Свободно"
+                    value={formatMoney(freeCapital, { currency: cur, kopecks: 'hide' })}
+                    valueColor="#7143AE"
+                    icon="savings"
+                    iconColor="#7143AE"
+                    iconBg={hexToRgba('#7143AE', 0.1)}
+                  />
                 </>
               ) : null}
               {spread && spread.max > spread.min ? (
                 <>
                   <Sep />
-                  <Row label="Разброс ставки" value={`${formatPercent(spread.min)} – ${formatPercent(spread.max)}`} />
+                  <Row
+                    label="Разброс ставки"
+                    value={`${formatPercent(spread.min)} – ${formatPercent(spread.max)}`}
+                    icon="height"
+                    iconColor={tokens.category.bond}
+                    iconBg={hexToRgba(tokens.category.bond, 0.1)}
+                  />
                 </>
               ) : null}
               {lockDays !== null ? (
                 <>
                   <Sep />
-                  <Row label="Заморожено в среднем" value={`${Math.round(lockDays)} ${pluralDays(Math.round(lockDays))}`} />
+                  <Row
+                    label="Заморожено в среднем"
+                    value={`${Math.round(lockDays)} ${pluralDays(Math.round(lockDays))}`}
+                    icon="lock-clock"
+                    iconColor={tokens.category.deposit}
+                    iconBg={hexToRgba(tokens.category.deposit, 0.1)}
+                  />
                 </>
               ) : null}
-            </Card>
+            </View>
           </>
         )}
       </ScrollView>
@@ -638,14 +676,22 @@ function typeIcon(typeId: string): keyof typeof MaterialCommunityIcons.glyphMap 
   }
 }
 
-function Row({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function Row({
+  label, value, sub, valueColor, icon, iconColor, iconBg,
+}: {
+  label: string; value: string; sub?: string; valueColor?: string;
+  icon: keyof typeof MaterialIcons.glyphMap; iconColor: string; iconBg: string;
+}) {
   return (
     <View style={styles.row}>
+      <View style={[styles.rowIconBox, { backgroundColor: iconBg }]}>
+        <MaterialIcons name={icon} size={18} color={iconColor} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowLabel}>{label}</Text>
         {sub ? <Text style={styles.rowSub} numberOfLines={1}>{sub}</Text> : null}
       </View>
-      <Text style={[styles.rowValue, accent && styles.rowAccent]}>{value}</Text>
+      <Text style={[styles.rowValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
     </View>
   );
 }
@@ -888,11 +934,17 @@ const styles = StyleSheet.create({
   taxByInstrumentValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
   taxByInstrumentSubValue: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 4 },
   taxByInstrumentSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: tokens.spacing.sm },
-  rowLabel: { fontSize: tokens.typography.label, color: tokens.text.secondary },
-  rowSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
-  rowValue: { fontSize: tokens.typography.body, fontFamily: font.semibold, color: tokens.text.primary },
-  rowAccent: { color: tokens.accent.base, fontFamily: font.bold },
+  effCard: {
+    backgroundColor: '#F9FAFF',
+    borderRadius: 20,
+    padding: 16,
+    ...boxShadow(tokens.shadow.card),
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.sm },
+  rowIconBox: { width: 34, height: 34, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
+  rowLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.secondary },
+  rowSub: { fontSize: tokens.typography.caption, lineHeight: 15, color: tokens.text.tertiary, marginTop: 2 },
+  rowValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary },
   sep: { height: 1, backgroundColor: tokens.surface.hairline },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.md },
