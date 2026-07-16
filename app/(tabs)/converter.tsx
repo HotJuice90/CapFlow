@@ -720,14 +720,14 @@ const s = StyleSheet.create({
   },
   topLeft: { flex: 1, gap: 20, paddingRight: 12 },
   topLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
-  // lineHeight = fontSize+2 (минимум для Onest без обрезки) + явная height
-  // (= lineHeight) и textAlignVertical: без них плейсхолдер садится по
-  // верхнему краю бокса, а введённое значение — по другой метрике, из-за
-  // чего цифра визуально «падает» вниз при вводе.
+  // Без lineHeight/height/textAlignVertical — именно с них начались прыжки
+  // числа между плейсхолдером и введённым значением. До того, как их сюда
+  // добавили в рамках Figma-сверки, поле работало нормально — возвращаем
+  // как было, точная высота карточки тут менее важна, чем рабочий инпут.
   bigInput: {
-    fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2, height: tokens.typography.display + 2,
+    fontSize: tokens.typography.display,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.34, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
+    letterSpacing: -0.34, padding: 0,
   },
 
   // Нижняя карточка (2 столбца + дивайдер) — плотнее, чем изначально в
@@ -741,9 +741,9 @@ const s = StyleSheet.create({
   col: { flex: 1, gap: tokens.spacing.md },
   colValueGroup: { gap: tokens.spacing.sm },
   colInput: {
-    fontSize: 26, lineHeight: 28, height: 28,
+    fontSize: 26,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.52, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
+    letterSpacing: -0.52, padding: 0,
   },
   divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
   rateHint: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
