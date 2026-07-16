@@ -199,31 +199,31 @@ export default function AnalyticsScreen() {
                   >
                     {earnedPeriod >= 0 ? '+' : '−'}{formatMoney(Math.abs(earnedPeriod), { currency: cur })}
                   </Text>
-                  <Text style={styles.heroEarnedLabel}>Заработано за период</Text>
+                  <Text style={styles.heroEarnedLabel}>Доход за период</Text>
                 </View>
               </View>
 
               <View style={styles.heroDivider} />
 
-              <View style={styles.heroRateCell}>
+              <Pressable
+                style={styles.heroRateCell}
+                onPress={() => { tapBuzz(); router.push('/settings/key-rate'); }}
+              >
                 <Text style={styles.heroRateLabel} numberOfLines={1}>Средняя ставка</Text>
                 <View style={styles.heroRatePillBg}>
                   <Text style={styles.heroRateValue} numberOfLines={1} adjustsFontSizeToFit>
                     {formatPercent(summary.avgRate)}
                   </Text>
-                  <Pressable
-                    style={styles.heroRateDeltaRow}
-                    onPress={() => { tapBuzz(); router.push('/settings/key-rate'); }}
-                  >
+                  <View style={styles.heroRateDeltaRow}>
                     <Text style={[styles.heroRateArrow, { color: summary.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}>
                       {summary.premiumToKeyRate >= 0 ? '↑' : '↓'}
                     </Text>
                     <Text style={styles.heroRateDeltaText} numberOfLines={1}>
                       {formatPercentSigned(summary.premiumToKeyRate)} КС
                     </Text>
-                  </Pressable>
+                  </View>
                 </View>
-              </View>
+              </Pressable>
             </View>
 
             {/* Инсайт — тёплая карточка-подсказка (лампочка), фон картинкой из Figma */}
