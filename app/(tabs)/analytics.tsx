@@ -808,7 +808,7 @@ const styles = StyleSheet.create({
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   // marginTop 24 — то же расстояние, что Figma держит между всеми тремя
   // секциями карточки (gap-[24px] на контейнере): строки → полоса → плашка.
-  allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.xl },
+  allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.lg },
   allocationSegment: { borderRadius: 4 },
   freeCapSegment: { overflow: 'hidden' },
   freeCapCard: {
@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderRadius: 16,
     padding: 16,
-    marginTop: tokens.spacing.xl,
+    marginTop: tokens.spacing.lg,
     backgroundColor: hexToRgba('#7143AE', 0.08),
     overflow: 'hidden',
   },
