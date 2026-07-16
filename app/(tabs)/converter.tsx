@@ -627,7 +627,7 @@ export default function ConverterScreen() {
           </Pressable>
 
           <View style={s.bottomCard}>
-            <View style={s.depCol}>
+            <View style={s.col}>
               <Text style={s.depColLabel}>Ставка, %</Text>
               <View style={s.depColGroup}>
                 <TextInput
@@ -651,7 +651,7 @@ export default function ConverterScreen() {
 
             <View style={s.divider} />
 
-            <View style={s.depCol}>
+            <View style={s.col}>
               <Text style={s.depColLabel}>Срок, дней</Text>
               <View style={s.depColGroup}>
                 <TextInput
@@ -719,29 +719,31 @@ const s = StyleSheet.create({
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
   topLeft: { flex: 1, gap: 20, paddingRight: 12 },
-  // lineHeight = fontSize + 2 — проверенный минимум для Onest на Android
-  // (100% реально режет глиф сверху и «прыгает» между плейсхолдером и
-  // введённым значением). Высота блока — естественная, без forced height.
   topLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
+  // lineHeight = fontSize+2 (минимум для Onest без обрезки) + явная height
+  // (= lineHeight) и textAlignVertical: без них плейсхолдер садится по
+  // верхнему краю бокса, а введённое значение — по другой метрике, из-за
+  // чего цифра визуально «падает» вниз при вводе.
   bigInput: {
-    fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2,
+    fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2, height: tokens.typography.display + 2,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.34, padding: 0, includeFontPadding: false,
+    letterSpacing: -0.34, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
   },
 
-  // Нижняя карточка (2 столбца + дивайдер). col: gap между чипом валюты и
-  // группой (число+курс) — 20; colValueGroup: gap внутри группы — 12.
+  // Нижняя карточка (2 столбца + дивайдер) — плотнее, чем изначально в
+  // Figma (20/12): col — gap между чипом валюты и группой (число+курс);
+  // colValueGroup — gap внутри группы (число→курс).
   bottomCard: {
     backgroundColor: tokens.surface.glass, borderRadius: tokens.radius.lg, padding: tokens.spacing.sheet,
     flexDirection: 'row', alignItems: 'stretch',
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
-  col: { flex: 1, gap: 20 },
-  colValueGroup: { gap: 12 },
+  col: { flex: 1, gap: tokens.spacing.md },
+  colValueGroup: { gap: tokens.spacing.sm },
   colInput: {
-    fontSize: 26, lineHeight: 28,
+    fontSize: 26, lineHeight: 28, height: 28,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.52, padding: 0, includeFontPadding: false,
+    letterSpacing: -0.52, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
   },
   divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
   rateHint: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
@@ -831,13 +833,11 @@ const s = StyleSheet.create({
 
   // ── Калькулятор вклада ──
   depCurrencyStatic: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.tertiary, letterSpacing: -0.24 },
-  // Свой (не общий col) — тут отступы плотнее пропорционально всей карточке.
-  depCol: { flex: 1, gap: tokens.spacing.md },
   depColLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
-  depColGroup: { gap: tokens.spacing.tight },
+  depColGroup: { gap: tokens.spacing.lg },
   // Быстрые пресеты под ставкой/сроком — мелкие чипы, скроллятся, если не влезли.
   depChipsRow: { flexDirection: 'row', gap: 2 },
-  depChip: { paddingHorizontal: tokens.spacing.chip, paddingVertical: tokens.spacing.xs, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral },
+  depChip: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral },
   depChipText: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: 'Onest_400Regular', color: tokens.text.secondary },
 
   depResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: tokens.spacing.tight, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.lg },
