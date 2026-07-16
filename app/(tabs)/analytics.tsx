@@ -631,7 +631,7 @@ export default function AnalyticsScreen() {
                   {/* Едва заметный градиент цвета иконки — из противоположного
                       (нижне-правого) угла к иконке, а не сплошная заливка. */}
                   <LinearGradient
-                    colors={['transparent', hexToRgba(t.color, 0.1)]}
+                    colors={['transparent', hexToRgba(t.color, 0.04)]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={StyleSheet.absoluteFill}
@@ -915,7 +915,7 @@ const styles = StyleSheet.create({
   // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
   effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   effTile: {
-    flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 12, gap: 10,
+    flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 16, gap: 16, minHeight: 104,
     backgroundColor: '#F9FAFF', overflow: 'hidden',
   },
   effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip },
