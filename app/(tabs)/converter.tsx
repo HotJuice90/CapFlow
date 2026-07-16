@@ -627,7 +627,7 @@ export default function ConverterScreen() {
           </Pressable>
 
           <View style={s.bottomCard}>
-            <View style={s.col}>
+            <View style={s.depCol}>
               <Text style={s.depColLabel}>Ставка, %</Text>
               <View style={s.depColGroup}>
                 <TextInput
@@ -651,7 +651,7 @@ export default function ConverterScreen() {
 
             <View style={s.divider} />
 
-            <View style={s.col}>
+            <View style={s.depCol}>
               <Text style={s.depColLabel}>Срок, дней</Text>
               <View style={s.depColGroup}>
                 <TextInput
@@ -762,8 +762,8 @@ const s = StyleSheet.create({
   },
   pillIconRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pillCode: {
-    fontSize: 16, lineHeight: 18, fontFamily: 'Onest_500Medium', color: tokens.text.primary,
-    textTransform: 'uppercase', letterSpacing: -0.64,
+    fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.primary,
+    textTransform: 'uppercase', letterSpacing: -0.56,
   },
 
   // Строка обновления
@@ -776,7 +776,7 @@ const s = StyleSheet.create({
 
   // История
   histSection: { marginTop: 40, flex: 1 },
-  histTitle: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.24, marginBottom: 12 },
+  histTitle: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.2, marginBottom: 12 },
   histHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   periodToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: tokens.spacing.tight, paddingVertical: 4 },
@@ -831,15 +831,17 @@ const s = StyleSheet.create({
 
   // ── Калькулятор вклада ──
   depCurrencyStatic: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.tertiary, letterSpacing: -0.24 },
+  // Свой (не общий col) — тут отступы плотнее пропорционально всей карточке.
+  depCol: { flex: 1, gap: tokens.spacing.md },
   depColLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
-  depColGroup: { gap: tokens.spacing.lg },
+  depColGroup: { gap: tokens.spacing.tight },
   // Быстрые пресеты под ставкой/сроком — мелкие чипы, скроллятся, если не влезли.
   depChipsRow: { flexDirection: 'row', gap: 2 },
-  depChip: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral },
+  depChip: { paddingHorizontal: tokens.spacing.chip, paddingVertical: tokens.spacing.xs, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral },
   depChipText: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: 'Onest_400Regular', color: tokens.text.secondary },
 
   depResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: tokens.spacing.tight, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.lg },
-  depResultTitle: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.48 },
+  depResultTitle: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.2 },
   depCapRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   depCapLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.secondary },
 
