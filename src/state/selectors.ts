@@ -161,7 +161,7 @@ export function portfolioSummary(data: AppData, now: Date = new Date()): Portfol
 
 function typeLabel(typeId: string): string {
   if (typeId === 'deposit') return 'Вклады';
-  if (typeId === 'savings') return 'Накопительный счёт';
+  if (typeId === 'savings') return 'Накопительные счета';
   if (typeId === 'bond') return 'Облигации';
   return 'ЦФА';
 }

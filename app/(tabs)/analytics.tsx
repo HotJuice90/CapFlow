@@ -332,7 +332,7 @@ export default function AnalyticsScreen() {
               <View style={styles.vesselRow}>
                 {typeGroups.map((g) => (
                   <View key={g.key} style={styles.vesselCol}>
-                    <Text style={styles.vesselLabel} numberOfLines={2}>{g.label}</Text>
+                    <Text style={styles.vesselLabel} numberOfLines={2}>{VESSEL_LABEL[g.key] ?? g.label}</Text>
                     <View style={styles.vessel}>
                       <LinearGradient
                         colors={[hexToRgba(g.color, 0.55), g.color]}
@@ -629,6 +629,11 @@ export default function AnalyticsScreen() {
     </ScreenBackground>
   );
 }
+
+// Сокращение только для узких карточек «Состав портфеля» (как в макете
+// Figma) — общий typeLabel() в selectors.ts трогать не надо, он делит
+// формулировку с главным экраном, где места больше.
+const VESSEL_LABEL: Record<string, string> = { savings: 'Накоп. счета' };
 
 // Те же иконки, что и везде в приложении для типа инструмента (AssetRow,
 // TypeCardsRow, каталог, поиск) — MaterialCommunityIcons, не свой набор.
