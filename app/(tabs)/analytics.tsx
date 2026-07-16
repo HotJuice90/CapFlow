@@ -782,7 +782,7 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.surface.white, 0.25),
     transform: [{ rotate: '-18deg' }],
   },
-  vesselPct: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary },
+  vesselPct: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary },
   vesselLabel: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.regular, color: tokens.text.tertiary, textAlign: 'center' },
   orgCard: {
     backgroundColor: '#F9FAFF',
