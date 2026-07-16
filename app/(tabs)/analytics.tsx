@@ -803,7 +803,7 @@ const styles = StyleSheet.create({
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: tokens.spacing.xs },
   orgAmount: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
-  orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
+  orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary },
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   // marginTop 24 — то же расстояние, что Figma держит между всеми тремя
