@@ -719,21 +719,18 @@ const s = StyleSheet.create({
     boxShadow: '0px 4px 14px rgba(48,69,62,0.08)',
   },
   topLeft: { flex: 1, gap: 20, paddingRight: 12 },
-  // label-стиль = 14/100% (lineHeight точно = fontSize) — так карточка
-  // складывается ровно в 108: padding 20+20 + label14 + gap20 + число34.
-  topLabel: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
-  // lineHeight = fontSize (100%, как в Figma) + фиксированная height и
-  // textAlignVertical — так число не «прыгает» между плейсхолдером и
-  // введённым значением на Android (жёсткий бокс вместо реflow по метрикам шрифта).
+  // lineHeight = fontSize + 2 — проверенный минимум для Onest на Android
+  // (100% реально режет глиф сверху и «прыгает» между плейсхолдером и
+  // введённым значением). Высота блока — естественная, без forced height.
+  topLabel: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
   bigInput: {
-    fontSize: tokens.typography.display, lineHeight: tokens.typography.display, height: tokens.typography.display,
+    fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.34, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
+    letterSpacing: -0.34, padding: 0, includeFontPadding: false,
   },
 
   // Нижняя карточка (2 столбца + дивайдер). col: gap между чипом валюты и
   // группой (число+курс) — 20; colValueGroup: gap внутри группы — 12.
-  // Итог: padding40 + pill36 + gap20 + число26 + gap12 + курс14 = 148.
   bottomCard: {
     backgroundColor: tokens.surface.glass, borderRadius: tokens.radius.lg, padding: tokens.spacing.sheet,
     flexDirection: 'row', alignItems: 'stretch',
@@ -742,12 +739,12 @@ const s = StyleSheet.create({
   col: { flex: 1, gap: 20 },
   colValueGroup: { gap: 12 },
   colInput: {
-    fontSize: 26, lineHeight: 26, height: 26,
+    fontSize: 26, lineHeight: 28,
     fontFamily: 'Onest_600SemiBold', color: tokens.text.primary,
-    letterSpacing: -0.52, padding: 0, textAlignVertical: 'center', includeFontPadding: false,
+    letterSpacing: -0.52, padding: 0, includeFontPadding: false,
   },
   divider: { width: 1, backgroundColor: D.divider, marginHorizontal: 16, alignSelf: 'stretch' },
-  rateHint: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
+  rateHint: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.text.tertiary },
 
   // Кнопка сброса
   resetBtn: {
@@ -822,15 +819,14 @@ const s = StyleSheet.create({
     flexDirection: 'row', backgroundColor: D.tabBarBg, borderRadius: tokens.radius.pill,
     marginBottom: tokens.spacing.lg,
   },
-  // Высота бара — 38px явно, а не через paddingVertical+lineHeight, иначе
-  // нативный lineHeight Onest (заметно больше fontSize без override) даёт
-  // непредсказуемую высоту.
+  // Высота — естественная (paddingVertical 11×2 + lineHeight 16 = 38),
+  // без forced height: lineHeight fontSize+2 — тот же минимум, что и везде.
   modeTab: {
-    flex: 1, height: 38, borderRadius: tokens.radius.pill,
+    flex: 1, paddingVertical: 11, borderRadius: tokens.radius.pill,
     alignItems: 'center', justifyContent: 'center',
   },
   modeTabActive: { backgroundColor: tokens.accent.base },
-  modeTabText: { fontSize: 14, lineHeight: 14, fontFamily: 'Onest_500Medium', color: tokens.accent.base },
+  modeTabText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.accent.base },
   modeTabTextActive: { color: tokens.text.inverse, fontFamily: 'Onest_600SemiBold' },
 
   // ── Калькулятор вклада ──
