@@ -737,6 +737,52 @@ export interface Insight {
   text: string;
 }
 
+// Родительный падеж множественного числа для «среди ваших ___» — typeLabel()
+// даёт именительный («Вклады»), тут отдельно, под другой синтаксис.
+const TYPE_LABEL_GENITIVE: Record<string, string> = {
+  deposit: 'вкладов',
+  savings: 'накопительных счетов',
+  bond: 'облигаций',
+  dfa: 'ЦФА',
+};
+
+/**
+ * Лучшая площадка по ставке СРЕДИ СВОЕГО ЖЕ ТИПА инструмента (вклад
+ * сравниваем с вкладом, не с облигацией — иначе сравнение нечестное).
+ * Порог 10% разницы — иначе это шум, а не инсайт. null, если сравнивать
+ * не с чем (меньше 2 площадок с этим типом) или разрыва нет.
+ */
+function bestOrgByType(data: AppData, views: AssetView[]): { typeId: string; orgName: string; deltaPct: number } | null {
+  const byType = new Map<string, Map<string, { orgId: string; orgName: string; capital: number; weightedRate: number }>>();
+  for (const v of views) {
+    const cap = convert(v.derived.currentValue, v.asset.currency, data);
+    if (cap <= 0) continue;
+    const typeId = v.instrument.typeId;
+    const orgMap = byType.get(typeId) ?? new Map();
+    const agg = orgMap.get(v.organization.id) ?? { orgId: v.organization.id, orgName: v.organization.name, capital: 0, weightedRate: 0 };
+    agg.capital += cap;
+    agg.weightedRate += v.derived.currentRate * cap;
+    orgMap.set(v.organization.id, agg);
+    byType.set(typeId, orgMap);
+  }
+
+  let best: { typeId: string; orgName: string; deltaPct: number } | null = null;
+  for (const [typeId, orgMap] of byType) {
+    const orgs = [...orgMap.values()].filter((o) => o.capital > 0).map((o) => ({ ...o, avgRate: o.weightedRate / o.capital }));
+    if (orgs.length < 2) continue;
+    const top = orgs.reduce((a, b) => (b.avgRate > a.avgRate ? b : a));
+    const rest = orgs.filter((o) => o.orgId !== top.orgId);
+    const restCapital = rest.reduce((sum, o) => sum + o.capital, 0);
+    if (restCapital <= 0) continue;
+    const restAvgRate = rest.reduce((sum, o) => sum + o.avgRate * o.capital, 0) / restCapital;
+    if (restAvgRate <= 0) continue;
+    const deltaPct = ((top.avgRate - restAvgRate) / restAvgRate) * 100;
+    if (deltaPct < 10) continue;
+    if (!best || deltaPct > best.deltaPct) best = { typeId, orgName: top.orgName, deltaPct };
+  }
+  return best;
+}
+
 /** 2-3 базовых детерминированных инсайта (решение #10). Возвращает по приоритету. */
 export function insights(data: AppData, now: Date = new Date()): Insight[] {
   const views = buildAssetViews(data, now);
@@ -754,7 +800,17 @@ export function insights(data: AppData, now: Date = new Date()): Insight[] {
     });
   }
 
-  // 2. средняя ставка vs ключевая
+  // 2. лучшая площадка по ставке (в рамках своего типа инструмента)
+  const orgBest = bestOrgByType(data, views);
+  if (orgBest) {
+    out.push({
+      icon: 'emoji-events',
+      title: `${orgBest.orgName} приносит на ${Math.round(orgBest.deltaPct)}% больше`,
+      text: `среди ваших ${TYPE_LABEL_GENITIVE[orgBest.typeId] ?? 'активов'}`,
+    });
+  }
+
+  // 3. средняя ставка vs ключевая
   const s = analyticsSummary(data, now);
   if (views.length > 0) {
     if (s.premiumToKeyRate >= 0) {
