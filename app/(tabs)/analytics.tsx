@@ -110,6 +110,49 @@ export default function AnalyticsScreen() {
   const freeCapitalShare = manualTotalCapital ? freeCapital / grandTotal : 0;
   const orgShare = (capital: number) => (manualTotalCapital ? capital / grandTotal : capital / (byOrg.total || 1));
 
+  // Плитки «Эффективность» — отдельный набор метрик, не строки списка (список
+  // уже занят под «Налоги»/«Размещение капитала»), поэтому собираем массив и
+  // рендерим сеткой 2×N, а не построчно с разделителями.
+  const effTiles: {
+    key: string; icon: keyof typeof MaterialIcons.glyphMap; color: string;
+    label: string; sub?: string; value: string; valueColor?: string;
+  }[] = [
+    {
+      key: 'income1m', icon: 'trending-up', color: tokens.accent.base,
+      label: 'Доход на 1 млн (год)', value: formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' }),
+    },
+  ];
+  if (summary.topInstrument) {
+    effTiles.push({
+      key: 'top', icon: 'emoji-events', color: tokens.semantic.positive,
+      label: 'Самый доходный', sub: summary.topInstrument.name,
+      value: `+${formatMoney(summary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' })}/д`,
+      valueColor: tokens.semantic.positive,
+    });
+  }
+  if (manualTotalCapital) {
+    effTiles.push({
+      key: 'used', icon: 'account-balance-wallet', color: tokens.accent.base,
+      label: 'Задействовано', value: formatMoney(byOrg.total, { currency: cur, kopecks: 'hide' }),
+    });
+    effTiles.push({
+      key: 'free', icon: 'savings', color: '#7143AE',
+      label: 'Свободно', value: formatMoney(freeCapital, { currency: cur, kopecks: 'hide' }), valueColor: '#7143AE',
+    });
+  }
+  if (spread && spread.max > spread.min) {
+    effTiles.push({
+      key: 'spread', icon: 'height', color: tokens.category.bond,
+      label: 'Разброс ставки', value: `${formatPercent(spread.min)} – ${formatPercent(spread.max)}`,
+    });
+  }
+  if (lockDays !== null) {
+    effTiles.push({
+      key: 'lock', icon: 'lock-clock', color: tokens.category.deposit,
+      label: 'Заморожено в среднем', value: `${Math.round(lockDays)} ${pluralDays(Math.round(lockDays))}`,
+    });
+  }
+
   const incomeStart = incomePace.prev;
   const incomeNow = incomePace.now;
   const incomeDeltaAbs = incomeNow - incomeStart;
@@ -578,79 +621,27 @@ export default function AnalyticsScreen() {
               ) : null}
             </View>
 
-            {/* Эффективность — ставка и премия к ключевой переехали в хиро,
-                тут остаётся то, что туда не влезло по смыслу. Иконки-боксы и
-                фон карточки — тот же язык, что у списка «Налоги» и строк
-                площадок в «Размещении капитала» (Figma тут была 1:1 старая
-                вёрстка приложения, без переосмысления). */}
+            {/* Эффективность — сетка плиток-статов, а не список: раньше это была
+                1:1 копия строчного паттерна из «Налогов» прямо над ней, и блоки
+                визуально сливались, хотя по смыслу это разные вещи. */}
             <Text style={styles.section}>Эффективность</Text>
-            <View style={styles.effCard}>
-              <Row
-                label="Доход на 1 млн (год)"
-                value={formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' })}
-                icon="trending-up"
-                iconColor={tokens.accent.base}
-                iconBg={hexToRgba(tokens.accent.base, 0.1)}
-              />
-              {summary.topInstrument ? (
-                <>
-                  <Sep />
-                  <Row
-                    label="Самый доходный"
-                    sub={summary.topInstrument.name}
-                    value={`+${formatMoney(summary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' })}/д`}
-                    valueColor={tokens.semantic.positive}
-                    icon="emoji-events"
-                    iconColor={tokens.semantic.positive}
-                    iconBg={hexToRgba(tokens.semantic.positive, 0.1)}
-                  />
-                </>
-              ) : null}
-              {manualTotalCapital ? (
-                <>
-                  <Sep />
-                  <Row
-                    label="Задействовано"
-                    value={formatMoney(byOrg.total, { currency: cur, kopecks: 'hide' })}
-                    icon="account-balance-wallet"
-                    iconColor={tokens.accent.base}
-                    iconBg={hexToRgba(tokens.accent.base, 0.1)}
-                  />
-                  <Sep />
-                  <Row
-                    label="Свободно"
-                    value={formatMoney(freeCapital, { currency: cur, kopecks: 'hide' })}
-                    valueColor="#7143AE"
-                    icon="savings"
-                    iconColor="#7143AE"
-                    iconBg={hexToRgba('#7143AE', 0.1)}
-                  />
-                </>
-              ) : null}
-              {spread && spread.max > spread.min ? (
-                <>
-                  <Sep />
-                  <Row
-                    label="Разброс ставки"
-                    value={`${formatPercent(spread.min)} – ${formatPercent(spread.max)}`}
-                    icon="height"
-                    iconColor={tokens.category.bond}
-                    iconBg={hexToRgba(tokens.category.bond, 0.1)}
-                  />
-                </>
-              ) : null}
-              {lockDays !== null ? (
-                <>
-                  <Sep />
-                  <Row
-                    label="Заморожено в среднем"
-                    value={`${Math.round(lockDays)} ${pluralDays(Math.round(lockDays))}`}
-                    icon="lock-clock"
-                    iconColor={tokens.category.deposit}
-                    iconBg={hexToRgba(tokens.category.deposit, 0.1)}
-                  />
-                </>
-              ) : null}
+            <View style={styles.effGrid}>
+              {effTiles.map((t) => (
+                <View key={t.key} style={[styles.effTile, { backgroundColor: hexToRgba(t.color, 0.08) }]}>
+                  <View style={[styles.effTileIconBox, { backgroundColor: hexToRgba(t.color, 0.16) }]}>
+                    <MaterialIcons name={t.icon} size={16} color={t.color} />
+                  </View>
+                  <Text
+                    style={[styles.effTileValue, t.valueColor ? { color: t.valueColor } : null]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {t.value}
+                  </Text>
+                  <Text style={styles.effTileLabel} numberOfLines={1}>{t.label}</Text>
+                  {t.sub ? <Text style={styles.effTileSub} numberOfLines={1}>{t.sub}</Text> : null}
+                </View>
+              ))}
             </View>
           </>
         )}
@@ -674,30 +665,6 @@ function typeIcon(typeId: string): keyof typeof MaterialCommunityIcons.glyphMap 
     case 'dfa': return 'chart-line';
     default: return 'dots-horizontal';
   }
-}
-
-function Row({
-  label, value, sub, valueColor, icon, iconColor, iconBg,
-}: {
-  label: string; value: string; sub?: string; valueColor?: string;
-  icon: keyof typeof MaterialIcons.glyphMap; iconColor: string; iconBg: string;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={[styles.rowIconBox, { backgroundColor: iconBg }]}>
-        <MaterialIcons name={icon} size={18} color={iconColor} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {sub ? <Text style={styles.rowSub} numberOfLines={1}>{sub}</Text> : null}
-      </View>
-      <Text style={[styles.rowValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
-    </View>
-  );
-}
-
-function Sep() {
-  return <View style={styles.sep} />;
 }
 
 const styles = StyleSheet.create({
@@ -934,18 +901,14 @@ const styles = StyleSheet.create({
   taxByInstrumentValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
   taxByInstrumentSubValue: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 4 },
   taxByInstrumentSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
-  effCard: {
-    backgroundColor: '#F9FAFF',
-    borderRadius: 20,
-    padding: 16,
-    ...boxShadow(tokens.shadow.card),
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.sm },
-  rowIconBox: { width: 34, height: 34, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
-  rowLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.secondary },
-  rowSub: { fontSize: tokens.typography.caption, lineHeight: 15, color: tokens.text.tertiary, marginTop: 2 },
-  rowValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary },
-  sep: { height: 1, backgroundColor: tokens.surface.hairline },
+  // Сетка плиток-статов — сознательно другой паттерн, чем построчные списки
+  // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
+  effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  effTile: { flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 12, gap: 8 },
+  effTileIconBox: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  effTileValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
+  effTileLabel: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.medium, color: tokens.text.secondary },
+  effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: -4 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
