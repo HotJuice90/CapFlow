@@ -954,12 +954,12 @@ const styles = StyleSheet.create({
   // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
   effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   effTile: {
-    flexBasis: '48%', flexGrow: 1, aspectRatio: 1.35, borderRadius: 16, padding: 16,
+    flexBasis: '48%', flexGrow: 1, aspectRatio: 1.31, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18,
     justifyContent: 'space-between', backgroundColor: '#F9FAFF', overflow: 'hidden',
   },
   effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   effTileIconBox: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  effTileLabel: { flex: 1, fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: tokens.text.secondary },
+  effTileLabel: { flex: 1, fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: tokens.text.secondary },
   effTileValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.22 },
   effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
