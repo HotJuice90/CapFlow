@@ -1376,7 +1376,7 @@ export function assetTimeline(asset: Asset): AssetTimelineEntry[] {
   return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export type HeroWindow = number | 'all' | 'year';
+export type HeroWindow = number | 'all' | 'year' | 'month';
 
 interface HistoryItem {
   asset: Asset;
@@ -1425,6 +1425,10 @@ function resolvePeriodStart(days: HeroWindow, now: Date, earliestOpen: number): 
   if (days === 'year') {
     const jan1 = new Date(now.getFullYear(), 0, 1);
     return new Date(Math.max(jan1.getTime(), earliestOpen));
+  }
+  if (days === 'month') {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return new Date(Math.max(monthStart.getTime(), earliestOpen));
   }
   const rollingStart = new Date(now);
   rollingStart.setDate(rollingStart.getDate() - (days - 1));
