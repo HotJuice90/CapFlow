@@ -119,7 +119,7 @@ export default function AnalyticsScreen() {
   }[] = [
     {
       key: 'income1m', icon: 'trending-up', color: tokens.accent.base,
-      label: 'Доход на\n1 млн', value: formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' }),
+      label: 'Доход\nна 1 млн', value: formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' }),
     },
   ];
   if (summary.topInstrument) {
