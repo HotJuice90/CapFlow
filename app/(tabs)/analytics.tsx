@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
   // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
   effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   effTile: {
-    flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 16, height: 104,
+    flexBasis: '48%', flexGrow: 1, aspectRatio: 1, borderRadius: 16, padding: 16,
     justifyContent: 'space-between', backgroundColor: '#F9FAFF', overflow: 'hidden',
   },
   effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip },
