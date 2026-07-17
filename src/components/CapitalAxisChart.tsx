@@ -131,27 +131,38 @@ export function CapitalAxisChart({
   width: number;
   height?: number;
 }) {
-  const max = Math.max(0, ...data);
-  const step = niceStep(max || 1);
-  // «Круглый» потолок для сетки/подписей (2М/4М/6М) — на нём и держатся ярлыки.
-  const niceMax = step * Math.max(1, Math.ceil(max / step));
-  // Все круглые деления шага до потолка — НЕ жёстко «шаг/2×шаг/потолок»: если
-  // делений больше трёх (max требует 4+ шагов), фиксированные три позиции
-  // давали неровный пропуск подписей (напр. 2М/4М/8М вместо 2М/4М/6М/8М).
+  // Масштаб НЕ от нуля, а от фактического диапазона видимых данных — у
+  // портфеля в несколько миллионов дневное движение теряется на шкале 0..max,
+  // график выглядит «мёртвым» плоским хвостом у потолка. Вместо этого зумим
+  // на реальный min..max ряда (как биржевые графики), с минимальным запасом
+  // 2% от текущего значения — иначе на почти плоском участке шаг сетки уедет
+  // в рубли на миллионных суммах.
+  const rawMin = Math.min(...data);
+  const rawMax = Math.max(0, ...data);
+  const minSpan = Math.max(rawMax * 0.02, 1);
+  const effectiveMin = Math.min(rawMin, rawMax - minSpan);
+  const step = niceStep(rawMax - effectiveMin || 1);
+  // «Круглые» пол/потолок сетки (2М/4М/6М) — на них держатся ярлыки. Все
+  // деления шага между ними — НЕ жёстко «низ/середина/верх»: если делений
+  // больше трёх, фиксированные три позиции давали неровный пропуск подписей.
+  const niceMin = Math.max(0, Math.floor(effectiveMin / step) * step);
+  const niceMax = step * Math.max(1, Math.ceil(rawMax / step));
   const gridValues: number[] = [];
-  for (let v = step; v <= niceMax + step * 0.01; v += step) gridValues.push(v);
-  // Реальный максимум растёт непрерывно (капает процент), а niceMax — круглыми
+  for (let v = niceMin; v <= niceMax + step * 0.01; v += step) gridValues.push(v);
+  // Реальный максимум/минимум растут непрерывно, а nice-границы — круглыми
   // ступенями, так что сразу после пробития очередной ступени пик ложится
-  // вплотную к верхнему краю. Даём отдельный запас в масштабе (не в подписях),
-  // чтобы точка/линия у максимума никогда не «утыкалась в потолок».
-  const axisMax = niceMax + step * 0.5;
+  // вплотную к краю. Даём отдельный запас в масштабе (не в подписях), чтобы
+  // точка/линия никогда не «утыкались» в потолок или пол.
+  const axisMin = Math.max(0, niceMin - step * 0.25);
+  const axisMax = niceMax + step * 0.25;
 
   const padTop = 16;
-  // Запас снизу — чтобы низкие участки ряда (просадки на «Годе») не «прилипали»
-  // к плашке под графиком: якорь нуля теперь не у самого края SVG.
+  // Запас снизу — чтобы низкие участки ряда не «прилипали» к плашке под
+  // графиком: якорь минимума теперь не у самого края SVG.
   const padBottom = 24;
   const innerH = height - padTop - padBottom;
-  const valueToY = (v: number) => padTop + innerH - (v / axisMax) * innerH;
+  const axisSpan = axisMax - axisMin || 1;
+  const valueToY = (v: number) => padTop + innerH - ((v - axisMin) / axisSpan) * innerH;
 
   if (data.length < 2) return <View style={{ width, height }} />;
 
