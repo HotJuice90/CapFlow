@@ -708,22 +708,25 @@ export default function AnalyticsScreen() {
               <>
                 <Text style={styles.section}>Ликвидность</Text>
                 <View style={styles.liqCard}>
-                  <View style={styles.taxHeaderRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.taxLabel}>Доступно сейчас</Text>
-                      <Text style={[styles.taxValue, { color: tokens.semantic.positive }]}>
-                        {formatMoney(liq.liquid, { currency: cur, kopecks: 'hide' })}
-                      </Text>
-                    </View>
-                    <View style={styles.liqFrozenBadge}>
-                      <MaterialIcons name="schedule" size={14} color="#909497" />
-                      <Text style={styles.liqFrozenBadgeText}>{Math.round((1 - liqLiquidShare) * 100)}%</Text>
-                    </View>
+                  <View>
+                    <Text style={styles.taxLabel}>Доступно сейчас</Text>
+                    <Text style={[styles.taxValue, { color: tokens.semantic.positive }]}>
+                      {formatMoney(liq.liquid, { currency: cur, kopecks: 'hide' })}
+                    </Text>
                   </View>
 
                   <View style={styles.liqBar}>
                     <View style={[styles.allocationSegment, { flex: Math.max(liqLiquidShare, 0.02), backgroundColor: tokens.semantic.positive }]} />
                     <View style={[styles.allocationSegment, { flex: Math.max(1 - liqLiquidShare, 0.02), backgroundColor: tokens.surface.neutral }]} />
+                  </View>
+
+                  <View style={[styles.taxMeta, { justifyContent: 'flex-end' }]}>
+                    <View style={styles.taxMetaInlineRow}>
+                      <MaterialIcons name="schedule" size={16} color={tokens.text.tertiary} />
+                      <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>
+                        {formatMoney(liq.frozen, { currency: cur, kopecks: 'hide' })}
+                      </Text>
+                    </View>
                   </View>
 
                   <View style={styles.liqSep} />
@@ -734,14 +737,19 @@ export default function AnalyticsScreen() {
                         style={({ pressed }) => [styles.liqRow, pressed && styles.taxRowPressed]}
                         onPress={() => { tapBuzz(); router.push(`/asset/${it.assetId}`); }}
                       >
-                        <Donut
-                          segments={[
-                            { value: it.termProgress, color: tokens.category[it.typeId] ?? tokens.accent.base },
-                            { value: 1 - it.termProgress, color: tokens.surface.neutral },
-                          ]}
-                          size={38}
-                          strokeWidth={4.5}
-                        />
+                        <View style={styles.liqRing}>
+                          <Donut
+                            segments={[
+                              { value: it.termProgress, color: tokens.category[it.typeId] ?? tokens.accent.base },
+                              { value: 1 - it.termProgress, color: tokens.surface.neutral },
+                            ]}
+                            size={38}
+                            strokeWidth={4.5}
+                          />
+                          <View style={styles.liqLockCircle}>
+                            <MaterialIcons name="lock" size={13} color={tokens.category[it.typeId] ?? tokens.accent.base} />
+                          </View>
+                        </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.liqRowName} numberOfLines={1}>
                             {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
@@ -1028,14 +1036,10 @@ const styles = StyleSheet.create({
   effTileValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.22 },
   effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   liqCard: { backgroundColor: '#F9FAFF', borderRadius: 20, padding: 16, ...boxShadow(tokens.shadow.card) },
-  liqFrozenBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip,
-    backgroundColor: hexToRgba('#909497', 0.12), borderRadius: tokens.radius.pill,
-    paddingHorizontal: tokens.spacing.tight, paddingVertical: 6,
-  },
-  liqFrozenBadgeText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.semibold, color: '#909497', letterSpacing: -0.13 },
   liqBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: 16 },
   liqSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
+  liqRing: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+  liqLockCircle: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: tokens.surface.white, alignItems: 'center', justifyContent: 'center' },
   liqItemSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
   liqRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   liqRowName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
