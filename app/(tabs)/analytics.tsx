@@ -12,7 +12,6 @@ import { boxShadow } from '@/theme/shadow';
 import { OrgLogo } from '@/components/BankLogo';
 import { InfoTap } from '@/components/InfoTap';
 import { CompareDonut } from '@/components/CompareDonut';
-import { Donut } from '@/components/Donut';
 import { CapitalAxisChart } from '@/components/CapitalAxisChart';
 import { useData } from '@/state/DataContext';
 import { tapBuzz } from '@/lib/haptics';
@@ -30,11 +29,9 @@ import {
   taxByOrganization,
   buildAssetViews,
   capitalizationBonus,
-  liquidity,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
-import { formatDateShort, pluralDays } from '@/format/date';
 import { t } from '@/i18n';
 
 // Иконка по типу инструмента — та же пара, что и в AssetRow.
@@ -91,9 +88,6 @@ export default function AnalyticsScreen() {
   const taxAssetRows = useMemo(() => taxByInstrument(data), [data]);
   const taxOrgRows = useMemo(() => taxByOrganization(data), [data]);
   const taxRows = taxTab === 'assets' ? taxAssetRows : taxOrgRows;
-  const liq = useMemo(() => liquidity(data), [data]);
-  const liqTotal = liq.liquid + liq.frozen;
-  const liqLiquidShare = liqTotal > 0 ? liq.liquid / liqTotal : 0;
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -698,80 +692,6 @@ export default function AnalyticsScreen() {
                 </View>
               ))}
             </View>
-
-            {/* Ликвидность — сколько можно снять прямо сейчас без потери %
-                (бессрочные счета) против того, что заморожено до срока
-                (вклады/облигации/ЦФА). Показываем, только если в портфеле
-                вообще есть срочные активы — иначе бар из одного сегмента
-                бессмысленный. */}
-            {liq.frozen > 0 ? (
-              <>
-                <Text style={styles.section}>Ликвидность</Text>
-                <View style={styles.liqCard}>
-                  <View>
-                    <Text style={styles.taxLabel}>Доступно сейчас</Text>
-                    <Text style={[styles.taxValue, { color: tokens.semantic.positive }]}>
-                      {formatMoney(liq.liquid, { currency: cur, kopecks: 'hide' })}
-                    </Text>
-                  </View>
-
-                  <View style={styles.taxBarWrap}>
-                    <View style={[styles.taxTrack, { backgroundColor: hexToRgba('#909497', 0.18) }]}>
-                      <LinearGradient
-                        colors={[hexToRgba(tokens.semantic.positive, 0.5), tokens.semantic.positive]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[styles.taxFill, { width: `${Math.min(Math.max(liqLiquidShare * 100, 0), 100)}%` }]}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.taxMeta}>
-                    <Text style={styles.taxMetaBigValue}>{Math.round(liqLiquidShare * 100)}%</Text>
-                    <View style={styles.taxMetaInlineRow}>
-                      <MaterialIcons name="lock" size={14} color={tokens.text.tertiary} />
-                      <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>
-                        {formatMoney(liq.frozen, { currency: cur, kopecks: 'hide' })}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.liqSep} />
-                  {liq.frozenItems.map((it, i) => (
-                    <View key={it.assetId}>
-                      {i > 0 ? <View style={styles.liqItemSep} /> : null}
-                      <Pressable
-                        style={({ pressed }) => [styles.liqRow, pressed && styles.taxRowPressed]}
-                        onPress={() => { tapBuzz(); router.push(`/asset/${it.assetId}`); }}
-                      >
-                        <View style={styles.liqRing}>
-                          <View style={[styles.liqLockCircle, { backgroundColor: hexToRgba(tokens.category[it.typeId] ?? tokens.accent.base, 0.16) }]}>
-                            <MaterialIcons name="lock" size={15} color={tokens.category[it.typeId] ?? tokens.accent.base} />
-                          </View>
-                          <Donut
-                            segments={[
-                              { value: it.termProgress, color: tokens.category[it.typeId] ?? tokens.accent.base },
-                              { value: 1 - it.termProgress, color: tokens.surface.neutral },
-                            ]}
-                            size={38}
-                            strokeWidth={4.5}
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.liqRowName} numberOfLines={1}>
-                            {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
-                          </Text>
-                          <Text style={styles.liqRowSub} numberOfLines={1}>
-                            через {it.daysRemaining} {pluralDays(it.daysRemaining)} · до {formatDateShort(it.unlockDate)}
-                          </Text>
-                        </View>
-                        <Text style={styles.liqRowValue}>{formatMoney(it.amountBase, { currency: cur, kopecks: 'hide' })}</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              </>
-            ) : null}
           </>
         )}
       </ScrollView>
@@ -1042,15 +962,6 @@ const styles = StyleSheet.create({
   effTileLabel: { flex: 1, fontSize: 12, lineHeight: 14, fontFamily: font.medium, color: tokens.text.secondary },
   effTileValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.22 },
   effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
-  liqCard: { backgroundColor: '#F9FAFF', borderRadius: 20, padding: 16, ...boxShadow(tokens.shadow.card) },
-  liqSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
-  liqRing: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  liqLockCircle: { position: 'absolute', width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  liqItemSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
-  liqRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  liqRowName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
-  liqRowSub: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 2 },
-  liqRowValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
