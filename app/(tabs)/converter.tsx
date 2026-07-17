@@ -38,7 +38,7 @@ import RotateLeftIcon from '../../assets/icons/converter/rotate-left.svg';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Порядок строго как в макете Figma (node 255-2981)
-const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
+const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL'];
 
 const CURRENCY_NAME: Record<CurrencyCode, string> = {
   RUB: 'Российский рубль',
@@ -51,7 +51,6 @@ const CURRENCY_NAME: Record<CurrencyCode, string> = {
   INR: 'Индийская рупия',
   AED: 'Дирхам ОАЭ',
   BRL: 'Бразильский реал',
-  ARS: 'Аргентинское песо',
 };
 
 const CHART_LINE = '#6B7ECB';

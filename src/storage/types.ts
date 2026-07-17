@@ -77,7 +77,6 @@ export const DEFAULT_RATES: Record<CurrencyCode, number> = {
   INR: 1.05,
   AED: 25,
   BRL: 16.5,
-  ARS: 0.09,
 };
 
 export const DEFAULT_PARAMS: CalcParams = {

@@ -15,7 +15,6 @@ const FLAGS: Record<CurrencyCode, any> = {
   INR: require('../../assets/flags/INR.png'),
   AED: require('../../assets/flags/AED.png'),
   BRL: require('../../assets/flags/BRL.png'),
-  ARS: require('../../assets/flags/ARS.png'),
 };
 
 export function Flag({ code, size = 28, style }: { code: CurrencyCode; size?: number; style?: StyleProp<ImageStyle> }) {
