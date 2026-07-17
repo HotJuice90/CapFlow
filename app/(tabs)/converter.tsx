@@ -26,7 +26,7 @@ import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
 import { CURRENCY_SYMBOL, formatMoney } from '@/format';
 import { timeAgo } from '@/format/date';
-import { tapBuzz } from '@/lib/haptics';
+import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { Flag } from '@/components/Flag';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { ScreenTitle } from '@/components/ScreenTitle';
@@ -369,8 +369,16 @@ export default function ConverterScreen() {
   };
 
   const doRefresh = async () => {
+    tapBuzz();
     setRefreshing(true);
-    try { await refreshRates(); } catch {} finally { setRefreshing(false); }
+    try {
+      await refreshRates();
+      successBuzz();
+    } catch {
+      warnBuzz();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const doBackfill = async () => {
