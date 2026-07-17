@@ -716,7 +716,7 @@ export default function AnalyticsScreen() {
                   </View>
 
                   <View style={styles.taxBarWrap}>
-                    <View style={[styles.taxTrack, { backgroundColor: tokens.surface.neutral }]}>
+                    <View style={[styles.taxTrack, { backgroundColor: hexToRgba('#909497', 0.18) }]}>
                       <LinearGradient
                         colors={[hexToRgba(tokens.semantic.positive, 0.5), tokens.semantic.positive]}
                         start={{ x: 0, y: 0 }}
