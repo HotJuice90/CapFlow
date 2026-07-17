@@ -1,12 +1,11 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { AssetView } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { pluralDays } from '@/format/date';
-import { OrgLogo, hasBankLogo } from '@/components/BankLogo';
+import { OrgLogo } from '@/components/BankLogo';
 import { t } from '@/i18n';
 
 const ICON_BY_TYPE = {
@@ -30,13 +29,14 @@ export function AssetRow({ view }: { view: AssetView }) {
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       onPress={() => router.push(`/asset/${asset.id}`)}
     >
-      {hasBankLogo(organization.logo) ? (
-        <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={44} radius={tokens.radius.sm} />
-      ) : (
-        <View style={[styles.iconBox, { backgroundColor: organization.color }]}>
-          <MaterialCommunityIcons name={iconName} size={22} color={tokens.text.inverse} />
-        </View>
-      )}
+      <OrgLogo
+        color={organization.color}
+        logo={organization.logo}
+        imageUri={organization.customImageUri}
+        size={44}
+        radius={tokens.radius.sm}
+        fallbackIcon={iconName}
+      />
 
       <View style={styles.middle}>
         <Text style={styles.name} numberOfLines={1}>
@@ -80,15 +80,6 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.spacing.md,
   },
   pressed: { opacity: 0.6 },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: tokens.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#F9FAFB',
-  },
   middle: { flex: 1, marginLeft: tokens.spacing.md },
   name: {
     fontSize: tokens.typography.body,
