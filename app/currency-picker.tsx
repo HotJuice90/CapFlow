@@ -9,11 +9,11 @@ import type { CurrencyCode } from '@/domain/types';
 import { tokens, font } from '@/theme';
 
 // Порядок строго как в макете Figma (node 255-2981)
-const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
+const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL'];
 const CURRENCY_NAME: Record<CurrencyCode, string> = {
   RUB: 'Российский рубль', USD: 'Доллар США', EUR: 'Евро', TRY: 'Турецкая лира', KZT: 'Казахстанский тенге',
   BYN: 'Белорусский рубль', CNY: 'Китайский юань', INR: 'Индийская рупия', AED: 'Дирхам ОАЭ',
-  BRL: 'Бразильский реал', ARS: 'Аргентинское песо',
+  BRL: 'Бразильский реал',
 };
 
 export default function CurrencyPickerSheet() {

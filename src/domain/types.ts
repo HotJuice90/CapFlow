@@ -5,7 +5,7 @@
 
 export type CurrencyCode =
   | 'RUB' | 'USD' | 'EUR' | 'TRY' | 'KZT' | 'BYN'
-  | 'CNY' | 'INR' | 'AED' | 'BRL' | 'ARS';
+  | 'CNY' | 'INR' | 'AED' | 'BRL';
 
 /** Поведение инструмента (архитектурный уровень). MVP: term | perpetual. */
 export type InstrumentBehavior = 'term' | 'perpetual'; // Срочный | Бессрочный

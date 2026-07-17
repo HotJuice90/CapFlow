@@ -17,7 +17,6 @@ const CURRENCY_COLOR: Record<string, string> = {
   INR: '#FF9933',
   AED: '#00843D',
   BRL: '#009C3B',
-  ARS: '#74ACDF',
 };
 
 /** Действующий курс валюты: ручной override приоритетнее автокурса ЦБ. */

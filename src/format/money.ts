@@ -20,7 +20,6 @@ export const CURRENCY_SYMBOL: Record<CurrencyCode, string> = {
   INR: '₹',
   AED: 'AED',
   BRL: 'R$',
-  ARS: '$',
 };
 
 const NBSP = ' '; // неразрывный пробел внутри числа

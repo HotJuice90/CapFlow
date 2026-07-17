@@ -18,11 +18,11 @@ import { exportData, importData } from '@/backup/backup';
 import { t } from '@/i18n';
 import Constants from 'expo-constants';
 
-const CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
+const CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL'];
 const CUR_NAME: Record<CurrencyCode, string> = {
   RUB: 'Российский рубль', USD: 'Доллар США', EUR: 'Евро', TRY: 'Турецкая лира', KZT: 'Казахстанский тенге',
   BYN: 'Белорусский рубль', CNY: 'Китайский юань', INR: 'Индийская рупия', AED: 'Дирхам ОАЭ',
-  BRL: 'Бразильский реал', ARS: 'Аргентинское песо',
+  BRL: 'Бразильский реал',
 };
 
 export default function SettingsScreen() {

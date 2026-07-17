@@ -12,7 +12,7 @@ import { boxShadow } from '@/theme/shadow';
 import { CURRENCY_SYMBOL } from '@/format/money';
 import { timeAgo } from '@/format/date';
 
-export const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
+export const ALL_CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL'];
 export const CURRENCY_NAME: Record<CurrencyCode, string> = {
   RUB: 'Российский рубль',
   USD: 'Доллар США',
@@ -24,7 +24,6 @@ export const CURRENCY_NAME: Record<CurrencyCode, string> = {
   INR: 'Индийская рупия',
   AED: 'Дирхам ОАЭ',
   BRL: 'Бразильский реал',
-  ARS: 'Аргентинское песо',
 };
 
 /** Курсы 91,23 привычны, но кросс-курс к недолларовой базе может быть < 1 —

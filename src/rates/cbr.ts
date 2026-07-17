@@ -6,7 +6,7 @@ import type { RateSnapshot } from '@/storage/types';
  * Возвращаем ₽ за 1 единицу валюты.
  */
 const CBR_URL = 'https://www.cbr-xml-daily.ru/daily_json.js';
-const WANTED: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL', 'ARS'];
+const WANTED: CurrencyCode[] = ['USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL'];
 
 interface CbrValute {
   Value: number;
