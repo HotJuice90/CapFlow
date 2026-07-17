@@ -767,6 +767,8 @@ export interface LiquidityFrozenItem {
   currency: CurrencyCode;
   unlockDate: string;
   daysRemaining: number;
+  /** прогресс срока 0..1 — для мини-кольца в списке (тот же расчёт, что и в «Ближайших событиях») */
+  termProgress: number;
 }
 
 export interface Liquidity {
@@ -808,6 +810,7 @@ export function liquidity(data: AppData, now: Date = new Date()): Liquidity {
         currency: v.asset.currency,
         unlockDate: v.asset.endDate ?? now.toISOString().slice(0, 10),
         daysRemaining: v.derived.daysRemaining ?? 0,
+        termProgress: v.derived.termProgress ?? 0,
       });
     } else {
       liquid += cap;
