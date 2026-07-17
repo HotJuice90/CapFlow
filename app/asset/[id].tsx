@@ -24,7 +24,7 @@ import { t } from '@/i18n';
 const TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклад',
   savings: 'Накопительный счёт',
-  bond: 'Облигация',
+  bond: 'Облигации',
   dfa: 'ЦФА',
 };
 

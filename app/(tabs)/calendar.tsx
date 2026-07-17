@@ -43,7 +43,7 @@ function pluralInstruments(n: number): string {
 const TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклад',
   savings: 'Накопительный счёт',
-  bond: 'Облигация',
+  bond: 'Облигации',
   dfa: 'ЦФА',
 };
 
