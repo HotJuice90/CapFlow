@@ -98,6 +98,12 @@ export default function HomeScreen() {
   const sort = SORTS[sortIdx];
   const sortedViews = useMemo(() => sortViews(views, sort.key), [views, sort.key]);
 
+  // Цели — водопад по всем активным, но на Главной показываем только «голову
+  // очереди» (первую незаполненную) — остальные ждут своей очереди, отдельно
+  // им сейчас копиться не в что.
+  const goals = useMemo(() => goalsProgress(data), [data]);
+  const activeGoal = goals.find((g) => !g.isComplete) ?? goals[goals.length - 1];
+
   if (loading) {
     return (
       <ScreenBackground>
@@ -113,12 +119,6 @@ export default function HomeScreen() {
   const hasCapitalDelta = typeof capitalDeltaPct === 'number' && isFinite(capitalDeltaPct);
   const capitalDeltaPositive = (capitalDeltaPct ?? 0) >= 0;
   const orgCount = new Set(views.map((v) => v.organization.id)).size;
-
-  // Цели — водопад по всем активным, но на Главной показываем только «голову
-  // очереди» (первую незаполненную) — остальные ждут своей очереди, отдельно
-  // им сейчас копиться не в что.
-  const goals = useMemo(() => goalsProgress(data), [data]);
-  const activeGoal = goals.find((g) => !g.isComplete) ?? goals[goals.length - 1];
 
   // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
