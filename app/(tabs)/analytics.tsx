@@ -119,13 +119,13 @@ export default function AnalyticsScreen() {
   }[] = [
     {
       key: 'income1m', icon: 'trending-up', color: tokens.accent.base,
-      label: 'Доход на 1 млн', value: formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' }),
+      label: 'Доход на\n1 млн', value: formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' }),
     },
   ];
   if (summary.topInstrument) {
     effTiles.push({
       key: 'top', icon: 'emoji-events', color: tokens.semantic.positive,
-      label: 'Лидер дохода', sub: summary.topInstrument.name,
+      label: 'Лидер\nдохода', sub: summary.topInstrument.name,
       value: `+${formatMoney(summary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' })}/д`,
       valueColor: tokens.semantic.positive,
     });
@@ -138,7 +138,7 @@ export default function AnalyticsScreen() {
   if (bestRateView) {
     effTiles.push({
       key: 'bestRate', icon: 'stars', color: tokens.category.dfa,
-      label: 'Лучшая ставка', sub: bestRateView.instrument.name,
+      label: 'Лучшая\nставка', sub: bestRateView.instrument.name,
       value: formatPercent(bestRateView.derived.currentRate),
       valueColor: tokens.category.dfa,
     });
@@ -148,7 +148,7 @@ export default function AnalyticsScreen() {
     // «Размещении капитала» и в плашке «Можно разместить», дублировать не надо.
     effTiles.push({
       key: 'workingShare', icon: 'account-balance-wallet', color: tokens.accent.base,
-      label: 'Активный капитал', value: `${Math.round((byOrg.total / manualTotalCapital) * 100)}%`,
+      label: 'Активный\nкапитал', value: `${Math.round((byOrg.total / manualTotalCapital) * 100)}%`,
     });
   }
   // Чистая ставка — средняя ставка за вычетом НДФЛ. Именно от avgRate, а не от
@@ -159,14 +159,14 @@ export default function AnalyticsScreen() {
   if (summary.totalCapital > 0) {
     effTiles.push({
       key: 'netRate', icon: 'verified', color: tokens.semantic.positive,
-      label: 'Чистая ставка', value: formatPercent(summary.avgRate * (1 - data.params.taxRate / 100)),
+      label: 'Чистая\nставка', value: formatPercent(summary.avgRate * (1 - data.params.taxRate / 100)),
       valueColor: tokens.semantic.positive,
     });
   }
   if (spread && spread.max > spread.min) {
     effTiles.push({
       key: 'spread', icon: 'height', color: tokens.category.bond,
-      label: 'Вилка ставок', value: `${formatPercent(spread.min)} – ${formatPercent(spread.max)}`,
+      label: 'Вилка\nставок', value: `${formatPercent(spread.min)} – ${formatPercent(spread.max)}`,
     });
   }
   // Капитализация — сколько именно принесло реинвестирование процентов (не
@@ -175,7 +175,7 @@ export default function AnalyticsScreen() {
   if (capBonus > 0) {
     effTiles.push({
       key: 'capBonus', icon: 'auto-graph', color: '#1C93B5',
-      label: 'Эффект капитализации', value: `+${formatMoney(capBonus, { currency: cur, kopecks: 'hide' })}`,
+      label: 'Эффект\nкапитализации', value: `+${formatMoney(capBonus, { currency: cur, kopecks: 'hide' })}`,
       valueColor: '#1C93B5',
     });
   }
@@ -186,7 +186,7 @@ export default function AnalyticsScreen() {
   if (allViews.length > 0) {
     effTiles.push({
       key: 'avgAsset', icon: 'balance', color: tokens.text.secondary,
-      label: 'Средний размер актива', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
+      label: 'Средний размер\nактива', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
     });
   }
 
