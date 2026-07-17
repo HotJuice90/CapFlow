@@ -15,6 +15,14 @@ import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent } from '@/format';
 import { tapBuzz, warnBuzz, successBuzz } from '@/lib/haptics';
 
+// Иконка по типу инструмента — та же пара, что и в AssetRow/TypeCardsRow.
+const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
+  dfa: 'chart-line',
+};
+
 interface ArchiveEntry {
   asset: Asset;
   instrument: FinancialInstrument;
@@ -151,7 +159,14 @@ function ArchiveRow({
 
   const row = (
     <Pressable style={styles.row} onPress={isStale ? onOpen : undefined} disabled={!isStale}>
-      <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={44} radius={16} />
+      <OrgLogo
+        color={organization.color}
+        logo={organization.logo}
+        imageUri={organization.customImageUri}
+        size={44}
+        radius={16}
+        fallbackIcon={ICON_BY_TYPE[instrument.typeId] ?? 'bank-outline'}
+      />
       <View style={{ flex: 1 }}>
         <Text style={styles.rowName} numberOfLines={1}>{instrument.name}</Text>
         <Text style={styles.rowSub} numberOfLines={1}>

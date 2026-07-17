@@ -6,6 +6,7 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
+import { FILTER_ICON } from './catalog/organizations';
 import { useData } from '@/state/DataContext';
 import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
@@ -87,7 +88,14 @@ export default function SearchScreen() {
                     <View key={a.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/asset/${a.id}`)}>
-                        <OrgLogo color={org?.color ?? tokens.accent.base} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={tokens.radius.sm} />
+                        <OrgLogo
+                          color={org?.color ?? tokens.accent.base}
+                          logo={org?.logo}
+                          imageUri={org?.customImageUri}
+                          size={44}
+                          radius={tokens.radius.sm}
+                          fallbackIcon={instr ? TYPE_ICON[instr.typeId] : undefined}
+                        />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.rowTitle} numberOfLines={1}>{instr?.name ?? 'Актив'}</Text>
                           <Text style={styles.rowSub} numberOfLines={1}>{a.title ?? org?.name ?? ''}</Text>
@@ -110,7 +118,15 @@ export default function SearchScreen() {
                     <View key={o.id}>
                       {i > 0 && <View style={styles.sep} />}
                       <Pressable style={styles.row} onPress={() => router.push(`/catalog/organization?id=${o.id}`)}>
-                        <OrgLogo color={o.color} logo={o.logo} imageUri={o.customImageUri} size={44} radius={tokens.radius.md} bordered={false} />
+                        <OrgLogo
+                          color={o.color}
+                          logo={o.logo}
+                          imageUri={o.customImageUri}
+                          size={44}
+                          radius={tokens.radius.md}
+                          bordered={false}
+                          fallbackIcon={(FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[o.type] ?? 'view-grid-outline'}
+                        />
                         <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>{o.name}</Text>
                         <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
                       </Pressable>
