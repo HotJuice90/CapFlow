@@ -540,7 +540,14 @@ export default function AssetFormScreen() {
                       onPress={() => pickExistingOrg(org)}
                       style={({ pressed }) => [styles.bankRow, i < existingOrgs.length - 1 && styles.rowDivider, pressed && { opacity: 0.6 }]}
                     >
-                      <OrgLogo color={org.color} logo={org.logo} imageUri={org.customImageUri} size={40} radius={14} />
+                      <OrgLogo
+                        color={org.color}
+                        logo={org.logo}
+                        imageUri={org.customImageUri}
+                        size={40}
+                        radius={14}
+                        fallbackIcon={(FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[org.type] ?? 'view-grid-outline'}
+                      />
                       <Text style={styles.bankName} numberOfLines={1}>{org.name}</Text>
                     </Pressable>
                   ))}

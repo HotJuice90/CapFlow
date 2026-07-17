@@ -47,6 +47,14 @@ const TYPE_LABEL: Record<string, string> = {
   dfa: 'ЦФА',
 };
 
+// Иконка по типу инструмента — та же пара, что и в AssetRow/TypeCardsRow.
+const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
+  dfa: 'chart-line',
+};
+
 const PAYOUT_LABEL: Record<string, string> = {
   daily: 'Ежедневно',
   monthly: 'Ежемесячно',
@@ -312,7 +320,15 @@ function InstrumentRow({
     <Pressable onPress={onPress} style={({ pressed }) => [styles.rowWrap, !isLast && styles.rowDivider, pressed && { opacity: 0.6 }]}>
       <View style={styles.row}>
         {org ? (
-          <OrgLogo color={org.color} logo={org.logo} imageUri={org.customImageUri} size={44} radius={16} variant="solid" />
+          <OrgLogo
+            color={org.color}
+            logo={org.logo}
+            imageUri={org.customImageUri}
+            size={44}
+            radius={16}
+            variant="solid"
+            fallbackIcon={view ? ICON_BY_TYPE[view.instrument.typeId] : undefined}
+          />
         ) : (
           <View style={[styles.iconFallback, { backgroundColor: c.color }]} />
         )}

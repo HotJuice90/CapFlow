@@ -24,7 +24,16 @@ import { t } from '@/i18n';
 const TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклад',
   savings: 'Накопительный счёт',
+  bond: 'Облигация',
   dfa: 'ЦФА',
+};
+
+// Иконка по типу инструмента — та же пара, что и в AssetRow/TypeCardsRow.
+const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
+  dfa: 'chart-line',
 };
 
 const PAYOUT_LABEL: Record<string, string> = {
@@ -171,7 +180,15 @@ export default function AssetScreen() {
 
         {/* Название с иконкой банка */}
         <View style={styles.titleRow}>
-          <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={44} radius={16} variant="solid" />
+          <OrgLogo
+            color={organization.color}
+            logo={organization.logo}
+            imageUri={organization.customImageUri}
+            size={44}
+            radius={16}
+            variant="solid"
+            fallbackIcon={ICON_BY_TYPE[instrument.typeId]}
+          />
           <View style={{ flex: 1 }}>
             <Text style={styles.name} numberOfLines={1}>{instrument.name}</Text>
             <Text style={styles.subtitle} numberOfLines={1}>
@@ -400,7 +417,14 @@ export default function AssetScreen() {
           <Pressable onPress={() => Linking.openURL(bankUrl).catch(() => {})} style={({ pressed }) => pressed && { opacity: 0.7 }}>
             <Card style={styles.bankCard}>
               <View style={styles.bankRow}>
-                <OrgLogo color={organization.color} logo={organization.logo} imageUri={organization.customImageUri} size={36} radius={12} />
+                <OrgLogo
+                  color={organization.color}
+                  logo={organization.logo}
+                  imageUri={organization.customImageUri}
+                  size={36}
+                  radius={12}
+                  fallbackIcon={ICON_BY_TYPE[instrument.typeId]}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.bankName} numberOfLines={1}>{organization.name}</Text>
                   <Text style={styles.bankHint} numberOfLines={1}>Приложение банка</Text>

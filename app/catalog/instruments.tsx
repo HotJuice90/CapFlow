@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { OrgLogo } from '@/components/BankLogo';
+import { FILTER_ICON } from './organizations';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
 import { tapBuzz, warnBuzz } from '@/lib/haptics';
@@ -158,7 +159,14 @@ export default function InstrumentsScreen() {
             <View key={g.org.id} style={styles.group}>
               <View style={styles.groupHeader}>
                 <View style={styles.groupLeft}>
-                  <OrgLogo color={g.org.color} logo={g.org.logo} imageUri={g.org.customImageUri} size={24} variant="bare" />
+                  <OrgLogo
+                    color={g.org.color}
+                    logo={g.org.logo}
+                    imageUri={g.org.customImageUri}
+                    size={24}
+                    variant="bare"
+                    fallbackIcon={(FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[g.org.type] ?? 'view-grid-outline'}
+                  />
                   <Text style={styles.groupName}>{g.org.name}</Text>
                 </View>
                 <Text style={styles.groupCount}>{g.items.length} инстр.</Text>

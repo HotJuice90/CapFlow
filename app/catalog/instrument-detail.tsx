@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
 import { PAYOUT_LABEL } from './instruments';
@@ -12,6 +13,14 @@ const TYPE_LABEL: Record<string, string> = {
   savings: 'Накопительный счёт',
   bond: 'Облигация',
   dfa: 'ЦФА',
+};
+
+// Иконка по типу инструмента — та же пара, что и в AssetRow/TypeCardsRow.
+const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  deposit: 'bank-outline',
+  savings: 'piggy-bank-outline',
+  bond: 'certificate-outline',
+  dfa: 'chart-line',
 };
 
 export default function InstrumentDetailSheet() {
@@ -56,7 +65,14 @@ export default function InstrumentDetailSheet() {
       <View style={s.grabber} />
 
       <View style={s.header}>
-        <OrgLogo color={org.color} logo={org.logo} imageUri={org.customImageUri} size={48} radius={16} />
+        <OrgLogo
+          color={org.color}
+          logo={org.logo}
+          imageUri={org.customImageUri}
+          size={48}
+          radius={16}
+          fallbackIcon={ICON_BY_TYPE[instrument.typeId]}
+        />
         <View style={{ flex: 1 }}>
           <Text style={s.title}>{instrument.name}</Text>
           <Text style={s.orgName}>{org.name}</Text>
