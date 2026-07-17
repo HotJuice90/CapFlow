@@ -186,7 +186,7 @@ export default function AnalyticsScreen() {
   if (allViews.length > 0) {
     effTiles.push({
       key: 'avgAsset', icon: 'balance', color: tokens.text.secondary,
-      label: 'Средний размер\nактива', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
+      label: 'Средний\nразмер актива', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
     });
   }
 
@@ -959,7 +959,7 @@ const styles = StyleSheet.create({
   },
   effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   effTileIconBox: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  effTileLabel: { flex: 1, fontSize: tokens.typography.micro, lineHeight: 14, fontFamily: font.medium, color: tokens.text.secondary },
+  effTileLabel: { flex: 1, fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: tokens.text.secondary },
   effTileValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.22 },
   effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
