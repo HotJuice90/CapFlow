@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +15,7 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
-import { HomeIncomeHero } from '@/components/HomeIncomeHero';
+import { Sparkline } from '@/components/Sparkline';
 import { TypeCardsRow } from '@/components/TypeCardsRow';
 import { Donut } from '@/components/Donut';
 import { AssetRow } from '@/components/AssetRow';
@@ -29,7 +31,7 @@ import {
 } from '@/state/selectors';
 import type { AssetView } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney, formatPercent } from '@/format';
+import { formatMoney, formatPercentSigned } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { t } from '@/i18n';
 
@@ -64,11 +66,35 @@ function termProgress(view: AssetView): number {
   return Math.min(1, Math.max(0, 1 - derived.daysRemaining / totalDays));
 }
 
+function pluralPlatform(n: number): string {
+  return n === 1 ? 'площадке' : 'площадках';
+}
+
+/** «Во что превратился доход» — игровой пересчёт дохода за день в бытовые
+ *  покупки. Цены — ориентировочные средние по РФ, не завязаны на реальные
+ *  данные (это флёр, не финансовый расчёт). */
+type ConvKey = 'coffee' | 'dinner' | 'gas' | 'payment' | 'car' | 'custom';
+const CONVERSION_ITEMS: {
+  key: ConvKey;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  chipLabel: string;
+  manyLabel: string;
+  price: number;
+}[] = [
+  { key: 'coffee', icon: 'coffee-outline', chipLabel: 'чашка', manyLabel: 'чашек кофе', price: 300 },
+  { key: 'dinner', icon: 'silverware-fork-knife', chipLabel: 'ужин', manyLabel: 'ужинов в кафе', price: 700 },
+  { key: 'gas', icon: 'gas-station-outline', chipLabel: 'бак', manyLabel: 'баков бензина', price: 3500 },
+  { key: 'payment', icon: 'home-city-outline', chipLabel: 'платёж', manyLabel: 'платежей по ипотеке', price: 30000 },
+  { key: 'car', icon: 'car-outline', chipLabel: 'машина', manyLabel: 'машин', price: 1_500_000 },
+];
+
 export default function HomeScreen() {
   const { data, loading } = useData();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sortIdx, setSortIdx] = useState(0);
+  const [convKey, setConvKey] = useState<ConvKey>('coffee');
+  const [customPrice, setCustomPrice] = useState('');
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -104,6 +130,16 @@ export default function HomeScreen() {
   const hasArchived = data.assets.some((a) => a.status !== 'active');
   const cur = data.settings.defaultCurrency;
   const capitalDeltaPct = comp.capitalPrev > 0 ? ((comp.capitalNow - comp.capitalPrev) / comp.capitalPrev) * 100 : undefined;
+  const hasCapitalDelta = typeof capitalDeltaPct === 'number' && isFinite(capitalDeltaPct);
+  const capitalDeltaPositive = (capitalDeltaPct ?? 0) >= 0;
+  const orgCount = new Set(views.map((v) => v.organization.id)).size;
+
+  const convActiveItem = CONVERSION_ITEMS.find((i) => i.key === convKey);
+  const convCustomPrice = parseInt(customPrice.replace(/\D/g, ''), 10) || 0;
+  const convPrice = convKey === 'custom' ? convCustomPrice : (convActiveItem?.price ?? 0);
+  const convManyLabel = convKey === 'custom' ? 'своих покупок' : (convActiveItem?.manyLabel ?? '');
+  const convCount = convPrice > 0 ? summary.incomePerDay / convPrice : 0;
+  const convCountText = convCount === 0 ? '0' : convCount >= 100 ? Math.round(convCount).toLocaleString('ru-RU') : convCount.toFixed(1).replace('.', ',');
 
   // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
@@ -143,19 +179,123 @@ export default function HomeScreen() {
 
         {hasAssets ? (
           <>
-            <HomeIncomeHero
-              dayValue={formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
-              monthValue={formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
-              capitalValue={formatMoney(summary.workingCapital, { currency: cur })}
-              capitalDeltaPct={capitalDeltaPct}
-              avgRate={formatPercent(summary.avgRate)}
-              topInstrument={taxSummary.topInstrument ? {
-                name: taxSummary.topInstrument.name,
-                org: taxSummary.topInstrument.org,
-                value: formatMoney(taxSummary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' }),
-              } : undefined}
-              spark={spark}
-            />
+            <View style={styles.heroTopRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.heroLabel}>Сегодня принесёт</Text>
+                <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                  +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
+                </Text>
+              </View>
+              <View style={styles.heroMonthPill}>
+                <View style={styles.heroMonthIconRow}>
+                  <MaterialCommunityIcons name="calendar-month-outline" size={13} color={tokens.text.tertiary} />
+                  <Text style={styles.heroMonthLabel}>в месяц</Text>
+                </View>
+                <Text style={styles.heroMonthValue} numberOfLines={1} adjustsFontSizeToFit>
+                  +{formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
+                </Text>
+              </View>
+            </View>
+
+            {spark.length >= 2 ? (
+              <View style={styles.heroSparkWrap}>
+                <Sparkline data={spark} width={SPARK_W} height={42} color={tokens.semantic.positive} />
+              </View>
+            ) : null}
+
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStatTile}>
+                <View style={styles.heroStatLabelRow}>
+                  <MaterialCommunityIcons name="wallet-outline" size={14} color={tokens.text.tertiary} />
+                  <Text style={styles.heroStatLabel} numberOfLines={1}>Капитал в работе</Text>
+                </View>
+                <View style={styles.heroStatValueRow}>
+                  <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                  {hasCapitalDelta ? (
+                    <MaterialCommunityIcons
+                      name={capitalDeltaPositive ? 'trending-up' : 'trending-down'}
+                      size={14}
+                      color={capitalDeltaPositive ? tokens.semantic.positive : tokens.semantic.negative}
+                    />
+                  ) : null}
+                </View>
+                {hasCapitalDelta ? (
+                  <Text style={[styles.heroStatDelta, { color: capitalDeltaPositive ? tokens.semantic.positive : tokens.semantic.negative }]}>
+                    {formatPercentSigned(capitalDeltaPct as number)}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.heroStatTile}>
+                <View style={styles.heroStatLabelRow}>
+                  <MaterialCommunityIcons name="star-outline" size={14} color={tokens.text.tertiary} />
+                  <Text style={styles.heroStatLabel} numberOfLines={1}>Активов в работе</Text>
+                </View>
+                <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {views.length} на {orgCount} {pluralPlatform(orgCount)}
+                </Text>
+              </View>
+            </View>
+
+            {taxSummary.topInstrument ? (
+              <View style={styles.heroLeaderPill}>
+                <View style={styles.heroLeaderIcon}>
+                  <MaterialCommunityIcons name="star-four-points" size={14} color={tokens.semantic.positive} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.heroLeaderLabel}>Лидер дохода</Text>
+                  <Text style={styles.heroLeaderName} numberOfLines={1}>{taxSummary.topInstrument.name}</Text>
+                </View>
+                <Text style={styles.heroLeaderValue} numberOfLines={1}>
+                  +{formatMoney(taxSummary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' })}/д
+                </Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.sectionTitle}>Во что превратился доход</Text>
+            <Card>
+              <View style={styles.convIconCircle}>
+                <MaterialCommunityIcons name="coffee-outline" size={20} color={tokens.category.dfa} />
+              </View>
+              <Text style={styles.convIntro}>сегодня твои деньги — это</Text>
+              <View style={styles.convBigRow}>
+                <Text style={styles.convBigNumber} numberOfLines={1} adjustsFontSizeToFit>{convCountText}</Text>
+                <Text style={styles.convBigLabel} numberOfLines={1}> {convManyLabel}</Text>
+              </View>
+              <Text style={styles.convSub}>…пока ты просто жил свой день</Text>
+
+              <View style={styles.convChipsWrap}>
+                {CONVERSION_ITEMS.map((item) => (
+                  <Pressable
+                    key={item.key}
+                    style={[styles.convChip, convKey === item.key && styles.convChipActive]}
+                    onPress={() => setConvKey(item.key)}
+                  >
+                    <MaterialCommunityIcons name={item.icon} size={14} color={convKey === item.key ? tokens.text.inverse : tokens.text.secondary} />
+                    <Text style={[styles.convChipText, convKey === item.key && styles.convChipTextActive]}>{item.chipLabel}</Text>
+                  </Pressable>
+                ))}
+                {convKey === 'custom' ? (
+                  <View style={[styles.convChip, styles.convChipActive, styles.convChipInput]}>
+                    <TextInput
+                      value={customPrice}
+                      onChangeText={setCustomPrice}
+                      placeholder="цена, ₽"
+                      placeholderTextColor={hexToRgba(tokens.text.inverse, 0.6)}
+                      keyboardType="number-pad"
+                      style={styles.convChipInputText}
+                      autoFocus
+                    />
+                  </View>
+                ) : (
+                  <Pressable style={[styles.convChip, styles.convChipDashed]} onPress={() => setConvKey('custom')}>
+                    <MaterialCommunityIcons name="plus" size={14} color={tokens.text.secondary} />
+                    <Text style={styles.convChipText}>своё</Text>
+                  </Pressable>
+                )}
+              </View>
+            </Card>
 
             {liq.frozen > 0 ? (
               <>
@@ -378,6 +518,8 @@ function EmptyAssets() {
   );
 }
 
+const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.xl },
@@ -447,4 +589,50 @@ const styles = StyleSheet.create({
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
   emptyBtn: { marginTop: tokens.spacing.lg, backgroundColor: tokens.accent.base, paddingHorizontal: tokens.spacing.xl, paddingVertical: tokens.spacing.md, borderRadius: tokens.radius.pill },
   emptyBtnText: { color: tokens.text.inverse, fontWeight: '600', fontSize: tokens.typography.label },
+  heroLabel: { fontSize: tokens.typography.label, fontFamily: font.medium, color: tokens.text.tertiary },
+  heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md },
+  heroValue: { fontSize: tokens.typography.metricLg, fontFamily: font.extrabold, color: tokens.semantic.positive, marginTop: 4, letterSpacing: -0.6 },
+  heroMonthPill: {
+    minWidth: 112,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.7),
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.md,
+  },
+  heroMonthIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  heroMonthLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary },
+  heroMonthValue: { fontSize: tokens.typography.body, fontFamily: font.bold, color: tokens.text.primary, marginTop: 2 },
+  heroSparkWrap: { marginTop: tokens.spacing.md },
+  heroStatsRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
+  heroStatTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 12 },
+  heroStatLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  heroStatLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary, flexShrink: 1 },
+  heroStatValueRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  heroStatValue: { fontSize: tokens.typography.body, fontFamily: font.bold, color: tokens.text.primary },
+  heroStatDelta: { fontSize: tokens.typography.micro, fontFamily: font.semibold, marginTop: 2 },
+  heroLeaderPill: {
+    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm,
+    backgroundColor: hexToRgba(tokens.semantic.positive, 0.08),
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: 14, paddingVertical: 12,
+    marginTop: tokens.spacing.sm,
+  },
+  heroLeaderIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: hexToRgba(tokens.semantic.positive, 0.16), alignItems: 'center', justifyContent: 'center' },
+  heroLeaderLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
+  heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
+  heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
+  convIconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: hexToRgba(tokens.category.dfa, 0.12), alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  convIntro: { fontSize: tokens.typography.caption, fontFamily: font.regular, color: tokens.text.tertiary, textAlign: 'center', marginTop: tokens.spacing.md },
+  convBigRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 },
+  convBigNumber: { fontSize: tokens.typography.metric, fontFamily: font.extrabold, color: tokens.text.primary },
+  convBigLabel: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.category.dfa },
+  convSub: { fontSize: tokens.typography.caption, fontFamily: font.regular, color: tokens.text.tertiary, textAlign: 'center', marginTop: 4 },
+  convChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: tokens.spacing.lg, justifyContent: 'center' },
+  convChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.pill, paddingHorizontal: 12, paddingVertical: 8 },
+  convChipActive: { backgroundColor: tokens.category.dfa },
+  convChipText: { fontSize: tokens.typography.caption, fontFamily: font.medium, color: tokens.text.secondary },
+  convChipTextActive: { color: tokens.text.inverse },
+  convChipDashed: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed', borderColor: tokens.surface.hairline },
+  convChipInput: { paddingVertical: 4, minWidth: 90 },
+  convChipInputText: { fontSize: tokens.typography.caption, fontFamily: font.medium, color: tokens.text.inverse, padding: 0 },
 });
