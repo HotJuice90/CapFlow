@@ -23,6 +23,7 @@ function migrate(data: AppData): AppData {
   if (!next.ratesHistory) next.ratesHistory = [];
   if (!next.manualRates) next.manualRates = {};
   if (!next.taxYearRecords) next.taxYearRecords = [];
+  if (!next.goals) next.goals = [];
   if (next.settings.abbreviateMillions === undefined) {
     next.settings = { ...next.settings, abbreviateMillions: true };
   }

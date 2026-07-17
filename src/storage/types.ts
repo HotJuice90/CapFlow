@@ -3,6 +3,7 @@ import type {
   CalcParams,
   CurrencyCode,
   FinancialInstrument,
+  Goal,
   Organization,
   Snapshot,
   TaxYearRecord,
@@ -57,6 +58,8 @@ export interface AppData {
   /** зафиксированная налоговая статистика по прошлым годам (решение — фиксируем
    *  год только когда он уже закончился, задним числом не пересчитываем) */
   taxYearRecords: TaxYearRecord[];
+  /** финансовые цели («копилки») — см. domain/types.ts → Goal */
+  goals: Goal[];
 }
 
 export interface RateSnapshot {
@@ -110,5 +113,6 @@ export function emptyAppData(): AppData {
     keyRateHistory: [...KEY_RATE_HISTORY],
     seededDemo: false,
     taxYearRecords: [],
+    goals: [],
   };
 }
