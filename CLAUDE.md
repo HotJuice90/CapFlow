@@ -76,8 +76,10 @@ ETF, облигации-флоатеры, структурные продукт�
   На Android — `Haptics.performAndroidHapticsAsync` (нативные сегменты), iOS — `impactAsync`.
 - **Диалоги**: `appAlert(title, message?, buttons?)` из `src/lib/dialog.tsx` —
   совместимо по сигнатуре с `Alert.alert`. Системный Alert НЕ используем.
-- **Валюты**: 11 кодов в порядке Figma (node 255-2981): RUB, USD, EUR, TRY, KZT, BYN,
-  CNY, INR, AED, BRL, ARS. Курсы: `src/rates/cbr.ts` (cbr-xml-daily.ru).
+- **Валюты**: 10 кодов в порядке Figma (node 255-2981): RUB, USD, EUR, TRY, KZT, BYN,
+  CNY, INR, AED, BRL. ARS убрали — ЦБ РФ не публикует курс аргентинского песо
+  (нет в фиде cbr-xml-daily.ru вообще, ни текущего значения, ни истории).
+  Курсы: `src/rates/cbr.ts` (cbr-xml-daily.ru).
   Флаги (PNG из Figma): `src/components/Flag.tsx`, в `assets/flags/`.
 - **Состояние**: `src/state/DataContext.tsx` (DataProvider в `_layout`).
   Селекторы и расчёты — `src/state/selectors.ts`.
