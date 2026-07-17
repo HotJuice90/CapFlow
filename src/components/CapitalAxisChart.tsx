@@ -23,7 +23,13 @@ function niceStep(maxValue: number, steps = 3): number {
 
 function formatAxisLabel(value: number): string {
   if (value >= 1_000_000) {
-    const m = value / 1_000_000;
+    // Сдвиг сетки на пол-шага (см. niceMin/niceMax ниже) даёт значения ровно
+    // на границе .x5 млн (5.75/5.85/…) — toFixed(1) на таких числах печально
+    // известен нестабильным округлением из-за двоичного представления
+    // (5.85 хранится как 5.849999…), соседние деления схлопываются в
+    // одинаковую подпись. Округляем через целые (×10) ДО форматирования —
+    // так граница неоднозначности не достаётся toFixed вовсе.
+    const m = Math.round(value / 100_000) / 10;
     return `${Number.isInteger(m) ? m : m.toFixed(1)}М`;
   }
   if (value >= 1_000) return `${Math.round(value / 1000)}К`;
@@ -149,9 +155,12 @@ export function CapitalAxisChart({
   // перескакивает на лишнюю ступень выше факта (пустая четверть графика сверху).
   const niceMin = Math.max(0, Math.floor((effectiveMin - half) / step) * step + half);
   const niceMax = Math.ceil((rawMax - half) / step) * step + half;
-  console.log('[capChart]', { rawMin, rawMax, minSpan, effectiveMin, step, half, niceMin, niceMax, dataLen: data.length });
   const gridValues: number[] = [];
   for (let v = niceMin; v <= niceMax + step * 0.01; v += step) gridValues.push(v);
+  // Ноль — честная нижняя граница масштаба (реальный минимум ряда близко к
+  // нулю), но отдельной линией/подписью его не рисуем: и так понятно, что
+  // низ графика — примерно ноль, а сама подпись «0» визуально шумит.
+  const visibleGridValues = gridValues.filter((v) => v > 0);
   // Реальный максимум/минимум растут непрерывно, а nice-границы — круглыми
   // ступенями, так что сразу после пробития очередной ступени пик ложится
   // вплотную к краю. Даём отдельный запас в масштабе (не в подписях), чтобы
@@ -193,7 +202,7 @@ export function CapitalAxisChart({
             <Stop offset="0.54" stopColor={tokens.semantic.positive} />
           </LinearGradient>
         </Defs>
-        {gridValues.map((v) => (
+        {visibleGridValues.map((v) => (
           <Line
             key={v}
             x1={0}
@@ -210,7 +219,7 @@ export function CapitalAxisChart({
         <Circle cx={last.x} cy={last.y} r={4} fill={tokens.semantic.positive} />
         <Circle cx={last.x} cy={last.y} r={7} fill={tokens.semantic.positive} fillOpacity={0.25} />
       </Svg>
-      {gridValues.map((v) => (
+      {visibleGridValues.map((v) => (
         <View key={v} style={[styles.axisLabel, { top: valueToY(v) - 11 }]}>
           <Text style={styles.axisLabelText}>{formatAxisLabel(v)}</Text>
         </View>
