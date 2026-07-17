@@ -29,7 +29,6 @@ import {
   taxByOrganization,
   buildAssetViews,
   capitalizationBonus,
-  convert,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
@@ -152,12 +151,15 @@ export default function AnalyticsScreen() {
       label: '% в работе', value: `${Math.round((byOrg.total / manualTotalCapital) * 100)}%`,
     });
   }
-  // Очищенная ставка — доходность С УЧЁТОМ налога (summary.netYear уже честно
-  // считает лимит), нигде на экране такого % пока не было — только суммы налога.
+  // Чистая ставка — средняя ставка за вычетом НДФЛ. Именно от avgRate, а не от
+  // summary.netYear/totalCapital: netYear считает налогооблагаемый доход в
+  // границах ТЕКУЩЕГО календарного года (см. thisYearTaxableIncome) — у
+  // недавно открытых активов это меньше полного годового дохода, и деление на
+  // totalCapital даёт заниженную ставку, а не «среднюю минус налог».
   if (summary.totalCapital > 0) {
     effTiles.push({
       key: 'netRate', icon: 'verified', color: tokens.semantic.positive,
-      label: 'Очищенная ставка', value: formatPercent((summary.netYear / summary.totalCapital) * 100),
+      label: 'Чистая ставка', value: formatPercent(summary.avgRate * (1 - data.params.taxRate / 100)),
       valueColor: tokens.semantic.positive,
     });
   }
@@ -177,19 +179,11 @@ export default function AnalyticsScreen() {
       valueColor: '#1C93B5',
     });
   }
-  // Максимальный/средний актив — размер позиции, а не доходность (то, чем
-  // занят «Лучшая ставка»/«Самый доходный») — сколько у одного инструмента и
-  // сколько бы вышло, поделить капитал поровну на все.
+  // Средний актив — размер позиции, а не доходность (то, чем занят «Лучшая
+  // ставка»/«Самый доходный») — сколько бы вышло, поделить капитал поровну на
+  // все. «Максимальный» убрали — он уже виден в «Размещении капитала» выше.
   const allViews = buildAssetViews(data);
   if (allViews.length > 0) {
-    const maxView = allViews.reduce((best, v) => (
-      convert(v.derived.currentValue, v.asset.currency, data) > convert(best.derived.currentValue, best.asset.currency, data) ? v : best
-    ));
-    effTiles.push({
-      key: 'maxAsset', icon: 'account-balance', color: tokens.accent.base,
-      label: 'Максимальный актив', sub: maxView.instrument.name,
-      value: formatMoney(convert(maxView.derived.currentValue, maxView.asset.currency, data), { currency: cur, kopecks: 'hide' }),
-    });
     effTiles.push({
       key: 'avgAsset', icon: 'balance', color: tokens.text.secondary,
       label: 'Средний актив', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
