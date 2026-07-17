@@ -745,10 +745,6 @@ export function capitalizationBonus(data: AppData, now: Date = new Date()): numb
   let bonus = 0;
   for (const v of views) {
     const mode = v.asset.capitalization ?? v.instrument.capitalization ?? 'none';
-    const diff = mode === 'capitalize'
-      ? v.derived.currentValue - calculate({ ...v.asset, capitalization: 'none' }, v.instrument, data.params, now, 0).currentValue
-      : null;
-    console.log('[capBonus]', v.instrument.name, 'mode=', mode, 'openDate=', v.asset.openDate, 'currentValue=', v.derived.currentValue, diff !== null ? `diff=${diff}` : '(skipped)');
     if (mode !== 'capitalize') continue;
     const simpleDerived = calculate({ ...v.asset, capitalization: 'none' }, v.instrument, data.params, now, 0);
     bonus += convert(Math.max(0, v.derived.currentValue - simpleDerived.currentValue), v.asset.currency, data);
