@@ -28,6 +28,8 @@ import {
   avgLockDuration,
   taxByInstrument,
   taxByOrganization,
+  buildAssetViews,
+  capitalizationBonus,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned, pluralDays } from '@/format';
@@ -130,20 +132,50 @@ export default function AnalyticsScreen() {
       valueColor: tokens.semantic.positive,
     });
   }
-  if (manualTotalCapital) {
+  // Лучшая ставка — не то же самое, что «Самый доходный»: тот может лидировать
+  // просто по размеру позиции, тут — именно по проценту.
+  const bestRateView = buildAssetViews(data).reduce<null | ReturnType<typeof buildAssetViews>[number]>(
+    (best, v) => (!best || v.derived.currentRate > best.derived.currentRate ? v : best), null,
+  );
+  if (bestRateView) {
     effTiles.push({
-      key: 'used', icon: 'account-balance-wallet', color: tokens.accent.base,
-      label: 'Задействовано', value: formatMoney(byOrg.total, { currency: cur, kopecks: 'hide' }),
+      key: 'bestRate', icon: 'stars', color: tokens.category.dfa,
+      label: 'Лучшая ставка', sub: bestRateView.instrument.name,
+      value: formatPercent(bestRateView.derived.currentRate),
+      valueColor: tokens.category.dfa,
     });
+  }
+  if (manualTotalCapital) {
+    // % в работе вместо суммы в деньгах — сумма уже видна крупно в
+    // «Размещении капитала» и в плашке «Можно разместить», дублировать не надо.
     effTiles.push({
-      key: 'free', icon: 'savings', color: '#7143AE',
-      label: 'Свободно', value: formatMoney(freeCapital, { currency: cur, kopecks: 'hide' }), valueColor: '#7143AE',
+      key: 'workingShare', icon: 'account-balance-wallet', color: tokens.accent.base,
+      label: '% в работе', value: `${Math.round((byOrg.total / manualTotalCapital) * 100)}%`,
+    });
+  }
+  // Очищенная ставка — доходность С УЧЁТОМ налога (summary.netYear уже честно
+  // считает лимит), нигде на экране такого % пока не было — только суммы налога.
+  if (summary.totalCapital > 0) {
+    effTiles.push({
+      key: 'netRate', icon: 'verified', color: tokens.semantic.positive,
+      label: 'Очищенная ставка', value: formatPercent((summary.netYear / summary.totalCapital) * 100),
+      valueColor: tokens.semantic.positive,
     });
   }
   if (spread && spread.max > spread.min) {
     effTiles.push({
       key: 'spread', icon: 'height', color: tokens.category.bond,
       label: 'Разброс ставки', value: `${formatPercent(spread.min)} – ${formatPercent(spread.max)}`,
+    });
+  }
+  // Капитализация — сколько именно принесло реинвестирование процентов (не
+  // весь доход, а только «проценты на проценты»), считаем через движок.
+  const capBonus = useMemo(() => capitalizationBonus(data), [data]);
+  if (capBonus > 0) {
+    effTiles.push({
+      key: 'capBonus', icon: 'auto-graph', color: '#1C93B5',
+      label: 'От капитализации', value: `+${formatMoney(capBonus, { currency: cur, kopecks: 'hide' })}`,
+      valueColor: '#1C93B5',
     });
   }
   if (lockDays !== null) {
