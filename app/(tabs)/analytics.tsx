@@ -715,12 +715,14 @@ export default function AnalyticsScreen() {
                     </Text>
                   </View>
 
-                  <View style={styles.liqBar}>
-                    <View style={[styles.allocationSegment, { flex: Math.max(liqLiquidShare, 0.02), backgroundColor: tokens.semantic.positive }]} />
-                    <View style={[styles.allocationSegment, { flex: Math.max(1 - liqLiquidShare, 0.02), backgroundColor: tokens.surface.neutral }]} />
+                  <View style={styles.taxBarWrap}>
+                    <View style={styles.taxTrack}>
+                      <View style={[styles.taxFill, { width: `${Math.min(Math.max(liqLiquidShare * 100, 0), 100)}%`, backgroundColor: tokens.semantic.positive }]} />
+                    </View>
                   </View>
 
-                  <View style={[styles.taxMeta, { justifyContent: 'flex-end' }]}>
+                  <View style={styles.taxMeta}>
+                    <Text style={styles.taxMetaBigValue}>{Math.round(liqLiquidShare * 100)}%</Text>
                     <View style={styles.taxMetaInlineRow}>
                       <MaterialIcons name="schedule" size={16} color={tokens.text.tertiary} />
                       <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>
@@ -746,7 +748,7 @@ export default function AnalyticsScreen() {
                             size={38}
                             strokeWidth={4.5}
                           />
-                          <View style={styles.liqLockCircle}>
+                          <View style={[styles.liqLockCircle, { backgroundColor: hexToRgba(tokens.category[it.typeId] ?? tokens.accent.base, 0.16) }]}>
                             <MaterialIcons name="lock" size={13} color={tokens.category[it.typeId] ?? tokens.accent.base} />
                           </View>
                         </View>
@@ -1036,10 +1038,9 @@ const styles = StyleSheet.create({
   effTileValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.22 },
   effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   liqCard: { backgroundColor: '#F9FAFF', borderRadius: 20, padding: 16, ...boxShadow(tokens.shadow.card) },
-  liqBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: 16 },
   liqSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
   liqRing: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  liqLockCircle: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: tokens.surface.white, alignItems: 'center', justifyContent: 'center' },
+  liqLockCircle: { position: 'absolute', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   liqItemSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
   liqRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   liqRowName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
