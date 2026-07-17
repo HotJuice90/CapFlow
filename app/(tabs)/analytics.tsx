@@ -186,7 +186,7 @@ export default function AnalyticsScreen() {
   if (allViews.length > 0) {
     effTiles.push({
       key: 'avgAsset', icon: 'balance', color: tokens.text.secondary,
-      label: 'Средний актив', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
+      label: 'Средний размер актива', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
     });
   }
 
@@ -675,7 +675,7 @@ export default function AnalyticsScreen() {
                   />
                   <View style={styles.effTileHeaderRow}>
                     <View style={[styles.effTileIconBox, { backgroundColor: hexToRgba(t.color, 0.16) }]}>
-                      <MaterialIcons name={t.icon} size={16} color={t.color} />
+                      <MaterialIcons name={t.icon} size={19} color={t.color} />
                     </View>
                     <Text style={styles.effTileLabel} numberOfLines={2}>{t.label}</Text>
                   </View>
@@ -957,9 +957,9 @@ const styles = StyleSheet.create({
     flexBasis: '48%', flexGrow: 1, aspectRatio: 1.35, borderRadius: 16, padding: 16,
     justifyContent: 'space-between', backgroundColor: '#F9FAFF', overflow: 'hidden',
   },
-  effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip },
-  effTileIconBox: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  effTileLabel: { flex: 1, fontSize: tokens.typography.caption, lineHeight: 17, fontFamily: font.medium, color: tokens.text.secondary },
+  effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  effTileIconBox: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  effTileLabel: { flex: 1, fontSize: tokens.typography.micro, lineHeight: 14, fontFamily: font.medium, color: tokens.text.secondary },
   effTileValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.22 },
   effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
