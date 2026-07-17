@@ -48,8 +48,8 @@ const TAX_TYPE_ICON: Record<string, keyof typeof MaterialCommunityIcons.glyphMap
 const PACE_VALUE_MAX_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - 32 - 140) / 2 - 8;
 
 type HeroPeriod = 'year' | 'month' | 'all';
-const HERO_PERIODS: { key: HeroPeriod; label: string; days: number | 'all' | 'year' }[] = [
-  { key: 'month', label: 'Месяц', days: 30 },
+const HERO_PERIODS: { key: HeroPeriod; label: string; days: number | 'all' | 'year' | 'month' }[] = [
+  { key: 'month', label: 'Месяц', days: 'month' },
   { key: 'year', label: 'Год', days: 'year' },
   { key: 'all', label: 'Всё время', days: 'all' },
 ];
