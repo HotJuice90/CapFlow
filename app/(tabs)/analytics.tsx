@@ -12,6 +12,7 @@ import { boxShadow } from '@/theme/shadow';
 import { OrgLogo } from '@/components/BankLogo';
 import { InfoTap } from '@/components/InfoTap';
 import { CompareDonut } from '@/components/CompareDonut';
+import { Donut } from '@/components/Donut';
 import { CapitalAxisChart } from '@/components/CapitalAxisChart';
 import { useData } from '@/state/DataContext';
 import { tapBuzz } from '@/lib/haptics';
@@ -715,7 +716,8 @@ export default function AnalyticsScreen() {
                       </Text>
                     </View>
                     <View style={styles.liqFrozenBadge}>
-                      <MaterialIcons name="schedule" size={18} color="#909497" />
+                      <MaterialIcons name="schedule" size={14} color="#909497" />
+                      <Text style={styles.liqFrozenBadgeText}>{Math.round((1 - liqLiquidShare) * 100)}%</Text>
                     </View>
                   </View>
 
@@ -732,9 +734,14 @@ export default function AnalyticsScreen() {
                         style={({ pressed }) => [styles.liqRow, pressed && styles.taxRowPressed]}
                         onPress={() => { tapBuzz(); router.push(`/asset/${it.assetId}`); }}
                       >
-                        <View style={[styles.liqLockCircle, { backgroundColor: hexToRgba(tokens.category[it.typeId] ?? tokens.accent.base, 0.12) }]}>
-                          <MaterialIcons name="lock" size={17} color={tokens.category[it.typeId] ?? tokens.accent.base} />
-                        </View>
+                        <Donut
+                          segments={[
+                            { value: it.termProgress, color: tokens.category[it.typeId] ?? tokens.accent.base },
+                            { value: 1 - it.termProgress, color: tokens.surface.neutral },
+                          ]}
+                          size={38}
+                          strokeWidth={4.5}
+                        />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.liqRowName} numberOfLines={1}>
                             {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
@@ -1021,12 +1028,16 @@ const styles = StyleSheet.create({
   effTileValue: { fontSize: 22, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.22 },
   effTileSub: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   liqCard: { backgroundColor: '#F9FAFF', borderRadius: 20, padding: 16, ...boxShadow(tokens.shadow.card) },
-  liqFrozenBadge: { width: 34, height: 34, borderRadius: 17, backgroundColor: hexToRgba('#909497', 0.12), alignItems: 'center', justifyContent: 'center' },
+  liqFrozenBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip,
+    backgroundColor: hexToRgba('#909497', 0.12), borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.tight, paddingVertical: 6,
+  },
+  liqFrozenBadgeText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.semibold, color: '#909497', letterSpacing: -0.13 },
   liqBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: 16 },
   liqSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
   liqItemSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
   liqRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  liqLockCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   liqRowName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
   liqRowSub: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 2 },
   liqRowValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
