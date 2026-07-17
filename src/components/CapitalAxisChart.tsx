@@ -139,14 +139,16 @@ export function CapitalAxisChart({
   // в рубли на миллионных суммах.
   const rawMin = Math.min(...data);
   const rawMax = Math.max(0, ...data);
-  const minSpan = Math.max(rawMax * 0.02, 1);
+  const minSpan = Math.max(rawMax * 0.04, 1);
   const effectiveMin = Math.min(rawMin, rawMax - minSpan);
   const step = niceStep(rawMax - effectiveMin || 1);
-  // «Круглые» пол/потолок сетки (2М/4М/6М) — на них держатся ярлыки. Все
-  // деления шага между ними — НЕ жёстко «низ/середина/верх»: если делений
-  // больше трёх, фиксированные три позиции давали неровный пропуск подписей.
-  const niceMin = Math.max(0, Math.floor(effectiveMin / step) * step);
-  const niceMax = step * Math.max(1, Math.ceil(rawMax / step));
+  const half = step / 2;
+  // «Круглые» пол/потолок сетки — со сдвигом на пол-шага (1М/3М/5М/7М, а не
+  // 0/2М/4М/6М/8М): без сдвига округление либо утыкает пол в 0, даже когда
+  // реальный минимум ряда заметно выше (0 никогда не было), либо потолок
+  // перескакивает на лишнюю ступень выше факта (пустая четверть графика сверху).
+  const niceMin = Math.max(0, Math.floor((effectiveMin - half) / step) * step + half);
+  const niceMax = Math.ceil((rawMax - half) / step) * step + half;
   const gridValues: number[] = [];
   for (let v = niceMin; v <= niceMax + step * 0.01; v += step) gridValues.push(v);
   // Реальный максимум/минимум растут непрерывно, а nice-границы — круглыми
