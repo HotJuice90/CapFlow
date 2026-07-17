@@ -716,15 +716,20 @@ export default function AnalyticsScreen() {
                   </View>
 
                   <View style={styles.taxBarWrap}>
-                    <View style={styles.taxTrack}>
-                      <View style={[styles.taxFill, { width: `${Math.min(Math.max(liqLiquidShare * 100, 0), 100)}%`, backgroundColor: tokens.semantic.positive }]} />
+                    <View style={[styles.taxTrack, { backgroundColor: tokens.surface.neutral }]}>
+                      <LinearGradient
+                        colors={[hexToRgba(tokens.semantic.positive, 0.5), tokens.semantic.positive]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={[styles.taxFill, { width: `${Math.min(Math.max(liqLiquidShare * 100, 0), 100)}%` }]}
+                      />
                     </View>
                   </View>
 
                   <View style={styles.taxMeta}>
                     <Text style={styles.taxMetaBigValue}>{Math.round(liqLiquidShare * 100)}%</Text>
                     <View style={styles.taxMetaInlineRow}>
-                      <MaterialIcons name="schedule" size={16} color={tokens.text.tertiary} />
+                      <MaterialIcons name="lock" size={14} color={tokens.text.tertiary} />
                       <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>
                         {formatMoney(liq.frozen, { currency: cur, kopecks: 'hide' })}
                       </Text>
@@ -740,6 +745,9 @@ export default function AnalyticsScreen() {
                         onPress={() => { tapBuzz(); router.push(`/asset/${it.assetId}`); }}
                       >
                         <View style={styles.liqRing}>
+                          <View style={[styles.liqLockCircle, { backgroundColor: hexToRgba(tokens.category[it.typeId] ?? tokens.accent.base, 0.16) }]}>
+                            <MaterialIcons name="lock" size={15} color={tokens.category[it.typeId] ?? tokens.accent.base} />
+                          </View>
                           <Donut
                             segments={[
                               { value: it.termProgress, color: tokens.category[it.typeId] ?? tokens.accent.base },
@@ -748,9 +756,6 @@ export default function AnalyticsScreen() {
                             size={38}
                             strokeWidth={4.5}
                           />
-                          <View style={[styles.liqLockCircle, { backgroundColor: hexToRgba(tokens.category[it.typeId] ?? tokens.accent.base, 0.16) }]}>
-                            <MaterialIcons name="lock" size={13} color={tokens.category[it.typeId] ?? tokens.accent.base} />
-                          </View>
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.liqRowName} numberOfLines={1}>
@@ -1040,7 +1045,7 @@ const styles = StyleSheet.create({
   liqCard: { backgroundColor: '#F9FAFF', borderRadius: 20, padding: 16, ...boxShadow(tokens.shadow.card) },
   liqSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
   liqRing: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  liqLockCircle: { position: 'absolute', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  liqLockCircle: { position: 'absolute', width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   liqItemSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
   liqRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   liqRowName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
