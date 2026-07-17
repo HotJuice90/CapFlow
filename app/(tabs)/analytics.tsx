@@ -119,13 +119,13 @@ export default function AnalyticsScreen() {
   }[] = [
     {
       key: 'income1m', icon: 'trending-up', color: tokens.accent.base,
-      label: 'Доход на 1 млн (год)', value: formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' }),
+      label: 'Доход на 1 млн', value: formatMoney(summary.incomePerMillionYear, { currency: cur, kopecks: 'hide' }),
     },
   ];
   if (summary.topInstrument) {
     effTiles.push({
       key: 'top', icon: 'emoji-events', color: tokens.semantic.positive,
-      label: 'Самый доходный', sub: summary.topInstrument.name,
+      label: 'Лидер дохода', sub: summary.topInstrument.name,
       value: `+${formatMoney(summary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' })}/д`,
       valueColor: tokens.semantic.positive,
     });
@@ -148,7 +148,7 @@ export default function AnalyticsScreen() {
     // «Размещении капитала» и в плашке «Можно разместить», дублировать не надо.
     effTiles.push({
       key: 'workingShare', icon: 'account-balance-wallet', color: tokens.accent.base,
-      label: '% в работе', value: `${Math.round((byOrg.total / manualTotalCapital) * 100)}%`,
+      label: 'Активный капитал', value: `${Math.round((byOrg.total / manualTotalCapital) * 100)}%`,
     });
   }
   // Чистая ставка — средняя ставка за вычетом НДФЛ. Именно от avgRate, а не от
@@ -166,7 +166,7 @@ export default function AnalyticsScreen() {
   if (spread && spread.max > spread.min) {
     effTiles.push({
       key: 'spread', icon: 'height', color: tokens.category.bond,
-      label: 'Разброс ставки', value: `${formatPercent(spread.min)} – ${formatPercent(spread.max)}`,
+      label: 'Вилка ставок', value: `${formatPercent(spread.min)} – ${formatPercent(spread.max)}`,
     });
   }
   // Капитализация — сколько именно принесло реинвестирование процентов (не
@@ -175,7 +175,7 @@ export default function AnalyticsScreen() {
   if (capBonus > 0) {
     effTiles.push({
       key: 'capBonus', icon: 'auto-graph', color: '#1C93B5',
-      label: 'От капитализации', value: `+${formatMoney(capBonus, { currency: cur, kopecks: 'hide' })}`,
+      label: 'Эффект капитализации', value: `+${formatMoney(capBonus, { currency: cur, kopecks: 'hide' })}`,
       valueColor: '#1C93B5',
     });
   }
@@ -679,14 +679,16 @@ export default function AnalyticsScreen() {
                     </View>
                     <Text style={styles.effTileLabel} numberOfLines={2}>{t.label}</Text>
                   </View>
-                  <Text
-                    style={[styles.effTileValue, t.valueColor ? { color: t.valueColor } : null]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {t.value}
-                  </Text>
-                  {t.sub ? <Text style={styles.effTileSub} numberOfLines={1}>{t.sub}</Text> : null}
+                  <View>
+                    <Text
+                      style={[styles.effTileValue, t.valueColor ? { color: t.valueColor } : null]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {t.value}
+                    </Text>
+                    {t.sub ? <Text style={styles.effTileSub} numberOfLines={1}>{t.sub}</Text> : null}
+                  </View>
                 </View>
               ))}
             </View>
@@ -952,8 +954,8 @@ const styles = StyleSheet.create({
   // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
   effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   effTile: {
-    flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 16, gap: 16, minHeight: 104,
-    backgroundColor: '#F9FAFF', overflow: 'hidden',
+    flexBasis: '48%', flexGrow: 1, borderRadius: 16, padding: 16, height: 104,
+    justifyContent: 'space-between', backgroundColor: '#F9FAFF', overflow: 'hidden',
   },
   effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip },
   effTileIconBox: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
