@@ -732,6 +732,26 @@ export function avgLockDuration(data: AppData, now: Date = new Date()): number |
   return capital > 0 ? weightedDays / capital : null;
 }
 
+/**
+ * «Проценты на проценты» — сколько именно реинвестирование добавило сверх
+ * простого %, только по активам с капитализацией. Считаем не приближённой
+ * формулой, а честно через движок: пересчитываем тот же актив с
+ * capitalization:'none' (остальное — ставка, пополнения, даты — то же самое)
+ * и берём разницу currentValue. Без учёта «нашей базы» (тела вклада) —
+ * ровно то, что попросили: эффект капитализации, не весь заработок.
+ */
+export function capitalizationBonus(data: AppData, now: Date = new Date()): number {
+  const views = buildAssetViews(data, now);
+  let bonus = 0;
+  for (const v of views) {
+    const mode = v.asset.capitalization ?? v.instrument.capitalization ?? 'none';
+    if (mode !== 'capitalize') continue;
+    const simpleDerived = calculate({ ...v.asset, capitalization: 'none' }, v.instrument, data.params, now, 0);
+    bonus += convert(Math.max(0, v.derived.currentValue - simpleDerived.currentValue), v.asset.currency, data);
+  }
+  return bonus;
+}
+
 export interface Insight {
   icon: string;
   title: string;
