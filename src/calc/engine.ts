@@ -7,7 +7,7 @@ import type {
   PayoutPeriod,
 } from '@/domain/types';
 import { calcAssetTax } from './tax';
-import { clamp, daysInMonth, daysInYear, diffDays, parseLocal } from './dayCount';
+import { addDays, clamp, daysInMonth, daysInYear, diffDays, parseLocal } from './dayCount';
 
 /** Версия движка — пишется в Snapshot, чтобы история не «плыла» при смене формул. */
 export const ENGINE_VERSION = '1.1.0';
@@ -70,8 +70,9 @@ function rateAt(timeline: RatePoint[], at: string | Date): number {
 }
 
 /**
- * Единый проход по ОБЪЕДИНЁННЫМ границам баланса И ставки — считает и текущее
- * тело счёта, и накопленный доход за один проход, посегментно.
+ * Единый проход по ОБЪЕДИНЁННЫМ границам баланса, ставки и (при капитализации)
+ * периодов капитализации — считает и текущее тело счёта, и накопленный доход
+ * за один проход, посегментно.
  *
  * На дате явной корректировки баланса тело ПЕРЕЗАПИСЫВАЕТСЯ — это факт из банка,
  * он главнее любой модельной оценки роста. На дате смены только ставки (без
@@ -85,6 +86,16 @@ function rateAt(timeline: RatePoint[], at: string | Date): number {
  * с фактом банка» (см. BalanceAdjustment.isCorrection): для такой точки доход за
  * ПРЕДЫДУЩИЙ отрезок берём как факт (новое тело минус старое), а не по формуле —
  * иначе «Начислено» продолжает копить доход, которого по факту не было.
+ *
+ * Периоды капитализации отсчитываются ФИКСИРОВАННЫМ шагом от даты открытия —
+ * независимо от того, где внутри периода банк менял ставку. Если считать
+ * «целые периоды» на каждом отрезке между чекпоинтами баланса/ставки отдельно
+ * (как было раньше), то при частых изменениях ставки (обычное дело у
+ * накопительных счетов) почти каждый отрезок короче одного периода — и
+ * `Math.floor` на нём даёт 0 капитализированных периодов, доход молча
+ * теряется. Поэтому проценты внутри периода копятся как простые (в `pending`,
+ * на стартовом теле периода) и сворачиваются в тело ровно на границе периода —
+ * так же, как это делает банк.
  */
 function walkAccrual(
   balance: BalancePoint[],
@@ -95,18 +106,38 @@ function walkAccrual(
 ): { balanceNow: number; accrued: number } {
   const balanceAt = new Map(balance.map((p) => [p.date, p.amount]));
   const correctionAt = new Set(balance.filter((p) => p.isCorrection).map((p) => p.date));
-  const checkpoints = [...new Set([...balance.map((p) => p.date), ...rates.map((p) => p.date)])].sort((a, b) =>
-    a.localeCompare(b),
-  );
+
+  const periodBoundaries: string[] = [];
+  if (mode === 'capitalize') {
+    const ppy = periodsPerYear(payout);
+    const periodDays = 365 / ppy;
+    const openDate = balance[0].date;
+    for (let k = 1; ; k++) {
+      const d = addDays(openDate, Math.round(k * periodDays));
+      if (diffDays(d, now) < 0) break; // граница за пределами «сейчас» — дальше не нужны
+      periodBoundaries.push(d);
+      if (k > 100_000) break; // защита от зацикливания на аномальных данных
+    }
+  }
+  const periodBoundarySet = new Set(periodBoundaries);
+
+  const checkpoints = [
+    ...new Set([...balance.map((p) => p.date), ...rates.map((p) => p.date), ...periodBoundaries]),
+  ].sort((a, b) => a.localeCompare(b));
 
   let principal = balance[0].amount;
+  let pending = 0; // накоплено внутри текущего периода капитализации, ещё не в теле
   let accrued = 0;
 
   for (let i = 0; i < checkpoints.length; i++) {
     const date = checkpoints[i];
     if (diffDays(date, now) < 0) continue; // граница ещё не наступила — не учитываем вовсе
     const explicitAmount = balanceAt.get(date);
-    if (explicitAmount !== undefined) principal = explicitAmount;
+    if (explicitAmount !== undefined) {
+      // Факт из банка перекрывает и не свёрнутые в тело проценты модели.
+      principal = explicitAmount;
+      pending = 0;
+    }
 
     const daysToNow = diffDays(date, now);
     if (daysToNow <= 0) continue; // граница ровно «сегодня» — сегмент нулевой длины
@@ -114,30 +145,34 @@ function walkAccrual(
     const daysToNext = next ? diffDays(date, next) : Infinity;
     const segmentDays = Math.min(daysToNow, daysToNext);
     if (segmentDays <= 0) continue;
+    const segmentEndsAtNext = segmentDays === daysToNext && next !== undefined;
 
     // Отрезок упирается ровно в следующую точку-ИСПРАВЛЕНИЕ (не в «сейчас» раньше
     // срока) — заменяем модельный доход на фактическую разницу тела.
     const nextAmount = next !== undefined ? balanceAt.get(next) : undefined;
-    if (nextAmount !== undefined && next !== undefined && correctionAt.has(next) && segmentDays === daysToNext) {
-      accrued += nextAmount - principal;
+    if (nextAmount !== undefined && segmentEndsAtNext && correctionAt.has(next)) {
+      accrued += nextAmount - (principal + pending);
       principal = nextAmount;
+      pending = 0;
       continue;
     }
 
     const r = rateAt(rates, date);
     if (mode === 'capitalize') {
-      const ppy = periodsPerYear(payout);
-      const elapsedPeriods = Math.floor((segmentDays * ppy) / 365);
-      const periodRate = r / 100 / ppy;
-      const growth = principal * (Math.pow(1 + periodRate, elapsedPeriods) - 1);
+      const growth = principal * (r / 100) * (segmentDays / 365);
+      pending += growth;
       accrued += growth;
-      principal += growth;
+      // Отрезок ровно упирается в границу периода капитализации — сворачиваем.
+      if (segmentEndsAtNext && periodBoundarySet.has(next)) {
+        principal += pending;
+        pending = 0;
+      }
     } else {
       accrued += principal * (r / 100) * (segmentDays / 365);
     }
   }
 
-  return { balanceNow: principal, accrued };
+  return { balanceNow: principal + pending, accrued };
 }
 
 /**

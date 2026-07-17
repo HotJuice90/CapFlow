@@ -41,3 +41,13 @@ export function daysInMonth(value: string | Date): number {
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
+
+/** Дата + N дней, в ISO 'YYYY-MM-DD' (локально, без сдвига часовым поясом). */
+export function addDays(value: string | Date, days: number): string {
+  const d = parseLocal(value);
+  const result = new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+  const y = result.getFullYear();
+  const m = String(result.getMonth() + 1).padStart(2, '0');
+  const day = String(result.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
