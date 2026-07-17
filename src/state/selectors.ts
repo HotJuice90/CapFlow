@@ -752,6 +752,71 @@ export function capitalizationBonus(data: AppData, now: Date = new Date()): numb
   return bonus;
 }
 
+// ---------- Ликвидность ----------
+
+export interface LiquidityFrozenItem {
+  assetId: string;
+  instrumentName: string;
+  title?: string;
+  typeId: string;
+  color: string;
+  logo?: string;
+  customImageUri?: string;
+  amount: number; // в валюте актива — сумма к освобождению (итог на конец срока)
+  amountBase: number; // то же в основной валюте
+  currency: CurrencyCode;
+  unlockDate: string;
+  daysRemaining: number;
+}
+
+export interface Liquidity {
+  liquid: number; // доступно снять сейчас без потери % (основная валюта)
+  frozen: number; // заморожено до срока (основная валюта)
+  frozenItems: LiquidityFrozenItem[]; // отсортированы по ближайшей дате разморозки
+}
+
+/**
+ * Бессрочные инструменты (накопительные счета) можно снять в любой момент
+ * без потери процентов — «доступно сейчас». Срочные (вклады, облигации, ЦФА
+ * до погашения) при досрочном закрытии обычно теряют процент банка/эмитента —
+ * «заморожено», независимо от allowPartialWithdraw (то разрешает частичное
+ * снятие суммы, но не гарантирует сохранение ставки — решили не усложнять).
+ * Срочный актив, у которого срок уже прошёл (daysRemaining <= 0), — фактически
+ * доступен, как и бессрочный.
+ */
+export function liquidity(data: AppData, now: Date = new Date()): Liquidity {
+  const views = buildAssetViews(data, now);
+  let liquid = 0;
+  let frozen = 0;
+  const frozenItems: LiquidityFrozenItem[] = [];
+  for (const v of views) {
+    const cap = convert(v.derived.currentValue, v.asset.currency, data);
+    const isFrozen = v.instrument.behavior === 'term' && (v.derived.daysRemaining ?? 0) > 0;
+    if (isFrozen) {
+      frozen += cap;
+      const amount = v.derived.finalAmount ?? v.derived.currentValue;
+      frozenItems.push({
+        assetId: v.asset.id,
+        instrumentName: v.instrument.name,
+        title: v.asset.title,
+        typeId: v.instrument.typeId,
+        color: v.organization.color,
+        logo: v.organization.logo,
+        customImageUri: v.organization.customImageUri,
+        amount,
+        amountBase: convert(amount, v.asset.currency, data),
+        currency: v.asset.currency,
+        unlockDate: v.asset.endDate ?? now.toISOString().slice(0, 10),
+        daysRemaining: v.derived.daysRemaining ?? 0,
+      });
+    } else {
+      liquid += cap;
+    }
+  }
+  frozenItems.sort((a, b) => a.daysRemaining - b.daysRemaining);
+  return { liquid, frozen, frozenItems };
+}
+
 export interface Insight {
   icon: string;
   title: string;
