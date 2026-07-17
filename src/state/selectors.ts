@@ -41,7 +41,7 @@ export function manualTotalCapitalConverted(data: AppData): number | undefined {
 }
 
 /** Пересчёт суммы из валюты актива в основную валюту приложения (по последним курсам). */
-function convert(amount: number, from: CurrencyCode, data: AppData): number {
+export function convert(amount: number, from: CurrencyCode, data: AppData): number {
   const inRub = amount * effectiveRate(data, from);
   return inRub / effectiveRate(data, data.settings.defaultCurrency);
 }

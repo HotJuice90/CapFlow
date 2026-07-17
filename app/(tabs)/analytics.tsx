@@ -25,14 +25,14 @@ import {
   incomePaceWindows,
   manualTotalCapitalConverted,
   rateSpread,
-  avgLockDuration,
   taxByInstrument,
   taxByOrganization,
   buildAssetViews,
   capitalizationBonus,
+  convert,
 } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney, formatPercent, formatPercentSigned, pluralDays } from '@/format';
+import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { t } from '@/i18n';
 
 // Иконка по типу инструмента — та же пара, что и в AssetRow.
@@ -86,7 +86,6 @@ export default function AnalyticsScreen() {
   const earnedPeriod = useMemo(() => earnedInPeriod(data, heroDays), [data, heroDays]);
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
   const spread = useMemo(() => rateSpread(data), [data]);
-  const lockDays = useMemo(() => avgLockDuration(data), [data]);
   const taxAssetRows = useMemo(() => taxByInstrument(data), [data]);
   const taxOrgRows = useMemo(() => taxByOrganization(data), [data]);
   const taxRows = taxTab === 'assets' ? taxAssetRows : taxOrgRows;
@@ -178,10 +177,22 @@ export default function AnalyticsScreen() {
       valueColor: '#1C93B5',
     });
   }
-  if (lockDays !== null) {
+  // Максимальный/средний актив — размер позиции, а не доходность (то, чем
+  // занят «Лучшая ставка»/«Самый доходный») — сколько у одного инструмента и
+  // сколько бы вышло, поделить капитал поровну на все.
+  const allViews = buildAssetViews(data);
+  if (allViews.length > 0) {
+    const maxView = allViews.reduce((best, v) => (
+      convert(v.derived.currentValue, v.asset.currency, data) > convert(best.derived.currentValue, best.asset.currency, data) ? v : best
+    ));
     effTiles.push({
-      key: 'lock', icon: 'lock-clock', color: tokens.category.deposit,
-      label: 'Заморожено в среднем', value: `${Math.round(lockDays)} ${pluralDays(Math.round(lockDays))}`,
+      key: 'maxAsset', icon: 'account-balance', color: tokens.accent.base,
+      label: 'Максимальный актив', sub: maxView.instrument.name,
+      value: formatMoney(convert(maxView.derived.currentValue, maxView.asset.currency, data), { currency: cur, kopecks: 'hide' }),
+    });
+    effTiles.push({
+      key: 'avgAsset', icon: 'balance', color: tokens.text.secondary,
+      label: 'Средний актив', value: formatMoney(summary.totalCapital / allViews.length, { currency: cur, kopecks: 'hide' }),
     });
   }
 
