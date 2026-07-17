@@ -149,6 +149,7 @@ export function CapitalAxisChart({
   // перескакивает на лишнюю ступень выше факта (пустая четверть графика сверху).
   const niceMin = Math.max(0, Math.floor((effectiveMin - half) / step) * step + half);
   const niceMax = Math.ceil((rawMax - half) / step) * step + half;
+  console.log('[capChart]', { rawMin, rawMax, minSpan, effectiveMin, step, half, niceMin, niceMax, dataLen: data.length });
   const gridValues: number[] = [];
   for (let v = niceMin; v <= niceMax + step * 0.01; v += step) gridValues.push(v);
   // Реальный максимум/минимум растут непрерывно, а nice-границы — круглыми
