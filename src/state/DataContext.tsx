@@ -11,6 +11,7 @@ import type {
   AssetStatus,
   CurrencyCode,
   FinancialInstrument,
+  Goal,
   Organization,
   Snapshot,
   TaxYearRecord,
@@ -58,6 +59,10 @@ interface DataContextValue {
   updateInstrument: (instrument: FinancialInstrument) => Promise<void>;
   /** false — отказ: на инструмент ещё ссылается актив (см. реализацию). */
   deleteInstrument: (id: string) => Promise<boolean>;
+  // цели
+  addGoal: (goal: Goal) => Promise<void>;
+  updateGoal: (goal: Goal) => Promise<void>;
+  deleteGoal: (id: string) => Promise<void>;
   // настройки/демо
   deleteDemoData: () => Promise<void>;
   reseedDemo: () => Promise<void>;
@@ -327,6 +332,28 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [data, persist],
   );
 
+  // --- Цели ---
+  const addGoal = useCallback(
+    async (goal: Goal) => {
+      await persist({ ...data, goals: [...data.goals, goal] });
+    },
+    [data, persist],
+  );
+
+  const updateGoal = useCallback(
+    async (goal: Goal) => {
+      await persist({ ...data, goals: data.goals.map((g) => (g.id === goal.id ? goal : g)) });
+    },
+    [data, persist],
+  );
+
+  const deleteGoal = useCallback(
+    async (id: string) => {
+      await persist({ ...data, goals: data.goals.filter((g) => g.id !== id) });
+    },
+    [data, persist],
+  );
+
   // --- Демо / настройки ---
   const deleteDemoData = useCallback(async () => {
     // Демо-организация/инструмент, на который уже ссылается РЕАЛЬНЫЙ (не демо)
@@ -476,6 +503,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addInstrument,
       updateInstrument,
       deleteInstrument,
+      addGoal,
+      updateGoal,
+      deleteGoal,
       deleteDemoData,
       reseedDemo,
       updateParams,
@@ -503,6 +533,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addInstrument,
       updateInstrument,
       deleteInstrument,
+      addGoal,
+      updateGoal,
+      deleteGoal,
       deleteDemoData,
       reseedDemo,
       updateParams,

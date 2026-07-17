@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +27,7 @@ import {
   monthComparison,
   analyticsSummary,
   liquidity,
+  goalsProgress,
 } from '@/state/selectors';
 import type { AssetView } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
@@ -70,31 +70,11 @@ function pluralPlatform(n: number): string {
   return n === 1 ? 'площадке' : 'площадках';
 }
 
-/** «Во что превратился доход» — игровой пересчёт дохода за день в бытовые
- *  покупки. Цены — ориентировочные средние по РФ, не завязаны на реальные
- *  данные (это флёр, не финансовый расчёт). */
-type ConvKey = 'coffee' | 'dinner' | 'gas' | 'payment' | 'car' | 'custom';
-const CONVERSION_ITEMS: {
-  key: ConvKey;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  chipLabel: string;
-  manyLabel: string;
-  price: number;
-}[] = [
-  { key: 'coffee', icon: 'coffee-outline', chipLabel: 'чашка', manyLabel: 'чашек кофе', price: 300 },
-  { key: 'dinner', icon: 'silverware-fork-knife', chipLabel: 'ужин', manyLabel: 'ужинов в кафе', price: 700 },
-  { key: 'gas', icon: 'gas-station-outline', chipLabel: 'бак', manyLabel: 'баков бензина', price: 3500 },
-  { key: 'payment', icon: 'home-city-outline', chipLabel: 'платёж', manyLabel: 'платежей по ипотеке', price: 30000 },
-  { key: 'car', icon: 'car-outline', chipLabel: 'машина', manyLabel: 'машин', price: 1_500_000 },
-];
-
 export default function HomeScreen() {
   const { data, loading } = useData();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sortIdx, setSortIdx] = useState(0);
-  const [convKey, setConvKey] = useState<ConvKey>('coffee');
-  const [customPrice, setCustomPrice] = useState('');
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -134,12 +114,11 @@ export default function HomeScreen() {
   const capitalDeltaPositive = (capitalDeltaPct ?? 0) >= 0;
   const orgCount = new Set(views.map((v) => v.organization.id)).size;
 
-  const convActiveItem = CONVERSION_ITEMS.find((i) => i.key === convKey);
-  const convCustomPrice = parseInt(customPrice.replace(/\D/g, ''), 10) || 0;
-  const convPrice = convKey === 'custom' ? convCustomPrice : (convActiveItem?.price ?? 0);
-  const convManyLabel = convKey === 'custom' ? 'своих покупок' : (convActiveItem?.manyLabel ?? '');
-  const convCount = convPrice > 0 ? summary.incomePerDay / convPrice : 0;
-  const convCountText = convCount === 0 ? '0' : convCount >= 100 ? Math.round(convCount).toLocaleString('ru-RU') : convCount.toFixed(1).replace('.', ',');
+  // Цели — водопад по всем активным, но на Главной показываем только «голову
+  // очереди» (первую незаполненную) — остальные ждут своей очереди, отдельно
+  // им сейчас копиться не в что.
+  const goals = useMemo(() => goalsProgress(data), [data]);
+  const activeGoal = goals.find((g) => !g.isComplete) ?? goals[goals.length - 1];
 
   // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
@@ -253,49 +232,63 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            <Text style={styles.sectionTitle}>Во что превратился доход</Text>
-            <Card>
-              <View style={styles.convIconCircle}>
-                <MaterialCommunityIcons name="coffee-outline" size={20} color={tokens.category.dfa} />
-              </View>
-              <Text style={styles.convIntro}>сегодня твои деньги — это</Text>
-              <View style={styles.convBigRow}>
-                <Text style={styles.convBigNumber} numberOfLines={1} adjustsFontSizeToFit>{convCountText}</Text>
-                <Text style={styles.convBigLabel} numberOfLines={1}> {convManyLabel}</Text>
-              </View>
-              <Text style={styles.convSub}>…пока ты просто жил свой день</Text>
-
-              <View style={styles.convChipsWrap}>
-                {CONVERSION_ITEMS.map((item) => (
-                  <Pressable
-                    key={item.key}
-                    style={[styles.convChip, convKey === item.key && styles.convChipActive]}
-                    onPress={() => setConvKey(item.key)}
-                  >
-                    <MaterialCommunityIcons name={item.icon} size={14} color={convKey === item.key ? tokens.text.inverse : tokens.text.secondary} />
-                    <Text style={[styles.convChipText, convKey === item.key && styles.convChipTextActive]}>{item.chipLabel}</Text>
-                  </Pressable>
-                ))}
-                {convKey === 'custom' ? (
-                  <View style={[styles.convChip, styles.convChipActive, styles.convChipInput]}>
-                    <TextInput
-                      value={customPrice}
-                      onChangeText={setCustomPrice}
-                      placeholder="цена, ₽"
-                      placeholderTextColor={hexToRgba(tokens.text.inverse, 0.6)}
-                      keyboardType="number-pad"
-                      style={styles.convChipInputText}
-                      autoFocus
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>Цель</Text>
+              {goals.length > 0 ? (
+                <Pressable onPress={() => router.push('/settings/goals')} hitSlop={8}>
+                  <Text style={styles.link}>Все цели</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {activeGoal ? (
+              <Pressable onPress={() => router.push(`/settings/goal-form?id=${activeGoal.goal.id}`)}>
+                <Card>
+                  <View style={styles.goalTop}>
+                    <Text style={styles.goalTitle} numberOfLines={1}>{activeGoal.goal.title}</Text>
+                    {activeGoal.isComplete ? (
+                      <View style={styles.goalDoneBadge}>
+                        <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                        <Text style={styles.goalDoneBadgeText}>Готово</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.goalPct}>{Math.round(activeGoal.progressPct)}%</Text>
+                    )}
+                  </View>
+                  <View style={styles.goalTrack}>
+                    <View
+                      style={[
+                        styles.goalFill,
+                        { width: `${Math.min(100, Math.max(0, activeGoal.progressPct))}%` },
+                        activeGoal.isComplete && styles.goalFillDone,
+                      ]}
                     />
                   </View>
-                ) : (
-                  <Pressable style={[styles.convChip, styles.convChipDashed]} onPress={() => setConvKey('custom')}>
-                    <MaterialCommunityIcons name="plus" size={14} color={tokens.text.secondary} />
-                    <Text style={styles.convChipText}>своё</Text>
-                  </Pressable>
-                )}
-              </View>
-            </Card>
+                  <View style={styles.goalBottom}>
+                    <Text style={styles.goalAmount}>
+                      {formatMoney(activeGoal.filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(activeGoal.targetAmount, { currency: cur, kopecks: 'hide' })}
+                    </Text>
+                    {!activeGoal.isComplete && activeGoal.daysRemaining !== null ? (
+                      <Text style={styles.goalDays}>≈ {activeGoal.daysRemaining} {pluralDays(activeGoal.daysRemaining)}</Text>
+                    ) : null}
+                  </View>
+                </Card>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => router.push('/settings/goal-form')}>
+                <Card>
+                  <View style={styles.goalEmptyRow}>
+                    <View style={styles.goalEmptyIcon}>
+                      <MaterialIcons name="flag" size={20} color={tokens.accent.base} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.goalEmptyTitle}>Заведи цель</Text>
+                      <Text style={styles.goalEmptyHint}>Доход портфеля начнёт копиться в её счёт</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
+                  </View>
+                </Card>
+              </Pressable>
+            )}
 
             {liq.frozen > 0 ? (
               <>
@@ -621,18 +614,19 @@ const styles = StyleSheet.create({
   heroLeaderLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
   heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
   heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
-  convIconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: hexToRgba(tokens.category.dfa, 0.12), alignItems: 'center', justifyContent: 'center' },
-  convIntro: { fontSize: tokens.typography.caption, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: tokens.spacing.md },
-  convBigRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', marginTop: 8 },
-  convBigNumber: { fontSize: tokens.typography.metric, fontFamily: font.extrabold, color: tokens.text.primary },
-  convBigLabel: { fontSize: tokens.typography.title, fontFamily: font.semibold, color: tokens.category.dfa },
-  convSub: { fontSize: tokens.typography.caption, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
-  convChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: tokens.spacing.lg },
-  convChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.pill, paddingHorizontal: 12, paddingVertical: 8 },
-  convChipActive: { backgroundColor: tokens.category.dfa },
-  convChipText: { fontSize: tokens.typography.caption, fontFamily: font.medium, color: tokens.text.secondary },
-  convChipTextActive: { color: tokens.text.inverse },
-  convChipDashed: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed', borderColor: tokens.surface.hairline },
-  convChipInput: { paddingVertical: 4, minWidth: 90 },
-  convChipInputText: { fontSize: tokens.typography.caption, fontFamily: font.medium, color: tokens.text.inverse, padding: 0 },
+  goalTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
+  goalTitle: { flex: 1, fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
+  goalPct: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.accent.base },
+  goalDoneBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: hexToRgba(tokens.semantic.positive, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  goalDoneBadgeText: { fontSize: tokens.typography.micro, fontFamily: font.semibold, color: tokens.semantic.positive },
+  goalTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden', marginTop: tokens.spacing.md },
+  goalFill: { height: '100%', borderRadius: 4, backgroundColor: tokens.accent.base },
+  goalFillDone: { backgroundColor: tokens.semantic.positive },
+  goalBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: tokens.spacing.sm },
+  goalAmount: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.secondary },
+  goalDays: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary },
+  goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
+  goalEmptyTitle: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
+  goalEmptyHint: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 2 },
 });

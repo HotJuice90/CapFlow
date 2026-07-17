@@ -87,6 +87,8 @@ export default function SettingsScreen() {
           <SettingsRow icon="layers" color="#21A038" label="Фин. инструменты" onPress={() => router.push('/catalog/instruments')} />
           <Divider />
           <SettingsRow icon="archive" color={tokens.accent.base} label="Архив активов" onPress={() => router.push('/archive')} />
+          <Divider />
+          <SettingsRow icon="flag" color={tokens.semantic.positive} label="Цели" onPress={() => router.push('/settings/goals')} />
           {/* Уведомления — временно скрыты, экран не готов. Не удалять роут/строку, просто не рендерим. */}
         </Group>
 

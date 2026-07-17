@@ -1,4 +1,4 @@
-import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Organization, Snapshot, TaxYearRecord } from '@/domain/types';
+import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, Snapshot, TaxYearRecord } from '@/domain/types';
 import { calculate, calcAssetTax, calcPortfolioTax, calcTax, daysInYear, diffDays, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
@@ -1635,4 +1635,102 @@ export function computeTaxYearRecord(data: AppData, year: number): TaxYearRecord
     taxWithheld,
     taxToPaySelf,
   };
+}
+
+// ---------- Цели ----------
+
+export interface GoalProgress {
+  goal: Goal;
+  filledAmount: number; // в основной валюте
+  targetAmount: number; // в основной валюте
+  progressPct: number; // 0..100
+  isComplete: boolean;
+  /** дней до цели по текущему темпу дохода — с учётом того, что перед ней в
+   *  очереди могут стоять ещё не заполненные цели (водопад). null — доход
+   *  сейчас нулевой, оценить нельзя. */
+  daysRemaining: number | null;
+}
+
+/**
+ * Прогресс по целям — водопад: реальный НАЧИСЛЕННЫЙ доход портфеля по дням
+ * (не тело активов, только доход) льётся в цели в порядке createdAt (старшая
+ * первой); после заполнения одной — остаток того же дня уходит в следующую.
+ * Деньги между «корзинами» физически не переносятся — чисто прогнозная
+ * надстройка поверх движка, на реальные расчёты (налог, доход и т.д.) не
+ * влияет никак.
+ *
+ * Если startDate цели раньше даты открытия первых активов — за эти дни
+ * начисленного дохода в природе не было, доход за них 0, прогресс начинает
+ * копиться только с появлением реальных активов.
+ */
+export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgress[] {
+  const active = data.goals
+    .filter((g) => g.status === 'active')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (active.length === 0) return [];
+
+  const { items } = buildHistoryItems(data, now);
+  const earliestGoalStart = Math.min(...active.map((g) => parseLocal(g.startDate).getTime()));
+  const seriesStart = new Date(Math.min(earliestGoalStart, now.getTime()));
+  const totalDays = Math.max(0, diffDays(seriesStart, now));
+
+  // Дневной ряд НАЧИСЛЕННОГО дохода всего портфеля (в основной валюте) —
+  // та же техника посегментного прохода, что в capitalHistorySeries, только
+  // берём accrued (доход), а не currentValue (тело+доход).
+  const dailyIncome: number[] = [];
+  let prevAccrued = 0;
+  for (let k = 0; k <= totalDays; k++) {
+    const day = new Date(seriesStart);
+    day.setDate(day.getDate() + k);
+    let totalAccrued = 0;
+    for (const { asset, instrument, openDate, closedAt } of items) {
+      const end = closedAt && closedAt < day ? closedAt : day;
+      if (openDate > end) continue;
+      totalAccrued += convert(calculate(asset, instrument, data.params, end, 0).accrued, asset.currency, data);
+    }
+    dailyIncome.push(k === 0 ? 0 : totalAccrued - prevAccrued);
+    prevAccrued = totalAccrued;
+  }
+
+  const targets = new Map<string, number>(active.map((g) => [g.id, convert(g.targetAmount, g.currency, data)]));
+  const filled = new Map<string, number>(active.map((g) => [g.id, 0]));
+
+  for (let k = 0; k <= totalDays; k++) {
+    let remaining = dailyIncome[k];
+    if (remaining <= 0) continue;
+    const day = new Date(seriesStart);
+    day.setDate(day.getDate() + k);
+    for (const g of active) {
+      if (remaining <= 0) break;
+      if (parseLocal(g.startDate) > day) continue;
+      const target = targets.get(g.id)!;
+      const have = filled.get(g.id)!;
+      if (have >= target) continue;
+      const take = Math.min(remaining, target - have);
+      filled.set(g.id, have + take);
+      remaining -= take;
+    }
+  }
+
+  // Темп «сейчас» — сглаженный run-rate движка, не дневная точка из ряда
+  // (та шумная: выходные/капитализация дают неровные дельты день-в-день).
+  const currentDailyIncome = analyticsSummary(data, now).incomePerDay;
+
+  let cumulativeRemaining = 0;
+  const out: GoalProgress[] = [];
+  for (const g of active) {
+    const target = targets.get(g.id)!;
+    const have = filled.get(g.id)!;
+    const isComplete = have >= target;
+    cumulativeRemaining += Math.max(0, target - have);
+    out.push({
+      goal: g,
+      filledAmount: have,
+      targetAmount: target,
+      progressPct: target > 0 ? Math.min(100, (have / target) * 100) : 100,
+      isComplete,
+      daysRemaining: !isComplete && currentDailyIncome > 0 ? Math.ceil(cumulativeRemaining / currentDailyIncome) : null,
+    });
+  }
+  return out;
 }
