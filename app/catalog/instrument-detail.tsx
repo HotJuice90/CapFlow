@@ -11,7 +11,7 @@ import { tokens, font } from '@/theme';
 const TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклад',
   savings: 'Накопительный счёт',
-  bond: 'Облигация',
+  bond: 'Облигации',
   dfa: 'ЦФА',
 };
 
