@@ -1741,6 +1741,10 @@ export interface GoalMetric {
   targetValue: number; // в основной валюте
   progressPct: number; // 0..100
   isComplete: boolean;
+  /** только для kind === 'capital': грубая оценка по текущему темпу дохода
+   *  (капитал растёт доходом, без учёта будущих пополнений/снятий). Для
+   *  incomeRate не считается — цель не накопительная, «ждать дни» бессмысленно. */
+  daysRemaining: number | null;
 }
 
 /**
@@ -1764,12 +1768,18 @@ export function standaloneGoalsProgress(data: AppData, now: Date = new Date()): 
       g.kind === 'incomeRate'
         ? (g.incomeRatePeriod === 'month' ? ps.incomePerMonth : ps.incomePerDay)
         : grandCapital;
+    const isComplete = currentValue >= targetValue;
+    const daysRemaining =
+      g.kind === 'capital' && !isComplete && ps.incomePerDay > 0
+        ? Math.ceil((targetValue - currentValue) / ps.incomePerDay)
+        : null;
     return {
       goal: g,
       currentValue,
       targetValue,
       progressPct: targetValue > 0 ? Math.min(100, (currentValue / targetValue) * 100) : 100,
-      isComplete: currentValue >= targetValue,
+      isComplete,
+      daysRemaining,
     };
   });
 }

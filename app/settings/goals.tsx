@@ -20,6 +20,8 @@ export default function GoalsScreen() {
 
   const progress = useMemo(() => goalsProgress(data), [data]);
   const metrics = useMemo(() => standaloneGoalsProgress(data), [data]);
+  const incomeRateMetrics = useMemo(() => metrics.filter((m) => m.goal.kind === 'incomeRate'), [metrics]);
+  const capitalMetrics = useMemo(() => metrics.filter((m) => m.goal.kind === 'capital'), [metrics]);
   const archived = useMemo(() => data.goals.filter((g) => g.status === 'archived'), [data.goals]);
   const hasActive = progress.length > 0 || metrics.length > 0;
 
@@ -55,14 +57,40 @@ export default function GoalsScreen() {
             </Pressable>
           </View>
         ) : (
-          <View style={styles.list}>
-            {progress.map((p) => (
-              <GoalRow key={p.goal.id} p={p} cur={cur} onPress={() => router.push(`/settings/goal-form?id=${p.goal.id}`)} />
-            ))}
-            {metrics.map((m) => (
-              <MetricRow key={m.goal.id} m={m} cur={cur} onPress={() => router.push(`/settings/goal-form?id=${m.goal.id}`)} />
-            ))}
-          </View>
+          <>
+            {progress.length > 0 ? (
+              <>
+                <Text style={styles.section}>Сумма</Text>
+                <View style={styles.list}>
+                  {progress.map((p) => (
+                    <GoalRow key={p.goal.id} p={p} cur={cur} onPress={() => router.push(`/settings/goal-form?id=${p.goal.id}`)} />
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {incomeRateMetrics.length > 0 ? (
+              <>
+                <Text style={styles.section}>Темп дохода</Text>
+                <View style={styles.list}>
+                  {incomeRateMetrics.map((m) => (
+                    <MetricRow key={m.goal.id} m={m} cur={cur} onPress={() => router.push(`/settings/goal-form?id=${m.goal.id}`)} />
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {capitalMetrics.length > 0 ? (
+              <>
+                <Text style={styles.section}>Капитал</Text>
+                <View style={styles.list}>
+                  {capitalMetrics.map((m) => (
+                    <MetricRow key={m.goal.id} m={m} cur={cur} onPress={() => router.push(`/settings/goal-form?id=${m.goal.id}`)} />
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </>
         )}
 
         {archived.length > 0 ? (
@@ -122,7 +150,7 @@ function GoalRow({ p, cur, onPress }: { p: GoalProgress; cur: CurrencyCode; onPr
 }
 
 function MetricRow({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onPress: () => void }) {
-  const { goal, currentValue, targetValue, progressPct, isComplete } = m;
+  const { goal, currentValue, targetValue, progressPct, isComplete, daysRemaining } = m;
   const suffix = goal.kind === 'incomeRate' ? `/${goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : '';
   return (
     <Pressable style={styles.row} onPress={onPress}>
@@ -142,9 +170,14 @@ function MetricRow({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onPr
         <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
       </View>
 
-      <Text style={styles.rowAmount}>
-        {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{suffix} из {formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{suffix}
-      </Text>
+      <View style={styles.rowBottom}>
+        <Text style={styles.rowAmount}>
+          {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{suffix} из {formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{suffix}
+        </Text>
+        {daysRemaining !== null ? (
+          <Text style={styles.rowDays}>≈ {daysRemaining} {pluralDays(daysRemaining)}</Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
