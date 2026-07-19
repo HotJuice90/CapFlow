@@ -22,6 +22,7 @@ import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { Toggle } from '@/components/Toggle';
 import {
+  Field,
   TextField,
   NumberField,
   DateField,
@@ -45,13 +46,13 @@ import { ORG_TYPES } from '@/domain/types';
 import { BANKS, BRAND_COLORS } from '@/domain/banks';
 import { TYPE_ICON } from '../catalog/instruments';
 import { ALL, FILTERS, FILTER_ICON, FILTER_COLOR, type Filter } from '../catalog/organizations';
+import { ALL_CURRENCIES } from '@/components/RatesSection';
 import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
-import { formatMoney, formatPercentSigned } from '@/format';
+import { formatMoney, formatPercentSigned, CURRENCY_SYMBOL } from '@/format';
 import { tapBuzz, successBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
 
-const CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY'];
 const PAYOUT_OPTIONS = [
   { label: 'Ежедневно', value: 'daily', icon: 'calendar-today' },
   { label: 'Ежемесячно', value: 'monthly', icon: 'calendar-month' },
@@ -768,15 +769,26 @@ export default function AssetFormScreen() {
                   label="Сумма"
                   value={amount}
                   onChange={setAmount}
-                  suffix={currency}
+                  suffix={CURRENCY_SYMBOL[currency]}
                   placeholder="0"
+                  grouped
                 />
-                <Segmented
-                  label="Валюта"
-                  value={currency}
-                  options={CURRENCIES.map((c) => ({ label: c, value: c }))}
-                  onChange={(v) => setCurrency(v as CurrencyCode)}
-                />
+                <Field label="Валюта">
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencyScroll}>
+                    {ALL_CURRENCIES.map((c) => {
+                      const active = c === currency;
+                      return (
+                        <Pressable
+                          key={c}
+                          style={[styles.currencyChip, active && styles.currencyChipActive]}
+                          onPress={() => { tapBuzz(); setCurrency(c); }}
+                        >
+                          <Text style={[styles.currencyChipText, active && styles.currencyChipTextActive]}>{c}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </Field>
                 <NumberField label="Ставка" value={rate} onChange={setRate} suffix="%" placeholder="0" />
                 <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} />
                 {isTerm ? (
@@ -889,6 +901,17 @@ function Sep() {
 
 const styles = StyleSheet.create({
   softCard: boxShadow(tokens.shadow.subtle),
+  currencyScroll: { flexGrow: 0 },
+  currencyChip: {
+    paddingHorizontal: tokens.spacing.tight,
+    paddingVertical: tokens.spacing.sm,
+    borderRadius: tokens.radius.pill,
+    backgroundColor: tokens.surface.neutral,
+    marginRight: tokens.spacing.chip,
+  },
+  currencyChipActive: { backgroundColor: tokens.accent.base },
+  currencyChipText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
+  currencyChipTextActive: { color: tokens.text.inverse, fontWeight: '700' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
