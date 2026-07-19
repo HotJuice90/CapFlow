@@ -452,7 +452,7 @@ export default function AssetFormScreen() {
     if (isExactDuplicate) {
       appAlert(
         'Такой актив уже есть',
-        'Актив с точно такими же продуктом, суммой и ставкой уже существует. Измените что-нибудь перед сохранением.',
+        'Актив с точно таким же инструментом, суммой и ставкой уже существует. Измените что-нибудь перед сохранением.',
         [{ text: 'Понятно' }],
       );
       return;
@@ -710,7 +710,7 @@ export default function AssetFormScreen() {
           {/* Шаг 2: продукт */}
           {platform ? (
             <FadeIn key={`product-${chosenOrg?.id ?? newOrgDraft?.name ?? 'new'}`}>
-              <Text style={styles.section}>Продукт</Text>
+              <Text style={styles.section}>Инструмент</Text>
               <Card style={styles.softCard}>
                 {orgInstruments.length > 0 ? (
                   <View style={{ marginBottom: newProduct ? tokens.spacing.md : 0 }}>
@@ -750,14 +750,14 @@ export default function AssetFormScreen() {
                       style={({ pressed }) => [styles.newProductRow, pressed && { opacity: 0.6 }]}
                     >
                       <MaterialIcons name="add" size={20} color={tokens.accent.base} />
-                      <Text style={styles.newProductText}>Новый продукт</Text>
+                      <Text style={styles.newProductText}>Новый инструмент</Text>
                     </Pressable>
                   </View>
                 ) : null}
 
                 {newProduct || orgInstruments.length === 0 ? (
                   <TextField
-                    label="Название продукта"
+                    label="Название инструмента"
                     value={productName}
                     onChangeText={(t) => { setProductName(t); setNewProduct(true); setInstrumentId(undefined); }}
                     placeholder="Альфа-Вклад Максимум, Яндекс Сейв…"
