@@ -467,7 +467,7 @@ export default function AssetFormScreen() {
       >
         <ScrollView
           contentContainerStyle={{
-            paddingTop: insets.top + tokens.spacing.sm,
+            paddingTop: tokens.spacing.screenTop,
             paddingHorizontal: tokens.spacing.screenH,
             paddingBottom: insets.bottom + 100,
           }}
@@ -475,13 +475,12 @@ export default function AssetFormScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Pressable onPress={handleClose} hitSlop={12}>
-              <MaterialIcons name="close" size={26} color={tokens.text.primary} />
+            <Pressable onPress={handleClose} hitSlop={12} style={styles.backBtn}>
+              <MaterialIcons name="close" size={24} color={tokens.text.primary} />
             </Pressable>
             <Text style={styles.headerTitle}>
               {editing ? 'Редактировать актив' : duplicateSource ? 'Дублировать актив' : 'Новый актив'}
             </Text>
-            <View style={{ width: 26 }} />
           </View>
 
           {/* Шаг 1: площадка */}
@@ -495,76 +494,89 @@ export default function AssetFormScreen() {
               </Pressable>
             </Card>
           ) : platformStage === 'picking' ? (
-            <Card style={styles.softCard} padded={false}>
-              <View style={styles.platformInner}>
-                <View style={styles.tabBarRow}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {FILTERS.map((t) => {
-                      const active = t === platformFilter;
-                      const color = FILTER_COLOR[t];
-                      return (
-                        <Pressable
-                          key={t}
-                          style={[styles.tabChip, active && { backgroundColor: color }]}
-                          onPress={() => setPlatformFilter(t)}
-                        >
-                          <MaterialCommunityIcons name={FILTER_ICON[t]} size={15} color={active ? tokens.text.inverse : color} />
-                          <Text style={[styles.tabChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
-                            {t}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-
-                <View style={styles.searchRow}>
-                  <MaterialIcons name="search" size={20} color={tokens.text.tertiary} />
-                  <TextInput
-                    style={styles.searchInput}
-                    value={platformQuery}
-                    onChangeText={setPlatformQuery}
-                    placeholder="Поиск по названию"
-                    placeholderTextColor={tokens.text.tertiary}
-                  />
-                  {platformQuery.length > 0 ? (
-                    <Pressable onPress={() => setPlatformQuery('')} hitSlop={8}>
-                      <MaterialIcons name="close" size={18} color={tokens.text.tertiary} />
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                <ScrollView style={styles.bankList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                  {existingOrgs.map((org, i) => (
-                    <Pressable
-                      key={org.id}
-                      onPress={() => pickExistingOrg(org)}
-                      style={({ pressed }) => [styles.bankRow, i < existingOrgs.length - 1 && styles.rowDivider, pressed && { opacity: 0.6 }]}
-                    >
-                      <OrgLogo
-                        color={org.color}
-                        logo={org.logo}
-                        imageUri={org.customImageUri}
-                        size={40}
-                        radius={14}
-                        fallbackIcon={(FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[org.type] ?? 'view-grid-outline'}
-                      />
-                      <Text style={styles.bankName} numberOfLines={1}>{org.name}</Text>
-                    </Pressable>
-                  ))}
-                  {existingOrgs.length === 0 ? (
-                    <Text style={styles.emptyHint}>Ничего не нашлось</Text>
-                  ) : null}
-                  <Pressable
-                    onPress={() => setPlatformStage('creating')}
-                    style={({ pressed }) => [styles.newProductRow, pressed && { opacity: 0.6 }]}
-                  >
-                    <MaterialIcons name="add" size={20} color={tokens.accent.base} />
-                    <Text style={styles.newProductText}>Новая площадка</Text>
-                  </Pressable>
+            <>
+              {/* Табы фильтра — прямо на фоне экрана, не внутри карточки: иначе
+                  непонятно, что по ним вообще можно тапать (выглядели частью
+                  статичного списка). */}
+              <View style={styles.tabBarRowOuter}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {FILTERS.map((t) => {
+                    const active = t === platformFilter;
+                    const color = FILTER_COLOR[t];
+                    return (
+                      <Pressable
+                        key={t}
+                        style={[styles.tabChip, active && { backgroundColor: color }]}
+                        onPress={() => setPlatformFilter(t)}
+                      >
+                        <MaterialCommunityIcons name={FILTER_ICON[t]} size={15} color={active ? tokens.text.inverse : color} />
+                        <Text style={[styles.tabChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
+                          {t}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
               </View>
-            </Card>
+
+              <Card style={styles.softCard} padded={false}>
+                <View style={styles.platformInner}>
+                  <View style={styles.searchRow}>
+                    <MaterialIcons name="search" size={20} color={tokens.text.tertiary} />
+                    <TextInput
+                      style={styles.searchInput}
+                      value={platformQuery}
+                      onChangeText={setPlatformQuery}
+                      placeholder="Поиск по названию"
+                      placeholderTextColor={tokens.text.tertiary}
+                    />
+                    {platformQuery.length > 0 ? (
+                      <Pressable onPress={() => setPlatformQuery('')} hitSlop={8}>
+                        <MaterialIcons name="close" size={18} color={tokens.text.tertiary} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
+                  {/* Не отдельный скролл внутри карточки (maxHeight:300 давал
+                      ощущение, что доступно всего 5 площадок, и было неясно,
+                      что список вообще скроллится) — список течёт как часть
+                      общего скролла экрана. */}
+                  <View style={styles.bankList}>
+                    {existingOrgs.map((org, i) => (
+                      <Pressable
+                        key={org.id}
+                        onPress={() => pickExistingOrg(org)}
+                        style={({ pressed }) => [styles.bankRow, i < existingOrgs.length - 1 && styles.rowDivider, pressed && { opacity: 0.6 }]}
+                      >
+                        <OrgLogo
+                          color={org.color}
+                          logo={org.logo}
+                          imageUri={org.customImageUri}
+                          size={40}
+                          radius={14}
+                          fallbackIcon={(FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[org.type] ?? 'view-grid-outline'}
+                        />
+                        <Text style={styles.bankName} numberOfLines={1}>{org.name}</Text>
+                      </Pressable>
+                    ))}
+                    {existingOrgs.length === 0 ? (
+                      <Text style={styles.emptyHint}>Ничего не нашлось</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </Card>
+
+              {/* Полноразмерная пунктирная кнопка под карточкой — раньше «+ Новая
+                  площадка» была последней строкой внутри clipped-скролла списка
+                  и терялась, пока её случайно не находили. */}
+              <Pressable
+                onPress={() => setPlatformStage('creating')}
+                style={({ pressed }) => [styles.newPlatformBtn, pressed && { opacity: 0.6 }]}
+              >
+                <MaterialIcons name="add" size={20} color={tokens.accent.base} />
+                <Text style={styles.newProductText}>Новая площадка</Text>
+              </Pressable>
+            </>
           ) : (
             <Card style={styles.softCard} padded={false}>
               <View style={styles.platformInner}>
@@ -774,19 +786,21 @@ export default function AssetFormScreen() {
                   grouped
                 />
                 <Field label="Валюта">
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencyScroll}>
-                    {ALL_CURRENCIES.map((c) => {
-                      const active = c === currency;
-                      return (
-                        <Pressable
-                          key={c}
-                          style={[styles.currencyChip, active && styles.currencyChipActive]}
-                          onPress={() => { tapBuzz(); setCurrency(c); }}
-                        >
-                          <Text style={[styles.currencyChipText, active && styles.currencyChipTextActive]}>{c}</Text>
-                        </Pressable>
-                      );
-                    })}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.currencyBar}>
+                      {ALL_CURRENCIES.map((c) => {
+                        const active = c === currency;
+                        return (
+                          <Pressable
+                            key={c}
+                            style={[styles.currencyTab, active && styles.currencyTabActive]}
+                            onPress={() => { tapBuzz(); setCurrency(c); }}
+                          >
+                            <Text style={[styles.currencyTabText, active && styles.currencyTabTextActive]}>{c}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   </ScrollView>
                 </Field>
                 <NumberField label="Ставка" value={rate} onChange={setRate} suffix="%" placeholder="0" />
@@ -901,24 +915,22 @@ function Sep() {
 
 const styles = StyleSheet.create({
   softCard: boxShadow(tokens.shadow.subtle),
-  currencyScroll: { flexGrow: 0 },
-  currencyChip: {
-    paddingHorizontal: tokens.spacing.tight,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radius.pill,
-    backgroundColor: tokens.surface.neutral,
-    marginRight: tokens.spacing.chip,
-  },
-  currencyChipActive: { backgroundColor: tokens.accent.base },
-  currencyChipText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
-  currencyChipTextActive: { color: tokens.text.inverse, fontWeight: '700' },
+  // Тот же стиль, что и таб-бар «Динамика курса» в конвертере (валют/истории) —
+  // единая пилюля-подложка с ползущим активным сегментом, просто без фиксированной
+  // ширины на 4 таба: тут 10 валют, лента сама растёт и скроллится.
+  currencyBar: { flexDirection: 'row', backgroundColor: tokens.surface.tabOff, borderRadius: tokens.radius.pill, padding: 1 },
+  currencyTab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pill },
+  currencyTabActive: { backgroundColor: tokens.accent.light },
+  currencyTabText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: tokens.text.tertiary },
+  currencyTabTextActive: { color: tokens.text.inverse },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: tokens.spacing.md,
+    gap: tokens.spacing.md,
+    marginBottom: tokens.spacing.xl,
   },
-  headerTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary },
+  backBtn: { width: 24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   section: {
     fontSize: tokens.typography.title,
     fontWeight: '600',
@@ -932,6 +944,7 @@ const styles = StyleSheet.create({
   platformInner: { paddingVertical: tokens.spacing.lg },
 
   tabBarRow: { paddingHorizontal: tokens.spacing.lg, marginBottom: tokens.spacing.md },
+  tabBarRowOuter: { marginBottom: tokens.spacing.md },
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -957,7 +970,7 @@ const styles = StyleSheet.create({
     borderBottomColor: tokens.surface.hairline,
   },
   searchInput: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary, paddingVertical: tokens.spacing.sm },
-  bankList: { maxHeight: 300, paddingHorizontal: tokens.spacing.lg },
+  bankList: { paddingHorizontal: tokens.spacing.lg },
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   bankName: { flex: 1, fontFamily: font.medium, fontSize: tokens.typography.body, color: tokens.text.primary },
@@ -1051,6 +1064,18 @@ const styles = StyleSheet.create({
   productSub: { fontFamily: font.regular, fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
   radioOff: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#D8DFE9', marginRight: 1 },
   newProductRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
+  newPlatformBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: tokens.spacing.md,
+    paddingVertical: tokens.spacing.lg,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: tokens.accent.base,
+  },
   newProductText: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.accent.base },
 
   // тип — цветные чипы во всю ширину экрана (как на экране «Инструмент»)
