@@ -157,6 +157,11 @@ export default function AssetFormScreen() {
   const [platformStage, setPlatformStage] = useState<'picking' | 'creating'>('picking');
   const [platformFilter, setPlatformFilter] = useState<Filter>(ALL);
   const [platformQuery, setPlatformQuery] = useState('');
+  // Свой скроллбар для списка площадок (нативный не стилизуется под наш акцент/
+  // форму) — трек+ползунок считаем сами из позиции скролла и высоты контента.
+  const [bankScrollY, setBankScrollY] = useState(0);
+  const [bankContentH, setBankContentH] = useState(0);
+  const [bankContainerH, setBankContainerH] = useState(0);
   const [orgMode, setOrgMode] = useState<'catalog' | 'custom'>('catalog');
   const [catalogQuery, setCatalogQuery] = useState('');
   const [customName, setCustomName] = useState('');
@@ -537,30 +542,59 @@ export default function AssetFormScreen() {
                     ) : null}
                   </View>
 
-                  {/* Окно на ~5 позиций с явным индикатором скролла — не «резиновая»
-                      высота: так сразу видно, что список длиннее видимого. */}
-                  <ScrollView style={styles.bankList} nestedScrollEnabled showsVerticalScrollIndicator>
-                    {existingOrgs.map((org, i) => (
-                      <Pressable
-                        key={org.id}
-                        onPress={() => pickExistingOrg(org)}
-                        style={({ pressed }) => [styles.bankRow, i < existingOrgs.length - 1 && styles.rowDivider, pressed && { opacity: 0.6 }]}
-                      >
-                        <OrgLogo
-                          color={org.color}
-                          logo={org.logo}
-                          imageUri={org.customImageUri}
-                          size={40}
-                          radius={14}
-                          fallbackIcon={(FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[org.type] ?? 'view-grid-outline'}
+                  {/* Окно на ~5 позиций со своим скроллбаром (нативный не красится
+                      под акцент) — трек светло-серый, ползунок акцентный синий,
+                      виден только когда реально есть что скроллить. */}
+                  <View style={styles.bankListWrap}>
+                    <ScrollView
+                      style={styles.bankList}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator={false}
+                      scrollEventThrottle={16}
+                      onScroll={(e) => setBankScrollY(e.nativeEvent.contentOffset.y)}
+                      onContentSizeChange={(_w, h) => setBankContentH(h)}
+                      onLayout={(e) => setBankContainerH(e.nativeEvent.layout.height)}
+                    >
+                      {existingOrgs.map((org, i) => (
+                        <Pressable
+                          key={org.id}
+                          onPress={() => pickExistingOrg(org)}
+                          style={({ pressed }) => [styles.bankRow, i < existingOrgs.length - 1 && styles.rowDivider, pressed && { opacity: 0.6 }]}
+                        >
+                          <OrgLogo
+                            color={org.color}
+                            logo={org.logo}
+                            imageUri={org.customImageUri}
+                            size={40}
+                            radius={14}
+                            fallbackIcon={(FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[org.type] ?? 'view-grid-outline'}
+                          />
+                          <Text style={styles.bankName} numberOfLines={1}>{org.name}</Text>
+                        </Pressable>
+                      ))}
+                      {existingOrgs.length === 0 ? (
+                        <Text style={styles.emptyHint}>Ничего не нашлось</Text>
+                      ) : null}
+                    </ScrollView>
+                    {existingOrgs.length > 5 && bankContentH > bankContainerH && bankContainerH > 0 ? (
+                      <View style={styles.bankScrollTrack}>
+                        <View
+                          style={[
+                            styles.bankScrollThumb,
+                            {
+                              height: Math.max(24, (bankContainerH / bankContentH) * bankContainerH),
+                              transform: [{
+                                translateY: Math.min(
+                                  bankContainerH - Math.max(24, (bankContainerH / bankContentH) * bankContainerH),
+                                  Math.max(0, (bankScrollY / (bankContentH - bankContainerH)) * (bankContainerH - Math.max(24, (bankContainerH / bankContentH) * bankContainerH))),
+                                ),
+                              }],
+                            },
+                          ]}
                         />
-                        <Text style={styles.bankName} numberOfLines={1}>{org.name}</Text>
-                      </Pressable>
-                    ))}
-                    {existingOrgs.length === 0 ? (
-                      <Text style={styles.emptyHint}>Ничего не нашлось</Text>
+                      </View>
                     ) : null}
-                  </ScrollView>
+                  </View>
                 </View>
               </Card>
 
@@ -972,7 +1006,15 @@ const styles = StyleSheet.create({
     borderBottomColor: tokens.surface.hairline,
   },
   searchInput: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary, paddingVertical: tokens.spacing.sm },
+  bankListWrap: { position: 'relative' },
   bankList: { maxHeight: 300, paddingHorizontal: tokens.spacing.lg },
+  bankScrollTrack: {
+    position: 'absolute', right: 2, top: 0, bottom: 0, width: 3,
+    borderRadius: 1.5, backgroundColor: hexToRgba(tokens.text.tertiary, 0.18),
+  },
+  bankScrollThumb: {
+    width: 3, borderRadius: 1.5, backgroundColor: tokens.accent.base,
+  },
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   bankName: { flex: 1, fontFamily: font.medium, fontSize: tokens.typography.body, color: tokens.text.primary },
