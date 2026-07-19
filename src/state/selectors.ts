@@ -1665,7 +1665,7 @@ export interface GoalProgress {
  */
 export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgress[] {
   const active = data.goals
-    .filter((g) => g.status === 'active')
+    .filter((g) => g.status === 'active' && (g.kind ?? 'amount') === 'amount')
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (active.length === 0) return [];
 
@@ -1733,4 +1733,43 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
     });
   }
   return out;
+}
+
+export interface GoalMetric {
+  goal: Goal;
+  currentValue: number; // в основной валюте (для incomeRate — за period цели)
+  targetValue: number; // в основной валюте
+  progressPct: number; // 0..100
+  isComplete: boolean;
+}
+
+/**
+ * Цели-измерители («Темп дохода», «Размер капитала») — не копилки: каждая
+ * мгновенно сравнивает текущее состояние портфеля с целью, без очереди и
+ * водопада (в отличие от goalsProgress). Прогресс может как расти, так и
+ * падать вместе с реальными показателями.
+ */
+export function standaloneGoalsProgress(data: AppData, now: Date = new Date()): GoalMetric[] {
+  const active = data.goals
+    .filter((g) => g.status === 'active' && (g.kind === 'incomeRate' || g.kind === 'capital'))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (active.length === 0) return [];
+
+  const ps = portfolioSummary(data, now);
+  const grandCapital = manualTotalCapitalConverted(data) ?? ps.workingCapital;
+
+  return active.map((g) => {
+    const targetValue = convert(g.targetAmount, g.currency, data);
+    const currentValue =
+      g.kind === 'incomeRate'
+        ? (g.incomeRatePeriod === 'month' ? ps.incomePerMonth : ps.incomePerDay)
+        : grandCapital;
+    return {
+      goal: g,
+      currentValue,
+      targetValue,
+      progressPct: targetValue > 0 ? Math.min(100, (currentValue / targetValue) * 100) : 100,
+      isComplete: currentValue >= targetValue,
+    };
+  });
 }

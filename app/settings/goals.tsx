@@ -6,7 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
-import { goalsProgress, type GoalProgress } from '@/state/selectors';
+import { goalsProgress, standaloneGoalsProgress, type GoalProgress, type GoalMetric } from '@/state/selectors';
 import { pluralDays } from '@/format/date';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
@@ -19,7 +19,9 @@ export default function GoalsScreen() {
   const cur = data.settings.defaultCurrency;
 
   const progress = useMemo(() => goalsProgress(data), [data]);
+  const metrics = useMemo(() => standaloneGoalsProgress(data), [data]);
   const archived = useMemo(() => data.goals.filter((g) => g.status === 'archived'), [data.goals]);
+  const hasActive = progress.length > 0 || metrics.length > 0;
 
   return (
     <ScreenBackground>
@@ -43,7 +45,7 @@ export default function GoalsScreen() {
           </Pressable>
         </View>
 
-        {progress.length === 0 ? (
+        {!hasActive ? (
           <View style={styles.empty}>
             <MaterialIcons name="flag" size={32} color={tokens.text.tertiary} />
             <Text style={styles.emptyTitle}>Пока нет целей</Text>
@@ -57,6 +59,9 @@ export default function GoalsScreen() {
             {progress.map((p) => (
               <GoalRow key={p.goal.id} p={p} cur={cur} onPress={() => router.push(`/settings/goal-form?id=${p.goal.id}`)} />
             ))}
+            {metrics.map((m) => (
+              <MetricRow key={m.goal.id} m={m} cur={cur} onPress={() => router.push(`/settings/goal-form?id=${m.goal.id}`)} />
+            ))}
           </View>
         )}
 
@@ -68,7 +73,10 @@ export default function GoalsScreen() {
                 <Pressable key={g.id} style={styles.archivedRow} onPress={() => router.push(`/settings/goal-form?id=${g.id}`)}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.archivedTitle} numberOfLines={1}>{g.title}</Text>
-                    <Text style={styles.archivedSub}>{formatMoney(g.targetAmount, { currency: g.currency, kopecks: 'hide' })}</Text>
+                    <Text style={styles.archivedSub}>
+                      {formatMoney(g.targetAmount, { currency: g.currency, kopecks: 'hide' })}
+                      {g.kind === 'incomeRate' ? `/${g.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : ''}
+                    </Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
                 </Pressable>
@@ -109,6 +117,34 @@ function GoalRow({ p, cur, onPress }: { p: GoalProgress; cur: CurrencyCode; onPr
           <Text style={styles.rowDays}>≈ {daysRemaining} {pluralDays(daysRemaining)}</Text>
         ) : null}
       </View>
+    </Pressable>
+  );
+}
+
+function MetricRow({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onPress: () => void }) {
+  const { goal, currentValue, targetValue, progressPct, isComplete } = m;
+  const suffix = goal.kind === 'incomeRate' ? `/${goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : '';
+  return (
+    <Pressable style={styles.row} onPress={onPress}>
+      <View style={styles.rowTop}>
+        <Text style={styles.rowTitle} numberOfLines={1}>{goal.title}</Text>
+        {isComplete ? (
+          <View style={styles.doneBadge}>
+            <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+            <Text style={styles.doneBadgeText}>Достигнуто</Text>
+          </View>
+        ) : (
+          <Text style={styles.rowPct}>{Math.round(progressPct)}%</Text>
+        )}
+      </View>
+
+      <View style={styles.track}>
+        <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
+      </View>
+
+      <Text style={styles.rowAmount}>
+        {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{suffix} из {formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{suffix}
+      </Text>
     </Pressable>
   );
 }
