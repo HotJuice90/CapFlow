@@ -6,74 +6,27 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import type {
-  Asset,
-  AssetStatus,
-  CurrencyCode,
-  FinancialInstrument,
-  Goal,
-  Organization,
-  Snapshot,
-  TaxYearRecord,
-} from '@/domain/types';
+import type { Organization, TaxYearRecord } from '@/domain/types';
 import { repository } from '@/storage/repository';
-import { type AppData, type RateSnapshot, emptyAppData } from '@/storage/types';
+import { type AppData, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
 import { findBankByName } from '@/domain/banks';
-import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
-import { fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
-import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
-import { calculate, ENGINE_VERSION } from '@/calc';
+import { fetchCbrRates } from '@/rates/cbr';
 import { computeTaxYearRecord } from './selectors';
-import { uid } from '@/utils/id';
 import { setAbbreviateMillionsDefault, setKopecksDefault } from '@/format';
+import { useAssetActions, type AssetActions } from './actions/useAssetActions';
+import { useCatalogActions, type CatalogActions } from './actions/useCatalogActions';
+import { useGoalActions, type GoalActions } from './actions/useGoalActions';
+import { useRatesActions, appendSnapshot, type RatesActions } from './actions/useRatesActions';
+import { useSettingsActions, type SettingsActions } from './actions/useSettingsActions';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
 
-/** Добавляет срез курсов за сегодня в историю (дедуп по дню, последние 90). */
-function appendSnapshot(history: RateSnapshot[], rates: AppData['rates']): RateSnapshot[] {
-  const date = new Date().toISOString().slice(0, 10);
-  const filtered = history.filter((s) => s.date !== date);
-  return [...filtered, { date, rates: { ...rates } }]
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-90);
-}
-
-interface DataContextValue {
+interface DataContextValue extends AssetActions, CatalogActions, GoalActions, RatesActions, SettingsActions {
   data: AppData;
   loading: boolean;
   hasDemo: boolean;
   reload: () => Promise<void>;
-  // активы
-  addAsset: (asset: Asset) => Promise<void>;
-  createAssetBundle: (bundle: { organization?: Organization; instrument?: FinancialInstrument; asset: Asset }) => Promise<void>;
-  updateAsset: (asset: Asset) => Promise<void>;
-  deleteAsset: (id: string) => Promise<void>;
-  setAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
-  // каталоги
-  addOrganization: (org: Organization) => Promise<void>;
-  updateOrganization: (org: Organization) => Promise<void>;
-  /** false — отказ: на площадку ещё ссылается инструмент (см. реализацию). */
-  deleteOrganization: (id: string) => Promise<boolean>;
-  addInstrument: (instrument: FinancialInstrument) => Promise<void>;
-  updateInstrument: (instrument: FinancialInstrument) => Promise<void>;
-  /** false — отказ: на инструмент ещё ссылается актив (см. реализацию). */
-  deleteInstrument: (id: string) => Promise<boolean>;
-  // цели
-  addGoal: (goal: Goal) => Promise<void>;
-  updateGoal: (goal: Goal) => Promise<void>;
-  deleteGoal: (id: string) => Promise<void>;
-  // настройки/демо
-  deleteDemoData: () => Promise<void>;
-  reseedDemo: () => Promise<void>;
-  updateParams: (patch: Partial<AppData['params']>) => Promise<void>;
-  setManualRate: (code: CurrencyCode, value: number | undefined) => Promise<void>;
-  refreshRates: () => Promise<void>;
-  backfillRateHistory: () => Promise<void>;
-  resetRateHistory: () => Promise<void>;
-  refreshKeyRate: () => Promise<void>;
-  updateSettings: (patch: Partial<AppData['settings']>) => Promise<void>;
-  replaceAll: (incoming: AppData) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -204,285 +157,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (next !== data) void persist(next);
   }, [data, loading, persist]);
 
-  // --- Активы ---
-  const addAsset = useCallback(
-    async (asset: Asset) => {
-      await persist({ ...data, assets: [...data.assets, asset] });
-    },
-    [data, persist],
-  );
-
-  /** Атомарное создание актива вместе с новыми организацией/инструментом (флоу
-   * «Новый актив»): последовательные addOrganization+addInstrument+addAsset из
-   * одного обработчика затирали бы друг друга — каждый persist от одного data. */
-  const createAssetBundle = useCallback(
-    async (bundle: { organization?: Organization; instrument?: FinancialInstrument; asset: Asset }) => {
-      await persist({
-        ...data,
-        organizations: bundle.organization ? [...data.organizations, bundle.organization] : data.organizations,
-        instruments: bundle.instrument ? [...data.instruments, bundle.instrument] : data.instruments,
-        assets: [...data.assets, bundle.asset],
-      });
-    },
-    [data, persist],
-  );
-
-  const updateAsset = useCallback(
-    async (asset: Asset) => {
-      await persist({
-        ...data,
-        assets: data.assets.map((a) => (a.id === asset.id ? asset : a)),
-      });
-    },
-    [data, persist],
-  );
-
-  const deleteAsset = useCallback(
-    async (id: string) => {
-      await persist({ ...data, assets: data.assets.filter((a) => a.id !== id) });
-    },
-    [data, persist],
-  );
-
-  const setAssetStatus = useCallback(
-    async (id: string, status: AssetStatus) => {
-      const asset = data.assets.find((a) => a.id === id);
-      let snapshots = data.snapshots;
-      // фиксируем Snapshot при закрытии/архивации активного актива (решение #8)
-      if (asset && asset.status === 'active' && (status === 'closed' || status === 'archived')) {
-        const instr = data.instruments.find((i) => i.id === asset.instrumentId);
-        if (instr) {
-          const snap: Snapshot = {
-            id: uid('snap-'),
-            assetId: id,
-            createdAt: new Date().toISOString(),
-            reason: status,
-            excludeFromAnalytics: status === 'archived',
-            engineVersion: ENGINE_VERSION,
-            derived: calculate(asset, instr, data.params),
-            assetSnapshot: { ...asset, status },
-          };
-          snapshots = [...data.snapshots, snap];
-        }
-      }
-      await persist({
-        ...data,
-        assets: data.assets.map((a) => (a.id === id ? { ...a, status } : a)),
-        snapshots,
-      });
-    },
-    [data, persist],
-  );
-
-  // --- Каталоги ---
-  const addOrganization = useCallback(
-    async (org: Organization) => {
-      await persist({ ...data, organizations: [...data.organizations, org] });
-    },
-    [data, persist],
-  );
-
-  const updateOrganization = useCallback(
-    async (org: Organization) => {
-      await persist({
-        ...data,
-        organizations: data.organizations.map((o) => (o.id === org.id ? org : o)),
-      });
-    },
-    [data, persist],
-  );
-
-  const deleteOrganization = useCallback(
-    async (id: string) => {
-      // Защита на уровне данных, а не только в UI каталога (см. deleteDemoData
-      // выше) — иначе инструмент остаётся без площадки и «висит» так, будто
-      // не существует, но не удаляется нигде.
-      if (data.instruments.some((i) => i.organizationId === id)) return false;
-      await persist({ ...data, organizations: data.organizations.filter((o) => o.id !== id) });
-      return true;
-    },
-    [data, persist],
-  );
-
-  const addInstrument = useCallback(
-    async (instrument: FinancialInstrument) => {
-      await persist({ ...data, instruments: [...data.instruments, instrument] });
-    },
-    [data, persist],
-  );
-
-  const updateInstrument = useCallback(
-    async (instrument: FinancialInstrument) => {
-      await persist({
-        ...data,
-        instruments: data.instruments.map((i) =>
-          i.id === instrument.id ? instrument : i,
-        ),
-      });
-    },
-    [data, persist],
-  );
-
-  const deleteInstrument = useCallback(
-    async (id: string) => {
-      if (data.assets.some((a) => a.instrumentId === id)) return false;
-      await persist({ ...data, instruments: data.instruments.filter((i) => i.id !== id) });
-      return true;
-    },
-    [data, persist],
-  );
-
-  // --- Цели ---
-  const addGoal = useCallback(
-    async (goal: Goal) => {
-      await persist({ ...data, goals: [...data.goals, goal] });
-    },
-    [data, persist],
-  );
-
-  const updateGoal = useCallback(
-    async (goal: Goal) => {
-      await persist({ ...data, goals: data.goals.map((g) => (g.id === goal.id ? goal : g)) });
-    },
-    [data, persist],
-  );
-
-  const deleteGoal = useCallback(
-    async (id: string) => {
-      await persist({ ...data, goals: data.goals.filter((g) => g.id !== id) });
-    },
-    [data, persist],
-  );
-
-  // --- Демо / настройки ---
-  const deleteDemoData = useCallback(async () => {
-    // Демо-организация/инструмент, на который уже ссылается РЕАЛЬНЫЙ (не демо)
-    // инструмент/актив, не должна исчезать — иначе он остаётся без площадки
-    // и перестаёт резолвиться нигде (актив «висит» так, будто не существует).
-    // Вместо удаления такая запись «усыновляется» — снимаем с неё isDemo.
-    const usedInstrumentIds = new Set(
-      data.assets.filter((a) => !a.isDemo).map((a) => a.instrumentId),
-    );
-    const instruments = data.instruments
-      .filter((i) => !i.isDemo || usedInstrumentIds.has(i.id))
-      .map((i) => (usedInstrumentIds.has(i.id) ? { ...i, isDemo: false } : i));
-
-    const usedOrgIds = new Set(instruments.filter((i) => !i.isDemo).map((i) => i.organizationId));
-    const organizations = data.organizations
-      .filter((o) => !o.isDemo || usedOrgIds.has(o.id))
-      .map((o) => (usedOrgIds.has(o.id) ? { ...o, isDemo: false } : o));
-
-    await persist({
-      ...data,
-      organizations,
-      instruments,
-      assets: data.assets.filter((a) => !a.isDemo),
-    });
-  }, [data, persist]);
-
-  const reseedDemo = useCallback(async () => {
-    if (data.assets.some((a) => a.isDemo)) return;
-    const demo = buildDemoData();
-    await persist({
-      ...data,
-      organizations: [...data.organizations, ...demo.organizations],
-      instruments: [...data.instruments, ...demo.instruments],
-      assets: [...data.assets, ...demo.assets],
-    });
-  }, [data, persist]);
-
-  const updateParams = useCallback(
-    async (patch: Partial<AppData['params']>) => {
-      await persist({ ...data, params: { ...data.params, ...patch } });
-    },
-    [data, persist],
-  );
-
-  const setManualRate = useCallback(
-    async (code: CurrencyCode, value: number | undefined) => {
-      const manualRates = { ...data.manualRates };
-      if (value === undefined) delete manualRates[code];
-      else manualRates[code] = value;
-      await persist({ ...data, manualRates });
-    },
-    [data, persist],
-  );
-
-  const refreshRates = useCallback(async () => {
-    const fetched = await fetchCbrRates();
-    const rates = { ...data.rates, ...fetched };
-    await persist({
-      ...data,
-      rates,
-      ratesUpdatedAt: new Date().toISOString(),
-      ratesHistory: appendSnapshot(data.ratesHistory, rates),
-    });
-  }, [data, persist]);
-
-  const backfillRateHistory = useCallback(async () => {
-    const hist = await fetchCbrHistory();
-    const byDate = new Map<string, RateSnapshot>();
-    for (const s of data.ratesHistory) byDate.set(s.date, s);
-    for (const s of hist) byDate.set(s.date, s);
-    const merged = [...byDate.values()]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-90);
-    await persist({ ...data, ratesHistory: merged });
-  }, [data, persist]);
-
-  /**
-   * Полный пересбор истории курсов с нуля — выбрасывает всё старое (в т.ч.
-   * записи, задвоенные старым багом бэкфилла, когда архивный запрос на «сегодня»
-   * перетирал живое значение), тянет архив заново (уже без «сегодня» в диапазоне)
-   * и добавляет актуальный курс на сегодня отдельным live-запросом.
-   */
-  const resetRateHistory = useCallback(async () => {
-    const hist = await fetchCbrHistory();
-    const fetched = await fetchCbrRates();
-    const rates = { ...data.rates, ...fetched };
-    const withToday = appendSnapshot(hist, rates);
-    await persist({
-      ...data,
-      rates,
-      ratesUpdatedAt: new Date().toISOString(),
-      ratesHistory: withToday.slice(-90),
-    });
-  }, [data, persist]);
-
-  const refreshKeyRate = useCallback(async () => {
-    const stored = data.keyRateHistory.length > 0 ? data.keyRateHistory : KEY_RATE_HISTORY;
-    const fromDate = stored[0]?.date ?? EARLIEST_DATE;
-    const fetched = await fetchKeyRateHistory(fromDate);
-    const merged = mergeKeyRateHistory(stored, fetched);
-    await persist({
-      ...data,
-      keyRateHistory: merged,
-      params: { ...data.params, keyRate: merged[0].rate },
-    });
-  }, [data, persist]);
-
-  const updateSettings = useCallback(
-    async (patch: Partial<AppData['settings']>) => {
-      await persist({ ...data, settings: { ...data.settings, ...patch } });
-    },
-    [data, persist],
-  );
-
-  const replaceAll = useCallback(
-    async (incoming: AppData) => {
-      const base = emptyAppData();
-      const merged: AppData = {
-        ...base,
-        ...incoming,
-        params: { ...base.params, ...incoming.params },
-        settings: { ...base.settings, ...incoming.settings },
-        rates: { ...base.rates, ...incoming.rates },
-        ratesUpdatedAt: incoming.ratesUpdatedAt ?? null,
-      };
-      await persist(merged);
-    },
-    [persist],
-  );
+  const assetActions = useAssetActions(data, persist);
+  const catalogActions = useCatalogActions(data, persist);
+  const goalActions = useGoalActions(data, persist);
+  const ratesActions = useRatesActions(data, persist);
+  const settingsActions = useSettingsActions(data, persist);
 
   const hasDemo = useMemo(() => data.assets.some((a) => a.isDemo), [data.assets]);
 
@@ -492,61 +171,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       loading,
       hasDemo,
       reload,
-      addAsset,
-      createAssetBundle,
-      updateAsset,
-      deleteAsset,
-      setAssetStatus,
-      addOrganization,
-      updateOrganization,
-      deleteOrganization,
-      addInstrument,
-      updateInstrument,
-      deleteInstrument,
-      addGoal,
-      updateGoal,
-      deleteGoal,
-      deleteDemoData,
-      reseedDemo,
-      updateParams,
-      setManualRate,
-      refreshRates,
-      backfillRateHistory,
-      resetRateHistory,
-      refreshKeyRate,
-      updateSettings,
-      replaceAll,
+      ...assetActions,
+      ...catalogActions,
+      ...goalActions,
+      ...ratesActions,
+      ...settingsActions,
     }),
-    [
-      data,
-      loading,
-      hasDemo,
-      reload,
-      addAsset,
-      createAssetBundle,
-      updateAsset,
-      deleteAsset,
-      setAssetStatus,
-      addOrganization,
-      updateOrganization,
-      deleteOrganization,
-      addInstrument,
-      updateInstrument,
-      deleteInstrument,
-      addGoal,
-      updateGoal,
-      deleteGoal,
-      deleteDemoData,
-      reseedDemo,
-      updateParams,
-      setManualRate,
-      refreshRates,
-      backfillRateHistory,
-      resetRateHistory,
-      refreshKeyRate,
-      updateSettings,
-      replaceAll,
-    ],
+    [data, loading, hasDemo, reload, assetActions, catalogActions, goalActions, ratesActions, settingsActions],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
