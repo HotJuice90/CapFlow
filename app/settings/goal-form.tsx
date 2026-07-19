@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    backgroundColor: hexToRgba(tokens.surface.white, 0.85),
+    backgroundColor: hexToRgba('#F5F7FF', 0.85),
     borderTopWidth: 1,
     borderTopColor: tokens.surface.hairline,
   },
