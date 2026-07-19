@@ -6,13 +6,25 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { GradientFooter } from '@/components/GradientFooter';
 import { Card } from '@/components/Card';
-import { TextField, NumberField, DateField } from '@/components/form/fields';
+import { TextField, NumberField, DateField, Segmented } from '@/components/form/fields';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
 import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
-import type { Goal } from '@/domain/types';
+import type { Goal, GoalKind } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
+
+const KIND_OPTIONS: { label: string; value: GoalKind }[] = [
+  { label: 'Сумма', value: 'amount' },
+  { label: 'Темп дохода', value: 'incomeRate' },
+  { label: 'Капитал', value: 'capital' },
+];
+
+const KIND_HINT: Record<GoalKind, string> = {
+  amount: 'Копилка: реальный начисленный доход портфеля льётся в цель, пока не наберётся сумма. Если целей несколько — по очереди, от самой старой.',
+  incomeRate: 'Измеритель, не копилка: показывает, насколько текущий доход портфеля близок к целевому темпу — растёт и падает вместе с реальным доходом.',
+  capital: 'Измеритель, не копилка: сравнивает весь капитал (активы + свободный, из настроек) с целевой суммой.',
+};
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -27,10 +39,12 @@ export default function GoalFormScreen() {
   const editing = data.goals.find((g) => g.id === id);
 
   const [title, setTitle] = useState(editing?.title ?? '');
+  const [kind, setKind] = useState<GoalKind>(editing?.kind ?? 'amount');
+  const [incomeRatePeriod, setIncomeRatePeriod] = useState<'day' | 'month'>(editing?.incomeRatePeriod ?? 'day');
   const [targetAmount, setTargetAmount] = useState<number | undefined>(editing?.targetAmount);
   const [startDate, setStartDate] = useState(editing?.startDate ?? todayIso());
 
-  const canSave = title.trim().length > 0 && !!targetAmount && targetAmount > 0 && !!startDate;
+  const canSave = title.trim().length > 0 && !!targetAmount && targetAmount > 0 && (kind !== 'amount' || !!startDate);
 
   const onSave = async () => {
     if (!canSave || !targetAmount) return;
@@ -38,7 +52,9 @@ export default function GoalFormScreen() {
     const goal: Goal = {
       id: editing?.id ?? uid('goal-'),
       title: title.trim(),
+      kind,
       targetAmount,
+      incomeRatePeriod: kind === 'incomeRate' ? incomeRatePeriod : undefined,
       currency: editing?.currency ?? data.settings.defaultCurrency,
       startDate,
       createdAt: editing?.createdAt ?? new Date().toISOString(),
@@ -103,19 +119,40 @@ export default function GoalFormScreen() {
 
         <Card>
           <TextField label="Название" value={title} onChangeText={setTitle} placeholder="Например, «Подушка безопасности»" autoFocus={!editing} />
-          <NumberField
-            label="Сумма"
-            value={targetAmount}
-            onChange={setTargetAmount}
-            placeholder="0"
-            suffix={editing?.currency ?? data.settings.defaultCurrency}
-          />
-          <DateField
-            label="Считать доход с"
-            value={startDate}
-            onChange={setStartDate}
-            hint="Можно задним числом — если до этой даты активов ещё не было, прогресс начнёт копиться только с их появления."
-          />
+          <Segmented label="Тип цели" value={kind} options={KIND_OPTIONS} onChange={setKind} />
+          {kind === 'incomeRate' ? (
+            <>
+              <NumberField
+                label="Целевой доход"
+                value={targetAmount}
+                onChange={setTargetAmount}
+                placeholder="0"
+                suffix={`${editing?.currency ?? data.settings.defaultCurrency}/${incomeRatePeriod === 'day' ? 'день' : 'мес'}`}
+              />
+              <Segmented
+                label="Период"
+                value={incomeRatePeriod}
+                options={[{ label: 'В день', value: 'day' }, { label: 'В месяц', value: 'month' }]}
+                onChange={setIncomeRatePeriod}
+              />
+            </>
+          ) : (
+            <NumberField
+              label={kind === 'capital' ? 'Целевой капитал' : 'Сумма'}
+              value={targetAmount}
+              onChange={setTargetAmount}
+              placeholder="0"
+              suffix={editing?.currency ?? data.settings.defaultCurrency}
+            />
+          )}
+          {kind === 'amount' ? (
+            <DateField
+              label="Считать доход с"
+              value={startDate}
+              onChange={setStartDate}
+              hint="Можно задним числом — если до этой даты активов ещё не было, прогресс начнёт копиться только с их появления."
+            />
+          ) : null}
         </Card>
 
         {editing ? (
@@ -125,9 +162,7 @@ export default function GoalFormScreen() {
           </Pressable>
         ) : null}
 
-        <Text style={styles.footnote}>
-          Цель — прогнозная надстройка, не отдельный кошелёк: деньги между активами никуда физически не переносятся. Если целей несколько, доход заполняет их по очереди — сначала самую старую, потом следующую.
-        </Text>
+        <Text style={styles.footnote}>{KIND_HINT[kind]}</Text>
       </ScrollView>
 
       <GradientFooter style={[styles.footer, { paddingBottom: insets.bottom + tokens.spacing.md }]}>

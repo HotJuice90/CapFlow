@@ -217,12 +217,24 @@ export interface TaxYearRecord {
  * реальный доход). При нескольких активных целях — водопад: копится в
  * порядке createdAt (старшая цель первой), после заполнения — в следующую.
  */
+/**
+ * 'amount' (по умолчанию, старые записи без поля) — накопительная цель,
+ * участвует в водопаде по накопленному доходу. 'incomeRate'/'capital' —
+ * измерители текущего состояния (темп дохода / общий капитал), в водопаде
+ * не участвуют, каждая считает свой прогресс независимо и мгновенно.
+ */
+export type GoalKind = 'amount' | 'incomeRate' | 'capital';
+
 export interface Goal {
   id: string;
   title: string;
+  kind?: GoalKind;
+  /** 'amount'/'capital' — целевая сумма; 'incomeRate' — целевой доход за incomeRatePeriod */
   targetAmount: number;
+  /** только для kind === 'incomeRate': единица периода целевого дохода */
+  incomeRatePeriod?: 'day' | 'month';
   currency: CurrencyCode;
-  /** ISO 'YYYY-MM-DD' — с какой даты считать доход в счёт цели (можно задним числом) */
+  /** ISO 'YYYY-MM-DD' — с какой даты считать доход в счёт цели (можно задним числом); для incomeRate/capital не используется */
   startDate: string;
   /** ISO datetime — момент создания записи, определяет порядок в водопаде (не путать со startDate) */
   createdAt: string;
