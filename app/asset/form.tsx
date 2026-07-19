@@ -520,7 +520,7 @@ export default function AssetFormScreen() {
               </View>
 
               <Card style={styles.softCard} padded={false}>
-                <View style={styles.platformInner}>
+                <View style={styles.platformInnerPicking}>
                   <View style={styles.searchRow}>
                     <MaterialIcons name="search" size={20} color={tokens.text.tertiary} />
                     <TextInput
@@ -537,11 +537,9 @@ export default function AssetFormScreen() {
                     ) : null}
                   </View>
 
-                  {/* Не отдельный скролл внутри карточки (maxHeight:300 давал
-                      ощущение, что доступно всего 5 площадок, и было неясно,
-                      что список вообще скроллится) — список течёт как часть
-                      общего скролла экрана. */}
-                  <View style={styles.bankList}>
+                  {/* Окно на ~5 позиций с явным индикатором скролла — не «резиновая»
+                      высота: так сразу видно, что список длиннее видимого. */}
+                  <ScrollView style={styles.bankList} nestedScrollEnabled showsVerticalScrollIndicator>
                     {existingOrgs.map((org, i) => (
                       <Pressable
                         key={org.id}
@@ -562,13 +560,12 @@ export default function AssetFormScreen() {
                     {existingOrgs.length === 0 ? (
                       <Text style={styles.emptyHint}>Ничего не нашлось</Text>
                     ) : null}
-                  </View>
+                  </ScrollView>
                 </View>
               </Card>
 
-              {/* Полноразмерная пунктирная кнопка под карточкой — раньше «+ Новая
-                  площадка» была последней строкой внутри clipped-скролла списка
-                  и терялась, пока её случайно не находили. */}
+              {/* Скролл есть — значит кнопка ЖИВЁТ снаружи, не последней строкой
+                  внутри списка (там её не видно, пока не долистаешь). */}
               <Pressable
                 onPress={() => setPlatformStage('creating')}
                 style={({ pressed }) => [styles.newPlatformBtn, pressed && { opacity: 0.6 }]}
@@ -942,9 +939,14 @@ const styles = StyleSheet.create({
 
   // площадка: обёртка с равными полями со всех сторон (16), внутри — свои строки
   platformInner: { paddingVertical: tokens.spacing.lg },
+  // Тот же блок, но для стадии «picking»: табы фильтра теперь отдельно на
+  // фоне экрана (см. tabBarRowOuter) — верхний паддинг тут только добирает
+  // недостающее до чистых 16 над полем поиска (у searchRow уже есть свои 8
+  // сверху), а не дублирует их поверх margin таб-бара.
+  platformInnerPicking: { paddingTop: tokens.spacing.sm, paddingBottom: tokens.spacing.lg },
 
   tabBarRow: { paddingHorizontal: tokens.spacing.lg, marginBottom: tokens.spacing.md },
-  tabBarRowOuter: { marginBottom: tokens.spacing.md },
+  tabBarRowOuter: { marginBottom: tokens.spacing.lg },
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -970,7 +972,7 @@ const styles = StyleSheet.create({
     borderBottomColor: tokens.surface.hairline,
   },
   searchInput: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary, paddingVertical: tokens.spacing.sm },
-  bankList: { paddingHorizontal: tokens.spacing.lg },
+  bankList: { maxHeight: 300, paddingHorizontal: tokens.spacing.lg },
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   bankName: { flex: 1, fontFamily: font.medium, fontSize: tokens.typography.body, color: tokens.text.primary },
