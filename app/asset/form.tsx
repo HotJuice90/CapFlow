@@ -950,10 +950,10 @@ const styles = StyleSheet.create({
   // Тот же стиль, что и таб-бар «Динамика курса» в конвертере (валют/истории) —
   // единая пилюля-подложка с ползущим активным сегментом, просто без фиксированной
   // ширины на 4 таба: тут 10 валют, лента сама растёт и скроллится.
-  currencyBar: { flexDirection: 'row', backgroundColor: tokens.surface.tabOff, borderRadius: tokens.radius.pill, padding: 1 },
+  currencyBar: { flexDirection: 'row', backgroundColor: 'rgba(215,226,235,0.2)', borderRadius: tokens.radius.pill, padding: 1, gap: 2 },
   currencyTab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pill },
   currencyTabActive: { backgroundColor: tokens.accent.light },
-  currencyTabText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: tokens.text.tertiary },
+  currencyTabText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: hexToRgba(tokens.text.primary, 0.5) },
   currencyTabTextActive: { color: tokens.text.inverse },
   header: {
     flexDirection: 'row',
