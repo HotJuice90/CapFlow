@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { tokens, hexToRgba } from '@/theme';
+import { tokens, hexToRgba, font } from '@/theme';
 import { OrgLogo } from '@/components/BankLogo';
 import { openOptionPicker } from '@/lib/optionPicker';
 import { openDatePicker } from '@/lib/datePicker';
@@ -96,9 +96,9 @@ export function NumberField({
   });
   return (
     <Field label={label} hint={hint}>
-      <View style={styles.inputRow}>
+      <View style={[styles.input, styles.inputRow]}>
         <TextInput
-          style={[styles.input, styles.inputFlex]}
+          style={styles.inputFlex}
           value={text}
           keyboardType="numeric"
           onChangeText={(t) => {
@@ -326,8 +326,15 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   inputRow: { flexDirection: 'row', alignItems: 'center' },
-  inputFlex: { flex: 1 },
-  suffix: { marginLeft: tokens.spacing.sm, fontSize: tokens.typography.body, color: tokens.text.secondary },
+  inputFlex: {
+    flex: 1,
+    fontSize: tokens.typography.body,
+    color: tokens.text.primary,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    padding: 0,
+  },
+  suffix: { marginLeft: tokens.spacing.sm, fontSize: tokens.typography.body, fontFamily: font.semibold, color: tokens.text.primary },
   selectRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   selectText: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary },
   selectIconBox: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -335,20 +342,20 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   segment: {
     flexDirection: 'row',
-    backgroundColor: tokens.surface.neutral,
-    borderRadius: tokens.radius.sm,
-    padding: 3,
-    gap: 3,
+    backgroundColor: 'rgba(215,226,235,0.2)',
+    borderRadius: tokens.radius.pill,
+    padding: 1,
+    gap: 2,
   },
   segmentItem: {
     flex: 1,
     paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radius.xs,
+    borderRadius: tokens.radius.pill,
     alignItems: 'center',
   },
-  segmentActive: { backgroundColor: tokens.surface.white },
-  segmentText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
-  segmentTextActive: { color: tokens.text.primary, fontWeight: '600' },
+  segmentActive: { backgroundColor: tokens.accent.light },
+  segmentText: { fontSize: tokens.typography.caption, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5) },
+  segmentTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
   swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing.md },
   swatch: {
     width: 40,
