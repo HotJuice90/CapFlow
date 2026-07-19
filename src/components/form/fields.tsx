@@ -6,8 +6,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { tokens } from '@/theme';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { tokens, hexToRgba } from '@/theme';
 import { OrgLogo } from '@/components/BankLogo';
 import { openOptionPicker } from '@/lib/optionPicker';
 import { openDatePicker } from '@/lib/datePicker';
@@ -62,6 +62,16 @@ export function TextField({
 }
 
 // ---------- NumberField ----------
+/** Живая группировка тысяч прямо во время ввода (целую часть — по 3 цифры),
+ *  дробную часть после запятой/точки не трогаем. */
+function groupWhileTyping(text: string): string {
+  const sepIdx = text.search(/[.,]/);
+  const intPart = (sepIdx === -1 ? text : text.slice(0, sepIdx)).replace(/\s/g, '');
+  const rest = sepIdx === -1 ? '' : text.slice(sepIdx);
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return grouped + rest;
+}
+
 export function NumberField({
   label,
   value,
@@ -69,6 +79,7 @@ export function NumberField({
   placeholder,
   suffix,
   hint,
+  grouped,
 }: {
   label: string;
   value: number | undefined;
@@ -76,8 +87,13 @@ export function NumberField({
   placeholder?: string;
   suffix?: string;
   hint?: string;
+  /** Разбивать целую часть пробелами по тысячам прямо во время ввода (для сумм). */
+  grouped?: boolean;
 }) {
-  const [text, setText] = useState(value !== undefined ? String(value) : '');
+  const [text, setText] = useState(() => {
+    if (value === undefined) return '';
+    return grouped ? groupWhileTyping(String(value)) : String(value);
+  });
   return (
     <Field label={label} hint={hint}>
       <View style={styles.inputRow}>
@@ -87,7 +103,7 @@ export function NumberField({
           keyboardType="numeric"
           onChangeText={(t) => {
             const norm = t.replace(',', '.').replace(/[^0-9.]/g, '');
-            setText(norm);
+            setText(grouped ? groupWhileTyping(norm) : norm);
             const n = parseFloat(norm);
             onChange(Number.isFinite(n) ? n : undefined);
           }}
@@ -196,6 +212,14 @@ export function SelectField({
       >
         {selected?.color ? (
           <OrgLogo color={selected.color} logo={selected.logo} imageUri={selected.imageUri} size={24} radius={8} />
+        ) : selected?.icon ? (
+          <View style={[styles.selectIconBox, { backgroundColor: hexToRgba(selected.iconColor ?? tokens.accent.base, 0.12) }]}>
+            <MaterialCommunityIcons
+              name={selected.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+              size={18}
+              color={selected.iconColor ?? tokens.accent.base}
+            />
+          </View>
         ) : null}
         <Text style={[styles.selectText, !selected && styles.placeholder]} numberOfLines={1}>
           {selected ? selected.label : placeholder}
@@ -306,6 +330,7 @@ const styles = StyleSheet.create({
   suffix: { marginLeft: tokens.spacing.sm, fontSize: tokens.typography.body, color: tokens.text.secondary },
   selectRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   selectText: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary },
+  selectIconBox: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   placeholder: { color: tokens.text.tertiary },
   disabled: { opacity: 0.5 },
   segment: {
