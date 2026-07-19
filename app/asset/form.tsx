@@ -1009,11 +1009,11 @@ const styles = StyleSheet.create({
   bankListWrap: { position: 'relative' },
   bankList: { maxHeight: 300, paddingHorizontal: tokens.spacing.lg },
   bankScrollTrack: {
-    position: 'absolute', right: 2, top: 0, bottom: 0, width: 3,
-    borderRadius: 1.5, backgroundColor: hexToRgba(tokens.text.tertiary, 0.18),
+    position: 'absolute', right: 2, top: 0, bottom: 0, width: 5,
+    borderRadius: 2.5, backgroundColor: hexToRgba(tokens.text.tertiary, 0.18),
   },
   bankScrollThumb: {
-    width: 3, borderRadius: 1.5, backgroundColor: tokens.accent.base,
+    width: 5, borderRadius: 2.5, backgroundColor: tokens.accent.light,
   },
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 10 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
@@ -1163,7 +1163,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    backgroundColor: hexToRgba(tokens.surface.white, 0.85),
+    // Нижний край фонового градиента (tokens.backgroundGradient), не голый
+    // белый — подложка остаётся полупрозрачной (контент под ней всё ещё виден
+    // при скролле), просто в тон экрана, а не выбивается белым пятном.
+    backgroundColor: hexToRgba('#F5F7FF', 0.85),
     borderTopWidth: 1,
     borderTopColor: tokens.surface.hairline,
   },
