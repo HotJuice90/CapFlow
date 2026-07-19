@@ -1165,10 +1165,10 @@ const styles = StyleSheet.create({
     paddingTop: tokens.spacing.md,
     // Нижний край фонового градиента (tokens.backgroundGradient), не голый
     // белый — подложка остаётся полупрозрачной (контент под ней всё ещё виден
-    // при скролле), просто в тон экрана, а не выбивается белым пятном.
-    backgroundColor: hexToRgba('#F5F7FF', 0.85),
-    borderTopWidth: 1,
-    borderTopColor: tokens.surface.hairline,
+    // при скролле), просто в тон экрана. Без верхней границы — раньше она
+    // отделяла белую подложку от контента, а теперь, когда тон почти совпадает
+    // с фоном, читалась как лишний шов/тень.
+    backgroundColor: hexToRgba('#F5F7FF', 0.7),
   },
   saveBtn: {
     backgroundColor: tokens.accent.base,
