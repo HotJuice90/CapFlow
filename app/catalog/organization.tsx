@@ -6,6 +6,7 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { GradientFooter } from '@/components/GradientFooter';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { TextField, SelectField, ColorField } from '@/components/form/fields';
@@ -309,11 +310,11 @@ export default function OrganizationFormScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + tokens.spacing.md }]}>
+      <GradientFooter style={[styles.footer, { paddingBottom: insets.bottom + tokens.spacing.md }]}>
         <Pressable style={[styles.saveBtn, !canSave && styles.disabled]} disabled={!canSave} onPress={onSave}>
           <Text style={styles.saveText}>Сохранить</Text>
         </Pressable>
-      </View>
+      </GradientFooter>
     </ScreenBackground>
   );
 }
@@ -442,7 +443,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    backgroundColor: hexToRgba('#F5F7FF', 0.7),
   },
   saveBtn: {
     backgroundColor: tokens.accent.base,

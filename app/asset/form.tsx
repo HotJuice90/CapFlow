@@ -18,6 +18,7 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { GradientFooter } from '@/components/GradientFooter';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { Toggle } from '@/components/Toggle';
@@ -908,7 +909,7 @@ export default function AssetFormScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + tokens.spacing.md }]}>
+        <GradientFooter style={[styles.footer, { paddingBottom: insets.bottom + tokens.spacing.md }]}>
           <Pressable
             style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
             disabled={!canSave}
@@ -916,7 +917,7 @@ export default function AssetFormScreen() {
           >
             <Text style={styles.saveText}>{editing ? 'Сохранить' : 'Создать актив'}</Text>
           </Pressable>
-        </View>
+        </GradientFooter>
       </KeyboardAvoidingView>
     </ScreenBackground>
   );
@@ -1163,12 +1164,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    // Нижний край фонового градиента (tokens.backgroundGradient), не голый
-    // белый — подложка остаётся полупрозрачной (контент под ней всё ещё виден
-    // при скролле), просто в тон экрана. Без верхней границы — раньше она
-    // отделяла белую подложку от контента, а теперь, когда тон почти совпадает
-    // с фоном, читалась как лишний шов/тень.
-    backgroundColor: hexToRgba('#F5F7FF', 0.7),
   },
   saveBtn: {
     backgroundColor: tokens.accent.base,
