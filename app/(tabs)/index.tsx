@@ -28,6 +28,9 @@ import {
   analyticsSummary,
   liquidity,
   goalsProgress,
+  standaloneGoalsProgress,
+  type GoalProgress,
+  type GoalMetric,
 } from '@/state/selectors';
 import type { AssetView } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
@@ -75,6 +78,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sortIdx, setSortIdx] = useState(0);
+  const [goalSlideIdx, setGoalSlideIdx] = useState(0);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -103,6 +107,20 @@ export default function HomeScreen() {
   // им сейчас копиться не в что.
   const goals = useMemo(() => goalsProgress(data), [data]);
   const activeGoal = goals.find((g) => !g.isComplete) ?? goals[goals.length - 1];
+  // «Темп дохода»/«Капитал» — измерители, не участвуют в очереди, поэтому
+  // на Главную попадает просто первая активная цель каждого вида (createdAt).
+  const metrics = useMemo(() => standaloneGoalsProgress(data), [data]);
+  const incomeRateGoal = metrics.find((m) => m.goal.kind === 'incomeRate');
+  const capitalGoal = metrics.find((m) => m.goal.kind === 'capital');
+  const hasAnyGoal = !!activeGoal || !!incomeRateGoal || !!capitalGoal;
+  type GoalSlide =
+    | { kind: 'amount'; p: GoalProgress }
+    | { kind: 'incomeRate' | 'capital'; m: GoalMetric };
+  const goalSlides: GoalSlide[] = [
+    ...(activeGoal ? [{ kind: 'amount' as const, p: activeGoal }] : []),
+    ...(incomeRateGoal ? [{ kind: 'incomeRate' as const, m: incomeRateGoal }] : []),
+    ...(capitalGoal ? [{ kind: 'capital' as const, m: capitalGoal }] : []),
+  ];
 
   if (loading) {
     return (
@@ -234,45 +252,103 @@ export default function HomeScreen() {
 
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>Цель</Text>
-              {goals.length > 0 ? (
+              {hasAnyGoal ? (
                 <Pressable onPress={() => router.push('/settings/goals')} hitSlop={8}>
                   <Text style={styles.link}>Все цели</Text>
                 </Pressable>
               ) : null}
             </View>
-            {activeGoal ? (
-              <Pressable onPress={() => router.push(`/settings/goal-form?id=${activeGoal.goal.id}`)}>
-                <Card>
-                  <View style={styles.goalTop}>
-                    <Text style={styles.goalTitle} numberOfLines={1}>{activeGoal.goal.title}</Text>
-                    {activeGoal.isComplete ? (
-                      <View style={styles.goalDoneBadge}>
-                        <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-                        <Text style={styles.goalDoneBadgeText}>Готово</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.goalPct}>{Math.round(activeGoal.progressPct)}%</Text>
-                    )}
+            {goalSlides.length > 0 ? (
+              <>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / SPARK_W))}
+                >
+                  {goalSlides.map((slide, i) => (
+                    <Pressable
+                      key={i}
+                      style={{ width: SPARK_W }}
+                      onPress={() => router.push(`/settings/goal-form?id=${slide.kind === 'amount' ? slide.p.goal.id : slide.m.goal.id}`)}
+                    >
+                      <Card>
+                        {slide.kind === 'amount' ? (
+                          <>
+                            <View style={styles.goalTop}>
+                              <Text style={styles.goalTitle} numberOfLines={1}>{slide.p.goal.title}</Text>
+                              {slide.p.isComplete ? (
+                                <View style={styles.goalDoneBadge}>
+                                  <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                                  <Text style={styles.goalDoneBadgeText}>Готово</Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.goalPct}>{Math.round(slide.p.progressPct)}%</Text>
+                              )}
+                            </View>
+                            <View style={styles.goalTrack}>
+                              <View
+                                style={[
+                                  styles.goalFill,
+                                  { width: `${Math.min(100, Math.max(0, slide.p.progressPct))}%` },
+                                  slide.p.isComplete && styles.goalFillDone,
+                                ]}
+                              />
+                            </View>
+                            <View style={styles.goalBottom}>
+                              <Text style={styles.goalAmount}>
+                                {formatMoney(slide.p.filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(slide.p.targetAmount, { currency: cur, kopecks: 'hide' })}
+                              </Text>
+                              {!slide.p.isComplete && slide.p.daysRemaining !== null ? (
+                                <Text style={styles.goalDays}>≈ {slide.p.daysRemaining} {pluralDays(slide.p.daysRemaining)}</Text>
+                              ) : null}
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.goalKindLabel}>{slide.kind === 'incomeRate' ? 'Темп дохода' : 'Капитал'}</Text>
+                            <View style={styles.goalTop}>
+                              <Text style={styles.goalTitle} numberOfLines={1}>{slide.m.goal.title}</Text>
+                              {slide.m.isComplete ? (
+                                <View style={styles.goalDoneBadge}>
+                                  <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                                  <Text style={styles.goalDoneBadgeText}>Достигнуто</Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.goalPct}>{Math.round(slide.m.progressPct)}%</Text>
+                              )}
+                            </View>
+                            <View style={styles.goalTrack}>
+                              <View
+                                style={[
+                                  styles.goalFill,
+                                  { width: `${Math.min(100, Math.max(0, slide.m.progressPct))}%` },
+                                  slide.m.isComplete && styles.goalFillDone,
+                                ]}
+                              />
+                            </View>
+                            <View style={styles.goalBottom}>
+                              <Text style={styles.goalAmount}>
+                                {formatMoney(slide.m.currentValue, { currency: cur, kopecks: 'hide' })}{slide.kind === 'incomeRate' ? `/${slide.m.goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : ''} из {formatMoney(slide.m.targetValue, { currency: cur, kopecks: 'hide' })}
+                              </Text>
+                              {slide.m.daysRemaining !== null ? (
+                                <Text style={styles.goalDays}>≈ {slide.m.daysRemaining} {pluralDays(slide.m.daysRemaining)}</Text>
+                              ) : null}
+                            </View>
+                          </>
+                        )}
+                      </Card>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                {goalSlides.length > 1 ? (
+                  <View style={styles.goalDots}>
+                    {goalSlides.map((_, i) => (
+                      <View key={i} style={[styles.goalDot, i === goalSlideIdx && styles.goalDotActive]} />
+                    ))}
                   </View>
-                  <View style={styles.goalTrack}>
-                    <View
-                      style={[
-                        styles.goalFill,
-                        { width: `${Math.min(100, Math.max(0, activeGoal.progressPct))}%` },
-                        activeGoal.isComplete && styles.goalFillDone,
-                      ]}
-                    />
-                  </View>
-                  <View style={styles.goalBottom}>
-                    <Text style={styles.goalAmount}>
-                      {formatMoney(activeGoal.filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(activeGoal.targetAmount, { currency: cur, kopecks: 'hide' })}
-                    </Text>
-                    {!activeGoal.isComplete && activeGoal.daysRemaining !== null ? (
-                      <Text style={styles.goalDays}>≈ {activeGoal.daysRemaining} {pluralDays(activeGoal.daysRemaining)}</Text>
-                    ) : null}
-                  </View>
-                </Card>
-              </Pressable>
+                ) : null}
+              </>
             ) : (
               <Pressable onPress={() => router.push('/settings/goal-form')}>
                 <Card>
@@ -614,6 +690,10 @@ const styles = StyleSheet.create({
   heroLeaderLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
   heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
   heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
+  goalKindLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary, marginBottom: 2 },
+  goalDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: tokens.spacing.sm },
+  goalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: hexToRgba(tokens.text.tertiary, 0.3) },
+  goalDotActive: { backgroundColor: tokens.accent.base, width: 16 },
   goalTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
   goalTitle: { flex: 1, fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
   goalPct: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.accent.base },
