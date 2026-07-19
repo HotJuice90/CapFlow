@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
     padding: 0,
   },
-  suffix: { marginLeft: tokens.spacing.sm, fontSize: tokens.typography.body, fontFamily: font.semibold, color: tokens.text.primary },
+  suffix: { marginLeft: tokens.spacing.sm, fontSize: tokens.typography.body, fontFamily: font.semibold, color: tokens.accent.base },
   selectRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   selectText: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary },
   selectIconBox: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

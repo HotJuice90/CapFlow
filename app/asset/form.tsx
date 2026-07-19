@@ -11,6 +11,8 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -861,7 +863,12 @@ export default function AssetFormScreen() {
                   onChange={(v) => setPayoutPeriod(v as PayoutPeriod)}
                   hint={needsPayout ? 'Нужен для капитализации — без него не посчитать начисление' : undefined}
                 />
-                <ToggleRow label="Налог удерживает банк сам" value={taxWithheldByBank} onChange={setTaxWithheldByBank} />
+                <ToggleRow
+                  label="Налог удерживает банк"
+                  value={taxWithheldByBank}
+                  onChange={setTaxWithheldByBank}
+                  style={{ marginBottom: tokens.spacing.lg }}
+                />
                 <TextField
                   label="Название актива (необязательно)"
                   value={title}
@@ -925,9 +932,19 @@ export default function AssetFormScreen() {
   );
 }
 
-function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function ToggleRow({
+  label,
+  value,
+  onChange,
+  style,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
   return (
-    <View style={styles.toggleRow}>
+    <View style={[styles.toggleRow, style]}>
       <Text style={styles.toggleLabel}>{label}</Text>
       <Toggle value={value} onChange={onChange} />
     </View>
