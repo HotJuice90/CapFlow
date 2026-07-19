@@ -107,7 +107,7 @@ export interface RateAdjustment {
 export interface Asset {
   id: string;
   instrumentId: string;
-  /** пользовательское название (опц.): «Подушка безопасности», «Отпуск 2027» */
+  /** пользовательская заметка (опц.): «Подушка безопасности», «Отпуск 2027» */
   title?: string;
   amount: number; // первоначальная сумма
   currency: CurrencyCode;
@@ -118,7 +118,6 @@ export interface Asset {
   /** переопределяет настройки инструмента, если заданы */
   capitalization?: CapitalizationMode;
   payoutPeriod?: PayoutPeriod;
-  comment?: string;
   status: AssetStatus;
   isDemo?: boolean;
   /** история пополнений/снятий, отсортирована по дате не обязательно — движок сам сортирует */

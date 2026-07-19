@@ -44,7 +44,7 @@ export function AssetRow({ view }: { view: AssetView }) {
         </Text>
         {asset.title ? (
           <Text style={styles.subtitle} numberOfLines={1}>
-            ↳ {asset.title}
+            {asset.title}
           </Text>
         ) : (
           <Text style={styles.subtitle} numberOfLines={1}>

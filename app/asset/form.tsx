@@ -189,14 +189,13 @@ export default function AssetFormScreen() {
   const [endDate, setEndDate] = useState<string | undefined>(editing?.endDate ?? duplicateEndDate);
   const [capitalization, setCapitalization] = useState<CapitalizationMode>(src?.capitalization ?? 'none');
   const [payoutPeriod, setPayoutPeriod] = useState<PayoutPeriod | undefined>(src?.payoutPeriod);
-  const [comment, setComment] = useState(src?.comment ?? '');
   const [taxWithheldByBank, setTaxWithheldByBank] = useState(src?.taxWithheldByBank ?? false);
 
   // Снимок состояния сразу после загрузки экрана — с ним сравниваем текущие
   // значения, чтобы понять, начал ли пользователь что-то менять (для
   // подтверждения на закрытие без сохранения).
   const initial = useRef({
-    orgId, instrumentId, title, amount, currency, rate, openDate, endDate, capitalization, payoutPeriod, comment,
+    orgId, instrumentId, title, amount, currency, rate, openDate, endDate, capitalization, payoutPeriod,
   }).current;
   const isDirty =
     orgId !== initial.orgId ||
@@ -210,8 +209,7 @@ export default function AssetFormScreen() {
     openDate !== initial.openDate ||
     endDate !== initial.endDate ||
     capitalization !== initial.capitalization ||
-    payoutPeriod !== initial.payoutPeriod ||
-    comment !== initial.comment;
+    payoutPeriod !== initial.payoutPeriod;
 
   const handleClose = () => {
     if (isDirty) {
@@ -429,7 +427,6 @@ export default function AssetFormScreen() {
       amount, currency, rate, openDate,
       endDate: isTerm ? endDate : undefined,
       capitalization: effectiveCapitalization, payoutPeriod,
-      comment: comment.trim() || undefined,
       status: editing?.status ?? 'active',
       isDemo: editing?.isDemo,
       taxWithheldByBank,
@@ -870,16 +867,10 @@ export default function AssetFormScreen() {
                   style={{ marginBottom: tokens.spacing.lg }}
                 />
                 <TextField
-                  label="Название актива (необязательно)"
+                  label="Заметка (необязательно)"
                   value={title}
                   onChangeText={setTitle}
                   placeholder="Например: отпуск"
-                />
-                <TextField
-                  label="Комментарий (необязательно)"
-                  value={comment}
-                  onChangeText={setComment}
-                  placeholder=""
                 />
               </Card>
             </FadeIn>
