@@ -306,7 +306,7 @@ export default function HomeScreen() {
                               {!slide.p.isComplete && slide.p.daysRemaining !== null ? (
                                 <View style={styles.goalEtaBadge}>
                                   <MaterialIcons name="event" size={13} color={tokens.accent.base} />
-                                  <Text style={styles.goalEtaValue}>≈{slide.p.daysRemaining} {pluralDays(slide.p.daysRemaining)}</Text>
+                                  <Text style={styles.goalEtaValue}>≈{formatDurationApprox(slide.p.daysRemaining)}</Text>
                                   <Text style={styles.goalEtaLabel}>до достижения</Text>
                                 </View>
                               ) : null}
@@ -726,8 +726,8 @@ const styles = StyleSheet.create({
   goalAmount: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.secondary },
   goalSummary: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.secondary, marginTop: tokens.spacing.sm },
   goalDays: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary },
-  goalActiveBadge: { backgroundColor: hexToRgba(tokens.accent.base, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  goalActiveBadgeText: { fontSize: tokens.typography.micro, fontFamily: font.semibold, color: tokens.accent.base },
+  goalActiveBadge: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  goalActiveBadgeText: { fontSize: tokens.typography.micro, fontFamily: font.semibold, color: tokens.semantic.warning },
   goalMainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md, marginTop: tokens.spacing.md },
   goalRemainLabel: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary },
   goalRemainValue: { fontSize: 26, fontFamily: font.bold, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 2 },

@@ -1670,13 +1670,17 @@ export interface GoalProgress {
  * копиться только с появлением реальных активов.
  */
 export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgress[] {
-  const active = data.goals
-    .filter((g) => g.status === 'active' && (g.kind ?? 'amount') === 'amount')
+  // Архивные цели тоже участвуют в симуляции (не пропадают из «Завершённых»
+  // просто из-за архивации), но перестают получать доход с момента архивации
+  // (archivedAt) — до этого момента история копится как обычно.
+  const allAmount = data.goals
+    .filter((g) => (g.status === 'active' || g.status === 'archived') && (g.kind ?? 'amount') === 'amount')
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  if (active.length === 0) return [];
+  if (allAmount.length === 0) return [];
+  const archivedCutoff = (g: Goal) => new Date(g.archivedAt ?? g.createdAt);
 
   const { items } = buildHistoryItems(data, now);
-  const earliestGoalStart = Math.min(...active.map((g) => parseLocal(g.startDate).getTime()));
+  const earliestGoalStart = Math.min(...allAmount.map((g) => parseLocal(g.startDate).getTime()));
   const seriesStart = new Date(Math.min(earliestGoalStart, now.getTime()));
   const totalDays = Math.max(0, diffDays(seriesStart, now));
 
@@ -1698,24 +1702,25 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
     prevAccrued = totalAccrued;
   }
 
-  const targets = new Map<string, number>(active.map((g) => [g.id, convert(g.targetAmount, g.currency, data)]));
-  const filled = new Map<string, number>(active.map((g) => [g.id, 0]));
+  const targets = new Map<string, number>(allAmount.map((g) => [g.id, convert(g.targetAmount, g.currency, data)]));
+  const filled = new Map<string, number>(allAmount.map((g) => [g.id, 0]));
   const filledBeforeToday = new Map<string, number>();
-  const completedDayIdx = new Map<string, number | null>(active.map((g) => [g.id, null]));
+  const completedDayIdx = new Map<string, number | null>(allAmount.map((g) => [g.id, null]));
 
   for (let k = 0; k <= totalDays; k++) {
     if (k === totalDays) {
       // Срез ДО распределения дохода «сегодня» — разница с финальным
       // состоянием и даёт «на сколько цель стала ближе сегодня».
-      for (const g of active) filledBeforeToday.set(g.id, filled.get(g.id)!);
+      for (const g of allAmount) filledBeforeToday.set(g.id, filled.get(g.id)!);
     }
     let remaining = dailyIncome[k];
     if (remaining <= 0) continue;
     const day = new Date(seriesStart);
     day.setDate(day.getDate() + k);
-    for (const g of active) {
+    for (const g of allAmount) {
       if (remaining <= 0) break;
       if (parseLocal(g.startDate) > day) continue;
+      if (g.status === 'archived' && day > archivedCutoff(g)) continue;
       const target = targets.get(g.id)!;
       const have = filled.get(g.id)!;
       if (have >= target) continue;
@@ -1733,11 +1738,13 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
 
   let cumulativeRemaining = 0;
   const out: GoalProgress[] = [];
-  for (const g of active) {
+  for (const g of allAmount) {
     const target = targets.get(g.id)!;
     const have = filled.get(g.id)!;
     const isComplete = have >= target;
-    cumulativeRemaining += Math.max(0, target - have);
+    // Архивная цель больше не в очереди — её остаток не должен раздувать
+    // оценку «дней до цели» для тех, кто реально ждёт своей очереди.
+    if (g.status === 'active') cumulativeRemaining += Math.max(0, target - have);
     const startOffset = Math.max(0, diffDays(seriesStart, parseLocal(g.startDate)));
     const dayIdx = completedDayIdx.get(g.id) ?? null;
     out.push({
@@ -1746,7 +1753,7 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
       targetAmount: target,
       progressPct: target > 0 ? Math.min(100, (have / target) * 100) : 100,
       isComplete,
-      daysRemaining: !isComplete && currentDailyIncome > 0 ? Math.ceil(cumulativeRemaining / currentDailyIncome) : null,
+      daysRemaining: g.status === 'active' && !isComplete && currentDailyIncome > 0 ? Math.ceil(cumulativeRemaining / currentDailyIncome) : null,
       deltaToday: Math.max(0, have - (filledBeforeToday.get(g.id) ?? 0)),
       completedInDays: dayIdx !== null ? Math.max(0, dayIdx - startOffset) : null,
     });

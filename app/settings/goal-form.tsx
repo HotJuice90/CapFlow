@@ -90,7 +90,12 @@ export default function GoalFormScreen() {
   const onArchive = async () => {
     if (!editing) return;
     tapBuzz();
-    await updateGoal({ ...editing, status: editing.status === 'active' ? 'archived' : 'active' });
+    const archiving = editing.status === 'active';
+    await updateGoal({
+      ...editing,
+      status: archiving ? 'archived' : 'active',
+      archivedAt: archiving ? new Date().toISOString() : undefined,
+    });
     router.back();
   };
 

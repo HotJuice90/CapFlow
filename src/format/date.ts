@@ -65,15 +65,13 @@ function plural(n: number, forms: [string, string, string]): string {
 export function formatDurationApprox(days: number): string {
   if (days < 60) return `${days} ${pluralDays(days)}`;
   const months = Math.round(days / 30.44);
-  if (months < 24) {
-    const y = Math.floor(months / 12);
-    const m = months % 12;
-    if (y === 0) return `${m} ${plural(m, ['месяц', 'месяца', 'месяцев'])}`;
-    if (m === 0) return `${y} ${plural(y, ['год', 'года', 'лет'])}`;
-    return `${y} ${plural(y, ['год', 'года', 'лет'])} ${m} ${plural(m, ['месяц', 'месяца', 'месяцев'])}`;
-  }
-  const years = Math.round(months / 12);
-  return `${years} ${plural(years, ['год', 'года', 'лет'])}`;
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  // Годы+месяцы всегда вместе (не схлопываем в «просто N лет» даже для
+  // далёких целей) — иначе кажется, что до цели ровно круглое число лет.
+  if (y === 0) return `${m} ${plural(m, ['месяц', 'месяца', 'месяцев'])}`;
+  if (m === 0) return `${y} ${plural(y, ['год', 'года', 'лет'])}`;
+  return `${y} ${plural(y, ['год', 'года', 'лет'])} ${m} ${plural(m, ['месяц', 'месяца', 'месяцев'])}`;
 }
 
 /** «обновлено» относительно времени: «только что», «5 минут назад», «2 часа назад», «вчера». */
