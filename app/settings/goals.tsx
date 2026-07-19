@@ -24,12 +24,18 @@ export default function GoalsScreen() {
   const metrics = useMemo(() => standaloneGoalsProgress(data), [data]);
   const incomeRateMetrics = useMemo(() => metrics.filter((m) => m.goal.kind === 'incomeRate'), [metrics]);
   const capitalMetrics = useMemo(() => metrics.filter((m) => m.goal.kind === 'capital'), [metrics]);
-  const archived = useMemo(() => data.goals.filter((g) => g.status === 'archived'), [data.goals]);
-
-  const incompleteAmount = useMemo(() => progress.filter((p) => !p.isComplete), [progress]);
+  // Завершённые остаются завершёнными и после архивации — это факт, а не
+  // текущий статус в очереди, поэтому completeAmount не фильтруем по status.
+  const incompleteAmount = useMemo(() => progress.filter((p) => !p.isComplete && p.goal.status === 'active'), [progress]);
   const completeAmount = useMemo(() => progress.filter((p) => p.isComplete), [progress]);
   const activeAmountGoal = incompleteAmount[0];
   const queuedAmountGoals = incompleteAmount.slice(1);
+  const completeAmountIds = useMemo(() => new Set(completeAmount.map((p) => p.goal.id)), [completeAmount]);
+
+  const archived = useMemo(
+    () => data.goals.filter((g) => g.status === 'archived' && !completeAmountIds.has(g.id)),
+    [data.goals, completeAmountIds],
+  );
 
   // Три параллельных типа целей не противоречат друг другу — счётчик наверху
   // просто суммирует все, независимо от типа (в отличие от очереди-водопада,
@@ -41,7 +47,7 @@ export default function GoalsScreen() {
   const goTo = (id: string) => router.push(`/settings/goal-form?id=${id}`);
   const archiveGoal = async (goal: Goal) => {
     tapBuzz();
-    await updateGoal({ ...goal, status: 'archived' });
+    await updateGoal({ ...goal, status: 'archived', archivedAt: new Date().toISOString() });
   };
   const hasActive = progress.length > 0 || metrics.length > 0;
 
@@ -82,14 +88,14 @@ export default function GoalsScreen() {
               <View style={styles.cardInner}>
                 <View style={styles.counterRow}>
                   <CounterTile icon="flag" color={tokens.accent.base} label="Все цели" value={allGoalsCount} />
-                  <CounterTile icon="bolt" color={tokens.accent.base} label="Активные" value={activeCount} />
+                  <CounterTile icon="bolt" color={tokens.semantic.warning} label="Активные" value={activeCount} />
                   <CounterTile icon="emoji-events" color={tokens.semantic.positive} label="Завершённые" value={completedCount} />
                 </View>
                 {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
                   <View style={styles.nearestRow}>
                     <MaterialIcons name="event" size={14} color={tokens.text.tertiary} />
                     <Text style={styles.nearestText}>
-                      Ближайшее достижение — через ≈{activeAmountGoal.daysRemaining} {pluralDays(activeAmountGoal.daysRemaining)}
+                      Ближайшее достижение — через ≈{formatDurationApprox(activeAmountGoal.daysRemaining)}
                     </Text>
                   </View>
                 ) : null}
@@ -180,10 +186,12 @@ function CounterTile({
 }: { icon: React.ComponentProps<typeof MaterialIcons>['name']; color: string; label: string; value: number }) {
   return (
     <View style={styles.counterTile}>
-      <View style={[styles.counterIconBox, { backgroundColor: hexToRgba(color, 0.12) }]}>
-        <MaterialIcons name={icon} size={18} color={color} />
+      <View style={styles.counterTopRow}>
+        <View style={[styles.counterIconBox, { backgroundColor: hexToRgba(color, 0.12) }]}>
+          <MaterialIcons name={icon} size={15} color={color} />
+        </View>
+        <Text style={styles.counterValue}>{value}</Text>
       </View>
-      <Text style={styles.counterValue}>{value}</Text>
       <Text style={styles.counterLabel} numberOfLines={1}>{label}</Text>
     </View>
   );
@@ -224,7 +232,7 @@ function ActiveGoalCard({ p, cur, onPress }: { p: GoalProgress; cur: CurrencyCod
             {daysRemaining !== null ? (
               <View style={styles.etaBadge}>
                 <MaterialIcons name="event" size={14} color={tokens.accent.base} />
-                <Text style={styles.etaBadgeValue}>≈{daysRemaining} {pluralDays(daysRemaining)}</Text>
+                <Text style={styles.etaBadgeValue}>≈{formatDurationApprox(daysRemaining)}</Text>
                 <Text style={styles.etaBadgeLabel}>до достижения</Text>
               </View>
             ) : null}
@@ -277,8 +285,9 @@ function MetricCard({
 }: { m: GoalMetric; cur: CurrencyCode; onPress: () => void; onArchive: () => void }) {
   const { goal, currentValue, targetValue, progressPct, isComplete, daysRemaining, growthPerPeriod } = m;
   const kind = goal.kind as GoalKind;
+  const isCapital = kind === 'capital';
   const periodSuffix = kind === 'incomeRate' ? `/${goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : '';
-  const growthSuffix = kind === 'incomeRate' ? periodSuffix : '/мес';
+  const remaining = Math.max(0, targetValue - currentValue);
   return (
     <Pressable onPress={onPress}>
       <Card>
@@ -286,59 +295,84 @@ function MetricCard({
           <View style={styles.activeTopRow}>
             <View style={styles.activeIconTitle}>
               <View style={styles.activeIconBox}>
-                <MaterialIcons name={kind === 'incomeRate' ? 'trending-up' : 'account-balance'} size={18} color={tokens.accent.base} />
+                <MaterialIcons name={isCapital ? 'account-balance' : 'trending-up'} size={18} color={tokens.accent.base} />
               </View>
               <Text style={styles.activeTitle} numberOfLines={1}>{goal.title}</Text>
             </View>
-            {isComplete ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
+              {isComplete ? (
                 <View style={styles.doneBadge}>
                   <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
                   <Text style={styles.doneBadgeText}>Достигнуто</Text>
                 </View>
+              ) : (
+                <View style={styles.activeBadge}>
+                  <Text style={styles.activeBadgeText}>Активная цель</Text>
+                </View>
+              )}
+              {isComplete ? (
                 <Pressable onPress={onArchive} hitSlop={10}>
                   <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
                 </Pressable>
-              </View>
-            ) : null}
+              ) : null}
+            </View>
           </View>
 
-          <View style={styles.activeMainRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.activeRemainLabel}>Сейчас</Text>
-              <Text style={styles.activeRemainValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
-              </Text>
-            </View>
-            <View style={styles.etaBadge}>
-              {kind === 'capital' && daysRemaining !== null ? (
-                <>
-                  <MaterialIcons name="event" size={14} color={tokens.accent.base} />
-                  <Text style={styles.etaBadgeValue}>≈{formatDurationApprox(daysRemaining)}</Text>
-                  <Text style={styles.etaBadgeLabel}>до достижения</Text>
-                </>
-              ) : (
-                <>
+          {isCapital ? (
+            <>
+              <View style={styles.activeMainRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.activeRemainLabel}>Осталось</Text>
+                  <Text style={styles.activeRemainValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                </View>
+                {daysRemaining !== null ? (
+                  <View style={styles.etaBadge}>
+                    <MaterialIcons name="event" size={14} color={tokens.accent.base} />
+                    <Text style={styles.etaBadgeValue}>≈{formatDurationApprox(daysRemaining)}</Text>
+                    <Text style={styles.etaBadgeLabel}>до достижения</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.track}>
+                <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
+              </View>
+              <View style={styles.cardFooterRow}>
+                <Text style={styles.cardFooterPct}>{Math.round(progressPct)}%</Text>
+                <Text style={styles.cardFooterAmount}>
+                  {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })} из {formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.activeMainRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.activeRemainLabel}>Сейчас</Text>
+                  <Text style={styles.activeRemainValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
+                  </Text>
+                </View>
+                <View style={styles.etaBadge}>
                   <Text style={styles.etaBadgeLabel}>Цель</Text>
                   <Text style={styles.etaBadgeValue}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
-                </>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.track}>
-            <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
-          </View>
-
-          <View style={styles.cardFooterRow}>
-            <Text style={styles.cardFooterPct}>{Math.round(progressPct)}%</Text>
-            <View style={styles.growthRow}>
-              <MaterialIcons name="trending-up" size={12} color={tokens.semantic.positive} />
-              <Text style={styles.growthText}>
-                +{formatMoney(growthPerPeriod, { currency: cur, kopecks: 'hide' })}{growthSuffix} прирост
-              </Text>
-            </View>
-          </View>
+                </View>
+              </View>
+              <View style={styles.track}>
+                <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
+              </View>
+              <View style={styles.cardFooterRow}>
+                <Text style={styles.cardFooterPct}>{Math.round(progressPct)}%</Text>
+                <View style={styles.growthRow}>
+                  <MaterialIcons name="trending-up" size={12} color={tokens.semantic.positive} />
+                  <Text style={styles.growthText}>
+                    +{formatMoney(growthPerPeriod, { currency: cur, kopecks: 'hide' })}{periodSuffix} прирост
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </Card>
     </Pressable>
@@ -362,9 +396,11 @@ function CompletedGoalRow({
         <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
         <Text style={styles.doneBadgeText}>Выполнено</Text>
       </View>
-      <Pressable onPress={onArchive} hitSlop={10}>
-        <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
-      </Pressable>
+      {goal.status === 'active' ? (
+        <Pressable onPress={onArchive} hitSlop={10}>
+          <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -382,9 +418,10 @@ const styles = StyleSheet.create({
   cardInner: { gap: tokens.spacing.md },
 
   counterRow: { flexDirection: 'row', gap: tokens.spacing.sm },
-  counterTile: { flex: 1, alignItems: 'center', gap: 4 },
-  counterIconBox: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  counterValue: { fontFamily: font.extrabold, fontSize: 22, color: tokens.text.primary, letterSpacing: -0.2, marginTop: 2 },
+  counterTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 10, gap: 6 },
+  counterTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  counterIconBox: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  counterValue: { fontFamily: font.extrabold, fontSize: 18, color: tokens.text.primary, letterSpacing: -0.2 },
   counterLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: tokens.spacing.md, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
   nearestText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.text.secondary },
@@ -403,8 +440,8 @@ const styles = StyleSheet.create({
   activeIconTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, minWidth: 0 },
   activeIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
   activeTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary },
-  activeBadge: { backgroundColor: hexToRgba(tokens.accent.base, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  activeBadgeText: { fontFamily: font.semibold, fontSize: tokens.typography.micro, color: tokens.accent.base },
+  activeBadge: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  activeBadgeText: { fontFamily: font.semibold, fontSize: tokens.typography.micro, color: tokens.semantic.warning },
   activeMainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md },
   activeRemainLabel: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
   activeRemainValue: { fontFamily: font.bold, fontSize: 28, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 4 },

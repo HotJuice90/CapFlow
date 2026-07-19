@@ -239,5 +239,8 @@ export interface Goal {
   /** ISO datetime — момент создания записи, определяет порядок в водопаде (не путать со startDate) */
   createdAt: string;
   status: 'active' | 'archived';
+  /** ISO datetime — момент архивации; ограничивает окно, за которое цель ещё
+   *  получала доход в водопаде (после архивации — не получает). */
+  archivedAt?: string;
   comment?: string;
 }
