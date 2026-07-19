@@ -1783,8 +1783,11 @@ export interface GoalMetric {
  * падать вместе с реальными показателями.
  */
 export function standaloneGoalsProgress(data: AppData, now: Date = new Date()): GoalMetric[] {
+  // Архивные тоже считаем (не только активные) — это живое сравнение с
+  // текущим состоянием портфеля, а не накопление, окно тут не нужно: если
+  // цель архивная, но всё ещё (или снова) достигнута — это просто факт.
   const active = data.goals
-    .filter((g) => g.status === 'active' && (g.kind === 'incomeRate' || g.kind === 'capital'))
+    .filter((g) => (g.status === 'active' || g.status === 'archived') && (g.kind === 'incomeRate' || g.kind === 'capital'))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (active.length === 0) return [];
 

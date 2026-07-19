@@ -18,6 +18,7 @@ import { Sparkline } from '@/components/Sparkline';
 import { TypeCardsRow } from '@/components/TypeCardsRow';
 import { Donut } from '@/components/Donut';
 import { AssetRow } from '@/components/AssetRow';
+import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
 import { useData } from '@/state/DataContext';
 import {
   buildAssetViews,
@@ -32,10 +33,11 @@ import {
   type GoalProgress,
   type GoalMetric,
 } from '@/state/selectors';
-import type { AssetView } from '@/domain/types';
+import type { AssetView, Goal } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercentSigned } from '@/format';
-import { formatDateShort, pluralDays, formatDurationApprox } from '@/format/date';
+import { formatDateShort, pluralDays } from '@/format/date';
+import { tapBuzz } from '@/lib/haptics';
 import { t } from '@/i18n';
 
 type SortKey = 'income' | 'amount' | 'rate' | 'end' | 'added';
@@ -74,7 +76,7 @@ function pluralPlatform(n: number): string {
 }
 
 export default function HomeScreen() {
-  const { data, loading } = useData();
+  const { data, loading, updateGoal } = useData();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sortIdx, setSortIdx] = useState(0);
@@ -106,12 +108,14 @@ export default function HomeScreen() {
   // очереди» (первую незаполненную) — остальные ждут своей очереди, отдельно
   // им сейчас копиться не в что.
   const goals = useMemo(() => goalsProgress(data), [data]);
-  const activeGoal = goals.find((g) => !g.isComplete) ?? goals[goals.length - 1];
+  const activeGoal = goals.find((g) => !g.isComplete && g.goal.status === 'active') ?? goals[goals.length - 1];
   // «Темп дохода»/«Капитал» — измерители, не участвуют в очереди, поэтому
   // на Главную попадает просто первая активная цель каждого вида (createdAt).
+  // Архивная-но-достигнутая тоже подходит (не перестаёт быть достижением),
+  // архивная-и-недостигнутая — нет (это просто отложенная запись).
   const metrics = useMemo(() => standaloneGoalsProgress(data), [data]);
-  const incomeRateGoal = metrics.find((m) => m.goal.kind === 'incomeRate');
-  const capitalGoal = metrics.find((m) => m.goal.kind === 'capital');
+  const incomeRateGoal = metrics.find((m) => m.goal.kind === 'incomeRate' && (m.goal.status === 'active' || m.isComplete));
+  const capitalGoal = metrics.find((m) => m.goal.kind === 'capital' && (m.goal.status === 'active' || m.isComplete));
   const hasAnyGoal = !!activeGoal || !!incomeRateGoal || !!capitalGoal;
   type GoalSlide =
     | { kind: 'amount'; p: GoalProgress }
@@ -121,6 +125,10 @@ export default function HomeScreen() {
     ...(incomeRateGoal ? [{ kind: 'incomeRate' as const, m: incomeRateGoal }] : []),
     ...(capitalGoal ? [{ kind: 'capital' as const, m: capitalGoal }] : []),
   ];
+  const archiveGoal = async (goal: Goal) => {
+    tapBuzz();
+    await updateGoal({ ...goal, status: 'archived', archivedAt: new Date().toISOString() });
+  };
 
   if (loading) {
     return (
@@ -267,98 +275,23 @@ export default function HomeScreen() {
                   onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / SPARK_W))}
                 >
                   {goalSlides.map((slide, i) => (
-                    <Pressable
-                      key={i}
-                      style={{ width: SPARK_W }}
-                      onPress={() => router.push(`/settings/goal-form?id=${slide.kind === 'amount' ? slide.p.goal.id : slide.m.goal.id}`)}
-                    >
-                      <Card>
-                        {slide.kind === 'amount' ? (
-                          <>
-                            <View style={styles.goalTop}>
-                              <Text style={styles.goalTitle} numberOfLines={1}>{slide.p.goal.title}</Text>
-                              {slide.p.isComplete ? (
-                                <View style={styles.goalDoneBadge}>
-                                  <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-                                  <Text style={styles.goalDoneBadgeText}>Готово</Text>
-                                </View>
-                              ) : (
-                                <View style={styles.goalActiveBadge}>
-                                  <Text style={styles.goalActiveBadgeText}>Активная цель</Text>
-                                </View>
-                              )}
-                            </View>
-                            <View style={styles.goalMainRow}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.goalRemainLabel}>Осталось</Text>
-                                <Text style={styles.goalRemainValue} numberOfLines={1} adjustsFontSizeToFit>
-                                  {formatMoney(Math.max(0, slide.p.targetAmount - slide.p.filledAmount), { currency: cur, kopecks: 'hide' })}
-                                </Text>
-                                {slide.p.deltaToday > 0 ? (
-                                  <View style={styles.goalDeltaRow}>
-                                    <MaterialIcons name="arrow-downward" size={11} color={tokens.semantic.positive} />
-                                    <Text style={styles.goalDeltaText}>
-                                      на {formatMoney(slide.p.deltaToday, { currency: cur, kopecks: 'hide' })} ближе сегодня
-                                    </Text>
-                                  </View>
-                                ) : null}
-                              </View>
-                              {!slide.p.isComplete && slide.p.daysRemaining !== null ? (
-                                <View style={styles.goalEtaBadge}>
-                                  <MaterialIcons name="event" size={13} color={tokens.accent.base} />
-                                  <Text style={styles.goalEtaValue}>≈{formatDurationApprox(slide.p.daysRemaining)}</Text>
-                                  <Text style={styles.goalEtaLabel}>до достижения</Text>
-                                </View>
-                              ) : null}
-                            </View>
-                            <View style={styles.goalTrack}>
-                              <View
-                                style={[
-                                  styles.goalFill,
-                                  { width: `${Math.min(100, Math.max(0, slide.p.progressPct))}%` },
-                                  slide.p.isComplete && styles.goalFillDone,
-                                ]}
-                              />
-                            </View>
-                            <Text style={styles.goalSummary}>
-                              {formatMoney(slide.p.filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(slide.p.targetAmount, { currency: cur, kopecks: 'hide' })} • {Math.round(slide.p.progressPct)}% выполнено
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <Text style={styles.goalKindLabel}>{slide.kind === 'incomeRate' ? 'Темп дохода' : 'Капитал'}</Text>
-                            <View style={styles.goalTop}>
-                              <Text style={styles.goalTitle} numberOfLines={1}>{slide.m.goal.title}</Text>
-                              {slide.m.isComplete ? (
-                                <View style={styles.goalDoneBadge}>
-                                  <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-                                  <Text style={styles.goalDoneBadgeText}>Достигнуто</Text>
-                                </View>
-                              ) : (
-                                <Text style={styles.goalPct}>{Math.round(slide.m.progressPct)}%</Text>
-                              )}
-                            </View>
-                            <View style={styles.goalTrack}>
-                              <View
-                                style={[
-                                  styles.goalFill,
-                                  { width: `${Math.min(100, Math.max(0, slide.m.progressPct))}%` },
-                                  slide.m.isComplete && styles.goalFillDone,
-                                ]}
-                              />
-                            </View>
-                            <View style={styles.goalBottom}>
-                              <Text style={styles.goalAmount}>
-                                {formatMoney(slide.m.currentValue, { currency: cur, kopecks: 'hide' })}{slide.kind === 'incomeRate' ? `/${slide.m.goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : ''} из {formatMoney(slide.m.targetValue, { currency: cur, kopecks: 'hide' })}
-                              </Text>
-                              {slide.m.daysRemaining !== null ? (
-                                <Text style={styles.goalDays}>≈ {formatDurationApprox(slide.m.daysRemaining)}</Text>
-                              ) : null}
-                            </View>
-                          </>
-                        )}
-                      </Card>
-                    </Pressable>
+                    <View key={i} style={{ width: SPARK_W }}>
+                      {slide.kind === 'amount' ? (
+                        <ActiveGoalCard
+                          p={slide.p}
+                          cur={cur}
+                          onPress={() => router.push(`/settings/goal-form?id=${slide.p.goal.id}`)}
+                          onArchive={() => archiveGoal(slide.p.goal)}
+                        />
+                      ) : (
+                        <MetricCard
+                          m={slide.m}
+                          cur={cur}
+                          onPress={() => router.push(`/settings/goal-form?id=${slide.m.goal.id}`)}
+                          onArchive={() => archiveGoal(slide.m.goal)}
+                        />
+                      )}
+                    </View>
                   ))}
                 </ScrollView>
                 {goalSlides.length > 1 ? (
@@ -710,32 +643,9 @@ const styles = StyleSheet.create({
   heroLeaderLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
   heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
   heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
-  goalKindLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary, marginBottom: 2 },
   goalDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: tokens.spacing.sm },
   goalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: hexToRgba(tokens.text.tertiary, 0.3) },
   goalDotActive: { backgroundColor: tokens.accent.base, width: 16 },
-  goalTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
-  goalTitle: { flex: 1, fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
-  goalPct: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.accent.base },
-  goalDoneBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: hexToRgba(tokens.semantic.positive, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
-  goalDoneBadgeText: { fontSize: tokens.typography.micro, fontFamily: font.semibold, color: tokens.semantic.positive },
-  goalTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden', marginTop: tokens.spacing.md },
-  goalFill: { height: '100%', borderRadius: 4, backgroundColor: tokens.accent.base },
-  goalFillDone: { backgroundColor: tokens.semantic.positive },
-  goalBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: tokens.spacing.sm },
-  goalAmount: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.secondary },
-  goalSummary: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.secondary, marginTop: tokens.spacing.sm },
-  goalDays: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary },
-  goalActiveBadge: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  goalActiveBadgeText: { fontSize: tokens.typography.micro, fontFamily: font.semibold, color: tokens.semantic.warning },
-  goalMainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md, marginTop: tokens.spacing.md },
-  goalRemainLabel: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary },
-  goalRemainValue: { fontSize: 26, fontFamily: font.bold, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 2 },
-  goalDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 5 },
-  goalDeltaText: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.semantic.positive },
-  goalEtaBadge: { alignItems: 'center', backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, paddingHorizontal: 10, paddingVertical: 7, gap: 2 },
-  goalEtaValue: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.accent.base },
-  goalEtaLabel: { fontSize: 9, fontFamily: font.regular, color: tokens.text.tertiary },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
   goalEmptyTitle: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
