@@ -13,6 +13,7 @@ import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
 import type { Goal, GoalKind } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
+import { CURRENCY_SYMBOL } from '@/format';
 
 const KIND_OPTIONS: { label: string; value: GoalKind }[] = [
   { label: 'Сумма', value: 'amount' },
@@ -104,17 +105,15 @@ export default function GoalFormScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <MaterialIcons name="close" size={26} color={tokens.text.primary} />
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+            <MaterialIcons name="close" size={24} color={tokens.text.primary} />
           </Pressable>
           <Text style={styles.headerTitle}>{editing ? 'Цель' : 'Новая цель'}</Text>
           {editing ? (
             <Pressable onPress={onDelete} hitSlop={12}>
               <MaterialIcons name="delete-outline" size={24} color={tokens.semantic.negative} />
             </Pressable>
-          ) : (
-            <View style={{ width: 26 }} />
-          )}
+          ) : null}
         </View>
 
         <Card>
@@ -127,7 +126,8 @@ export default function GoalFormScreen() {
                 value={targetAmount}
                 onChange={setTargetAmount}
                 placeholder="0"
-                suffix={`${editing?.currency ?? data.settings.defaultCurrency}/${incomeRatePeriod === 'day' ? 'день' : 'мес'}`}
+                grouped
+                suffix={`${CURRENCY_SYMBOL[editing?.currency ?? data.settings.defaultCurrency]}/${incomeRatePeriod === 'day' ? 'день' : 'мес'}`}
               />
               <Segmented
                 label="Период"
@@ -142,7 +142,8 @@ export default function GoalFormScreen() {
               value={targetAmount}
               onChange={setTargetAmount}
               placeholder="0"
-              suffix={editing?.currency ?? data.settings.defaultCurrency}
+              grouped
+              suffix={CURRENCY_SYMBOL[editing?.currency ?? data.settings.defaultCurrency]}
             />
           )}
           {kind === 'amount' ? (
@@ -178,10 +179,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: tokens.spacing.md,
     marginBottom: tokens.spacing.xl,
   },
-  headerTitle: { fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
+  backBtn: { width: 24 },
+  headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   archiveRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing.chip,
     marginTop: tokens.spacing.lg, paddingVertical: tokens.spacing.md,

@@ -11,12 +11,13 @@ import { goalsProgress, standaloneGoalsProgress, type GoalProgress, type GoalMet
 import { pluralDays, formatDurationApprox } from '@/format/date';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
-import type { CurrencyCode, GoalKind } from '@/domain/types';
+import { tapBuzz } from '@/lib/haptics';
+import type { CurrencyCode, Goal, GoalKind } from '@/domain/types';
 
 export default function GoalsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data } = useData();
+  const { data, updateGoal } = useData();
   const cur = data.settings.defaultCurrency;
 
   const progress = useMemo(() => goalsProgress(data), [data]);
@@ -30,7 +31,18 @@ export default function GoalsScreen() {
   const activeAmountGoal = incompleteAmount[0];
   const queuedAmountGoals = incompleteAmount.slice(1);
 
+  // Три параллельных типа целей не противоречат друг другу — счётчик наверху
+  // просто суммирует все, независимо от типа (в отличие от очереди-водопада,
+  // которая касается только «Суммы»).
+  const allGoalsCount = progress.length + metrics.length;
+  const activeCount = (activeAmountGoal ? 1 : 0) + metrics.filter((m) => !m.isComplete).length;
+  const completedCount = completeAmount.length + metrics.filter((m) => m.isComplete).length;
+
   const goTo = (id: string) => router.push(`/settings/goal-form?id=${id}`);
+  const archiveGoal = async (goal: Goal) => {
+    tapBuzz();
+    await updateGoal({ ...goal, status: 'archived' });
+  };
   const hasActive = progress.length > 0 || metrics.length > 0;
 
   return (
@@ -66,26 +78,26 @@ export default function GoalsScreen() {
           </View>
         ) : (
           <>
+            <Card>
+              <View style={styles.cardInner}>
+                <View style={styles.counterRow}>
+                  <CounterTile icon="flag" color={tokens.accent.base} label="Все цели" value={allGoalsCount} />
+                  <CounterTile icon="bolt" color={tokens.accent.base} label="Активные" value={activeCount} />
+                  <CounterTile icon="emoji-events" color={tokens.semantic.positive} label="Завершённые" value={completedCount} />
+                </View>
+                {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
+                  <View style={styles.nearestRow}>
+                    <MaterialIcons name="event" size={14} color={tokens.text.tertiary} />
+                    <Text style={styles.nearestText}>
+                      Ближайшее достижение — через ≈{activeAmountGoal.daysRemaining} {pluralDays(activeAmountGoal.daysRemaining)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </Card>
+
             {progress.length > 0 ? (
               <>
-                <Card>
-                  <View style={styles.cardInner}>
-                    {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
-                      <View>
-                        <Text style={styles.heroLabel}>До ближайшей цели</Text>
-                        <Text style={styles.heroValue}>
-                          ≈{activeAmountGoal.daysRemaining} {pluralDays(activeAmountGoal.daysRemaining)}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <View style={styles.statsRow}>
-                      <StatTile icon="flag" label={incompleteAmount.length === 1 ? 'цель всего' : 'цели всего'} value={incompleteAmount.length} />
-                      <StatTile icon="check-circle-outline" label="активная" value={activeAmountGoal ? 1 : 0} />
-                      <StatTile icon="hourglass-empty" label="в очереди" value={queuedAmountGoals.length} />
-                    </View>
-                  </View>
-                </Card>
-
                 <Text style={styles.section}>Цели по сумме</Text>
                 <View style={styles.list}>
                   {activeAmountGoal ? (
@@ -109,7 +121,7 @@ export default function GoalsScreen() {
                 <Text style={styles.section}>Цели по доходу</Text>
                 <View style={styles.list}>
                   {incomeRateMetrics.map((m) => (
-                    <MetricCard key={m.goal.id} m={m} cur={cur} onPress={() => goTo(m.goal.id)} />
+                    <MetricCard key={m.goal.id} m={m} cur={cur} onPress={() => goTo(m.goal.id)} onArchive={() => archiveGoal(m.goal)} />
                   ))}
                 </View>
               </>
@@ -120,7 +132,7 @@ export default function GoalsScreen() {
                 <Text style={styles.section}>Цели по капиталу</Text>
                 <View style={styles.list}>
                   {capitalMetrics.map((m) => (
-                    <MetricCard key={m.goal.id} m={m} cur={cur} onPress={() => goTo(m.goal.id)} />
+                    <MetricCard key={m.goal.id} m={m} cur={cur} onPress={() => goTo(m.goal.id)} onArchive={() => archiveGoal(m.goal)} />
                   ))}
                 </View>
               </>
@@ -131,7 +143,7 @@ export default function GoalsScreen() {
                 <Text style={styles.section}>Завершённые цели</Text>
                 <View style={styles.list}>
                   {completeAmount.map((p) => (
-                    <CompletedGoalRow key={p.goal.id} p={p} cur={cur} onPress={() => goTo(p.goal.id)} />
+                    <CompletedGoalRow key={p.goal.id} p={p} cur={cur} onPress={() => goTo(p.goal.id)} onArchive={() => archiveGoal(p.goal)} />
                   ))}
                 </View>
               </>
@@ -163,14 +175,16 @@ export default function GoalsScreen() {
   );
 }
 
-function StatTile({ icon, label, value }: { icon: React.ComponentProps<typeof MaterialIcons>['name']; label: string; value: number }) {
+function CounterTile({
+  icon, color, label, value,
+}: { icon: React.ComponentProps<typeof MaterialIcons>['name']; color: string; label: string; value: number }) {
   return (
-    <View style={styles.statTile}>
-      <View style={styles.statTileLabelRow}>
-        <MaterialIcons name={icon} size={14} color={tokens.text.tertiary} />
-        <Text style={styles.statTileLabel} numberOfLines={1}>{label}</Text>
+    <View style={styles.counterTile}>
+      <View style={[styles.counterIconBox, { backgroundColor: hexToRgba(color, 0.12) }]}>
+        <MaterialIcons name={icon} size={18} color={color} />
       </View>
-      <Text style={styles.statTileValue}>{value}</Text>
+      <Text style={styles.counterValue}>{value}</Text>
+      <Text style={styles.counterLabel} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -202,8 +216,8 @@ function ActiveGoalCard({ p, cur, onPress }: { p: GoalProgress; cur: CurrencyCod
               </Text>
               {deltaToday > 0 ? (
                 <View style={styles.deltaRow}>
-                  <MaterialIcons name="arrow-downward" size={12} color={tokens.semantic.positive} />
-                  <Text style={styles.deltaText}>на {formatMoney(deltaToday, { currency: cur, kopecks: 'hide' })} ближе сегодня</Text>
+                  <MaterialIcons name="add" size={12} color={tokens.semantic.positive} />
+                  <Text style={styles.deltaText}>{formatMoney(deltaToday, { currency: cur, kopecks: 'hide' })} сегодня</Text>
                 </View>
               ) : null}
             </View>
@@ -219,9 +233,12 @@ function ActiveGoalCard({ p, cur, onPress }: { p: GoalProgress; cur: CurrencyCod
           <View style={styles.track}>
             <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }]} />
           </View>
-          <Text style={styles.activeSummary}>
-            {formatMoney(filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })} • {Math.round(progressPct)}% выполнено
-          </Text>
+          <View style={styles.cardFooterRow}>
+            <Text style={styles.cardFooterPct}>{Math.round(progressPct)}%</Text>
+            <Text style={styles.cardFooterAmount}>
+              {formatMoney(filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })}
+            </Text>
+          </View>
         </View>
       </Card>
     </Pressable>
@@ -255,7 +272,9 @@ function QueuedGoalRow({
   );
 }
 
-function MetricCard({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onPress: () => void }) {
+function MetricCard({
+  m, cur, onPress, onArchive,
+}: { m: GoalMetric; cur: CurrencyCode; onPress: () => void; onArchive: () => void }) {
   const { goal, currentValue, targetValue, progressPct, isComplete, daysRemaining, growthPerPeriod } = m;
   const kind = goal.kind as GoalKind;
   const periodSuffix = kind === 'incomeRate' ? `/${goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : '';
@@ -264,27 +283,46 @@ function MetricCard({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onP
     <Pressable onPress={onPress}>
       <Card>
         <View style={styles.cardInner}>
-          <View style={styles.rowTop}>
-            <Text style={styles.rowTitle} numberOfLines={1}>{goal.title}</Text>
-            {isComplete ? (
-              <View style={styles.doneBadge}>
-                <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-                <Text style={styles.doneBadgeText}>Достигнуто</Text>
+          <View style={styles.activeTopRow}>
+            <View style={styles.activeIconTitle}>
+              <View style={styles.activeIconBox}>
+                <MaterialIcons name={kind === 'incomeRate' ? 'trending-up' : 'account-balance'} size={18} color={tokens.accent.base} />
               </View>
-            ) : (
-              <Text style={styles.rowPct}>{Math.round(progressPct)}%</Text>
-            )}
+              <Text style={styles.activeTitle} numberOfLines={1}>{goal.title}</Text>
+            </View>
+            {isComplete ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
+                <View style={styles.doneBadge}>
+                  <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                  <Text style={styles.doneBadgeText}>Достигнуто</Text>
+                </View>
+                <Pressable onPress={onArchive} hitSlop={10}>
+                  <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
-          <View style={styles.metricCompareRow}>
-            <View>
-              <Text style={styles.metricCompareLabel}>Сейчас</Text>
-              <Text style={styles.metricCompareValue}>{formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
+          <View style={styles.activeMainRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activeRemainLabel}>Сейчас</Text>
+              <Text style={styles.activeRemainValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
+              </Text>
             </View>
-            <MaterialIcons name="arrow-forward" size={16} color={tokens.text.tertiary} />
-            <View>
-              <Text style={styles.metricCompareLabel}>Цель</Text>
-              <Text style={styles.metricCompareValue}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
+            <View style={styles.etaBadge}>
+              {kind === 'capital' && daysRemaining !== null ? (
+                <>
+                  <MaterialIcons name="event" size={14} color={tokens.accent.base} />
+                  <Text style={styles.etaBadgeValue}>≈{formatDurationApprox(daysRemaining)}</Text>
+                  <Text style={styles.etaBadgeLabel}>до достижения</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.etaBadgeLabel}>Цель</Text>
+                  <Text style={styles.etaBadgeValue}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
+                </>
+              )}
             </View>
           </View>
 
@@ -292,16 +330,11 @@ function MetricCard({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onP
             <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
           </View>
 
-          <View style={styles.metricBottomRow}>
-            {daysRemaining !== null ? (
-              <View style={styles.metricHintRow}>
-                <MaterialIcons name="event" size={12} color={tokens.text.tertiary} />
-                <Text style={styles.metricHintText}>≈{formatDurationApprox(daysRemaining)} до достижения</Text>
-              </View>
-            ) : <View />}
-            <View style={styles.metricHintRow}>
+          <View style={styles.cardFooterRow}>
+            <Text style={styles.cardFooterPct}>{Math.round(progressPct)}%</Text>
+            <View style={styles.growthRow}>
               <MaterialIcons name="trending-up" size={12} color={tokens.semantic.positive} />
-              <Text style={[styles.metricHintText, { color: tokens.semantic.positive }]}>
+              <Text style={styles.growthText}>
                 +{formatMoney(growthPerPeriod, { currency: cur, kopecks: 'hide' })}{growthSuffix} прирост
               </Text>
             </View>
@@ -312,22 +345,27 @@ function MetricCard({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onP
   );
 }
 
-function CompletedGoalRow({ p, cur, onPress }: { p: GoalProgress; cur: CurrencyCode; onPress: () => void }) {
+function CompletedGoalRow({
+  p, cur, onPress, onArchive,
+}: { p: GoalProgress; cur: CurrencyCode; onPress: () => void; onArchive: () => void }) {
   const { goal, targetAmount, completedInDays } = p;
   return (
-    <Pressable style={styles.archivedRow} onPress={onPress}>
-      <View style={{ flex: 1 }}>
+    <View style={styles.archivedRow}>
+      <Pressable style={{ flex: 1 }} onPress={onPress}>
         <Text style={styles.archivedTitle} numberOfLines={1}>{goal.title}</Text>
         <Text style={styles.archivedSub}>
           {formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })}
           {completedInDays !== null ? ` • Выполнено за ${completedInDays} ${pluralDays(completedInDays)}` : ''}
         </Text>
-      </View>
+      </Pressable>
       <View style={styles.doneBadge}>
         <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
         <Text style={styles.doneBadgeText}>Выполнено</Text>
       </View>
-    </Pressable>
+      <Pressable onPress={onArchive} hitSlop={10}>
+        <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -343,18 +381,15 @@ const styles = StyleSheet.create({
   // а не на сам Card (иначе gap молча не работает и всё слипается).
   cardInner: { gap: tokens.spacing.md },
 
-  heroLabel: { fontFamily: font.medium, fontSize: tokens.typography.label, color: tokens.text.tertiary },
-  heroValue: { fontFamily: font.extrabold, fontSize: 28, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 4 },
-  statsRow: { flexDirection: 'row', gap: tokens.spacing.sm },
-  statTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 12 },
-  statTileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statTileLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary, flexShrink: 1 },
-  statTileValue: { fontFamily: font.bold, fontSize: tokens.typography.body, color: tokens.text.primary, marginTop: 6 },
+  counterRow: { flexDirection: 'row', gap: tokens.spacing.sm },
+  counterTile: { flex: 1, alignItems: 'center', gap: 4 },
+  counterIconBox: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  counterValue: { fontFamily: font.extrabold, fontSize: 22, color: tokens.text.primary, letterSpacing: -0.2, marginTop: 2 },
+  counterLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
+  nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: tokens.spacing.md, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
+  nearestText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.text.secondary },
 
   list: { gap: 10 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
-  rowTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary },
-  rowPct: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.accent.base },
   doneBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: hexToRgba(tokens.semantic.positive, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   doneBadgeText: { fontFamily: font.semibold, fontSize: tokens.typography.micro, color: tokens.semantic.positive },
   track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden' },
@@ -363,7 +398,7 @@ const styles = StyleSheet.create({
 
   section: { fontFamily: font.semibold, fontSize: 20, color: tokens.text.primary, letterSpacing: -0.2, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
 
-  // --- Активная цель (крупная карточка) ---
+  // --- Общий стиль крупных карточек (активная цель по сумме / метрики) ---
   activeTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
   activeIconTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, minWidth: 0 },
   activeIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
@@ -381,7 +416,11 @@ const styles = StyleSheet.create({
   },
   etaBadgeValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.accent.base },
   etaBadgeLabel: { fontFamily: font.regular, fontSize: 10, color: tokens.text.tertiary },
-  activeSummary: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
+  cardFooterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardFooterPct: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.accent.base },
+  cardFooterAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
+  growthRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  growthText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.semantic.positive },
 
   // --- Следующие цели (компактные строки очереди — та же секция, что активная) ---
   queuedRow: {
@@ -396,14 +435,6 @@ const styles = StyleSheet.create({
   waitBadgeText: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   queuedAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
   queuedHint: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-
-  // --- Метрики (Темп дохода / Капитал) ---
-  metricCompareRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.lg },
-  metricCompareLabel: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  metricCompareValue: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary, marginTop: 3 },
-  metricBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
-  metricHintRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  metricHintText: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
 
   archivedRow: {
     flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md,
