@@ -1649,6 +1649,12 @@ export interface GoalProgress {
    *  очереди могут стоять ещё не заполненные цели (водопад). null — доход
    *  сейчас нулевой, оценить нельзя. */
   daysRemaining: number | null;
+  /** сколько дохода досталось этой цели за сегодня (может быть 0, если цель
+   *  ещё не в очереди на заполнение или уже заполнена). */
+  deltaToday: number;
+  /** сколько дней заняло достижение цели, от startDate до момента заполнения —
+   *  только для уже выполненных; null, если ещё не заполнена. */
+  completedInDays: number | null;
 }
 
 /**
@@ -1694,8 +1700,15 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
 
   const targets = new Map<string, number>(active.map((g) => [g.id, convert(g.targetAmount, g.currency, data)]));
   const filled = new Map<string, number>(active.map((g) => [g.id, 0]));
+  const filledBeforeToday = new Map<string, number>();
+  const completedDayIdx = new Map<string, number | null>(active.map((g) => [g.id, null]));
 
   for (let k = 0; k <= totalDays; k++) {
+    if (k === totalDays) {
+      // Срез ДО распределения дохода «сегодня» — разница с финальным
+      // состоянием и даёт «на сколько цель стала ближе сегодня».
+      for (const g of active) filledBeforeToday.set(g.id, filled.get(g.id)!);
+    }
     let remaining = dailyIncome[k];
     if (remaining <= 0) continue;
     const day = new Date(seriesStart);
@@ -1707,8 +1720,10 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
       const have = filled.get(g.id)!;
       if (have >= target) continue;
       const take = Math.min(remaining, target - have);
-      filled.set(g.id, have + take);
+      const newHave = have + take;
+      filled.set(g.id, newHave);
       remaining -= take;
+      if (newHave >= target && completedDayIdx.get(g.id) === null) completedDayIdx.set(g.id, k);
     }
   }
 
@@ -1723,6 +1738,8 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
     const have = filled.get(g.id)!;
     const isComplete = have >= target;
     cumulativeRemaining += Math.max(0, target - have);
+    const startOffset = Math.max(0, diffDays(seriesStart, parseLocal(g.startDate)));
+    const dayIdx = completedDayIdx.get(g.id) ?? null;
     out.push({
       goal: g,
       filledAmount: have,
@@ -1730,6 +1747,8 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
       progressPct: target > 0 ? Math.min(100, (have / target) * 100) : 100,
       isComplete,
       daysRemaining: !isComplete && currentDailyIncome > 0 ? Math.ceil(cumulativeRemaining / currentDailyIncome) : null,
+      deltaToday: Math.max(0, have - (filledBeforeToday.get(g.id) ?? 0)),
+      completedInDays: dayIdx !== null ? Math.max(0, dayIdx - startOffset) : null,
     });
   }
   return out;
@@ -1745,6 +1764,9 @@ export interface GoalMetric {
    *  (капитал растёт доходом, без учёта будущих пополнений/снятий). Для
    *  incomeRate не считается — цель не накопительная, «ждать дни» бессмысленно. */
   daysRemaining: number | null;
+  /** темп прироста «сейчас» в основной валюте — для incomeRate это currentValue
+   *  за period цели (день/месяц), для capital — доход портфеля в месяц. */
+  growthPerPeriod: number;
 }
 
 /**
@@ -1780,6 +1802,7 @@ export function standaloneGoalsProgress(data: AppData, now: Date = new Date()): 
       progressPct: targetValue > 0 ? Math.min(100, (currentValue / targetValue) * 100) : 100,
       isComplete,
       daysRemaining,
+      growthPerPeriod: g.kind === 'incomeRate' ? currentValue : ps.incomePerMonth,
     };
   });
 }

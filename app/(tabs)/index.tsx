@@ -35,7 +35,7 @@ import {
 import type { AssetView } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercentSigned } from '@/format';
-import { formatDateShort, pluralDays } from '@/format/date';
+import { formatDateShort, pluralDays, formatDurationApprox } from '@/format/date';
 import { t } from '@/i18n';
 
 type SortKey = 'income' | 'amount' | 'rate' | 'end' | 'added';
@@ -283,8 +283,33 @@ export default function HomeScreen() {
                                   <Text style={styles.goalDoneBadgeText}>Готово</Text>
                                 </View>
                               ) : (
-                                <Text style={styles.goalPct}>{Math.round(slide.p.progressPct)}%</Text>
+                                <View style={styles.goalActiveBadge}>
+                                  <Text style={styles.goalActiveBadgeText}>Активная цель</Text>
+                                </View>
                               )}
+                            </View>
+                            <View style={styles.goalMainRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.goalRemainLabel}>Осталось</Text>
+                                <Text style={styles.goalRemainValue} numberOfLines={1} adjustsFontSizeToFit>
+                                  {formatMoney(Math.max(0, slide.p.targetAmount - slide.p.filledAmount), { currency: cur, kopecks: 'hide' })}
+                                </Text>
+                                {slide.p.deltaToday > 0 ? (
+                                  <View style={styles.goalDeltaRow}>
+                                    <MaterialIcons name="arrow-downward" size={11} color={tokens.semantic.positive} />
+                                    <Text style={styles.goalDeltaText}>
+                                      на {formatMoney(slide.p.deltaToday, { currency: cur, kopecks: 'hide' })} ближе сегодня
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                              {!slide.p.isComplete && slide.p.daysRemaining !== null ? (
+                                <View style={styles.goalEtaBadge}>
+                                  <MaterialIcons name="event" size={13} color={tokens.accent.base} />
+                                  <Text style={styles.goalEtaValue}>≈{slide.p.daysRemaining} {pluralDays(slide.p.daysRemaining)}</Text>
+                                  <Text style={styles.goalEtaLabel}>до достижения</Text>
+                                </View>
+                              ) : null}
                             </View>
                             <View style={styles.goalTrack}>
                               <View
@@ -295,14 +320,9 @@ export default function HomeScreen() {
                                 ]}
                               />
                             </View>
-                            <View style={styles.goalBottom}>
-                              <Text style={styles.goalAmount}>
-                                {formatMoney(slide.p.filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(slide.p.targetAmount, { currency: cur, kopecks: 'hide' })}
-                              </Text>
-                              {!slide.p.isComplete && slide.p.daysRemaining !== null ? (
-                                <Text style={styles.goalDays}>≈ {slide.p.daysRemaining} {pluralDays(slide.p.daysRemaining)}</Text>
-                              ) : null}
-                            </View>
+                            <Text style={styles.goalSummary}>
+                              {formatMoney(slide.p.filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(slide.p.targetAmount, { currency: cur, kopecks: 'hide' })} • {Math.round(slide.p.progressPct)}% выполнено
+                            </Text>
                           </>
                         ) : (
                           <>
@@ -332,7 +352,7 @@ export default function HomeScreen() {
                                 {formatMoney(slide.m.currentValue, { currency: cur, kopecks: 'hide' })}{slide.kind === 'incomeRate' ? `/${slide.m.goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : ''} из {formatMoney(slide.m.targetValue, { currency: cur, kopecks: 'hide' })}
                               </Text>
                               {slide.m.daysRemaining !== null ? (
-                                <Text style={styles.goalDays}>≈ {slide.m.daysRemaining} {pluralDays(slide.m.daysRemaining)}</Text>
+                                <Text style={styles.goalDays}>≈ {formatDurationApprox(slide.m.daysRemaining)}</Text>
                               ) : null}
                             </View>
                           </>
@@ -704,7 +724,18 @@ const styles = StyleSheet.create({
   goalFillDone: { backgroundColor: tokens.semantic.positive },
   goalBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: tokens.spacing.sm },
   goalAmount: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.secondary },
+  goalSummary: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.secondary, marginTop: tokens.spacing.sm },
   goalDays: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary },
+  goalActiveBadge: { backgroundColor: hexToRgba(tokens.accent.base, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  goalActiveBadgeText: { fontSize: tokens.typography.micro, fontFamily: font.semibold, color: tokens.accent.base },
+  goalMainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md, marginTop: tokens.spacing.md },
+  goalRemainLabel: { fontSize: tokens.typography.hint, fontFamily: font.regular, color: tokens.text.tertiary },
+  goalRemainValue: { fontSize: 26, fontFamily: font.bold, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 2 },
+  goalDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 5 },
+  goalDeltaText: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.semantic.positive },
+  goalEtaBadge: { alignItems: 'center', backgroundColor: hexToRgba(tokens.accent.base, 0.08), borderRadius: tokens.radius.md, paddingHorizontal: 10, paddingVertical: 7, gap: 2 },
+  goalEtaValue: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.accent.base },
+  goalEtaLabel: { fontSize: 9, fontFamily: font.regular, color: tokens.text.tertiary },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
   goalEmptyTitle: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
