@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
   goalRemainValue: { fontSize: 26, fontFamily: font.bold, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 2 },
   goalDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 5 },
   goalDeltaText: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.semantic.positive },
-  goalEtaBadge: { alignItems: 'center', backgroundColor: hexToRgba(tokens.accent.base, 0.08), borderRadius: tokens.radius.md, paddingHorizontal: 10, paddingVertical: 7, gap: 2 },
+  goalEtaBadge: { alignItems: 'center', backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, paddingHorizontal: 10, paddingVertical: 7, gap: 2 },
   goalEtaValue: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.accent.base },
   goalEtaLabel: { fontSize: 9, fontFamily: font.regular, color: tokens.text.tertiary },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },

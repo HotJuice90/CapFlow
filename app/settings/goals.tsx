@@ -68,58 +68,39 @@ export default function GoalsScreen() {
           <>
             {progress.length > 0 ? (
               <>
-                <View style={styles.statsCard}>
-                  <View style={styles.statItem}>
-                    <MaterialIcons name="flag" size={16} color={tokens.accent.base} />
-                    <Text style={styles.statValue}>{incompleteAmount.length}</Text>
-                    <Text style={styles.statLabel}>{incompleteAmount.length === 1 ? 'цель всего' : 'цели всего'}</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <MaterialIcons name="check-circle-outline" size={16} color={tokens.semantic.positive} />
-                    <Text style={styles.statValue}>{activeAmountGoal ? 1 : 0}</Text>
-                    <Text style={styles.statLabel}>активная цель</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <MaterialIcons name="hourglass-empty" size={16} color={tokens.text.tertiary} />
-                    <Text style={styles.statValue}>{queuedAmountGoals.length}</Text>
-                    <Text style={styles.statLabel}>в очереди на потом</Text>
-                  </View>
-                </View>
-
-                {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
-                  <View style={styles.nearestRow}>
-                    <MaterialIcons name="my-location" size={14} color={tokens.text.tertiary} />
-                    <Text style={styles.nearestText}>
-                      Ближайшая цель ≈ через {activeAmountGoal.daysRemaining} {pluralDays(activeAmountGoal.daysRemaining)}
-                    </Text>
-                  </View>
-                ) : null}
-
-                {activeAmountGoal ? (
-                  <>
-                    <Text style={styles.section}>Активная цель</Text>
-                    <ActiveGoalCard p={activeAmountGoal} cur={cur} onPress={() => goTo(activeAmountGoal.goal.id)} />
-                  </>
-                ) : null}
-
-                {queuedAmountGoals.length > 0 ? (
-                  <>
-                    <Text style={styles.section}>Следующие цели</Text>
-                    <View style={styles.list}>
-                      {queuedAmountGoals.map((p, i) => (
-                        <QueuedGoalRow
-                          key={p.goal.id}
-                          p={p}
-                          cur={cur}
-                          waitingFor={i === 0 ? null : queuedAmountGoals[i - 1].goal.title}
-                          onPress={() => goTo(p.goal.id)}
-                        />
-                      ))}
+                <Card>
+                  <View style={styles.cardInner}>
+                    {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
+                      <View>
+                        <Text style={styles.heroLabel}>До ближайшей цели</Text>
+                        <Text style={styles.heroValue}>
+                          ≈{activeAmountGoal.daysRemaining} {pluralDays(activeAmountGoal.daysRemaining)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.statsRow}>
+                      <StatTile icon="flag" label={incompleteAmount.length === 1 ? 'цель всего' : 'цели всего'} value={incompleteAmount.length} />
+                      <StatTile icon="check-circle-outline" label="активная" value={activeAmountGoal ? 1 : 0} />
+                      <StatTile icon="hourglass-empty" label="в очереди" value={queuedAmountGoals.length} />
                     </View>
-                  </>
-                ) : null}
+                  </View>
+                </Card>
+
+                <Text style={styles.section}>Цели по сумме</Text>
+                <View style={styles.list}>
+                  {activeAmountGoal ? (
+                    <ActiveGoalCard p={activeAmountGoal} cur={cur} onPress={() => goTo(activeAmountGoal.goal.id)} />
+                  ) : null}
+                  {queuedAmountGoals.map((p, i) => (
+                    <QueuedGoalRow
+                      key={p.goal.id}
+                      p={p}
+                      cur={cur}
+                      waitingFor={i === 0 ? null : queuedAmountGoals[i - 1].goal.title}
+                      onPress={() => goTo(p.goal.id)}
+                    />
+                  ))}
+                </View>
               </>
             ) : null}
 
@@ -182,52 +163,66 @@ export default function GoalsScreen() {
   );
 }
 
+function StatTile({ icon, label, value }: { icon: React.ComponentProps<typeof MaterialIcons>['name']; label: string; value: number }) {
+  return (
+    <View style={styles.statTile}>
+      <View style={styles.statTileLabelRow}>
+        <MaterialIcons name={icon} size={14} color={tokens.text.tertiary} />
+        <Text style={styles.statTileLabel} numberOfLines={1}>{label}</Text>
+      </View>
+      <Text style={styles.statTileValue}>{value}</Text>
+    </View>
+  );
+}
+
 function ActiveGoalCard({ p, cur, onPress }: { p: GoalProgress; cur: CurrencyCode; onPress: () => void }) {
   const { goal, filledAmount, targetAmount, progressPct, deltaToday, daysRemaining } = p;
   const remaining = Math.max(0, targetAmount - filledAmount);
   return (
     <Pressable onPress={onPress}>
-      <Card style={styles.activeCard}>
-        <View style={styles.activeTopRow}>
-          <View style={styles.activeIconTitle}>
-            <View style={styles.activeIconBox}>
-              <MaterialIcons name="flag" size={18} color={tokens.accent.base} />
+      <Card>
+        <View style={styles.cardInner}>
+          <View style={styles.activeTopRow}>
+            <View style={styles.activeIconTitle}>
+              <View style={styles.activeIconBox}>
+                <MaterialIcons name="flag" size={18} color={tokens.accent.base} />
+              </View>
+              <Text style={styles.activeTitle} numberOfLines={1}>{goal.title}</Text>
             </View>
-            <Text style={styles.activeTitle} numberOfLines={1}>{goal.title}</Text>
+            <View style={styles.activeBadge}>
+              <Text style={styles.activeBadgeText}>Активная цель</Text>
+            </View>
           </View>
-          <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>Активная цель</Text>
-          </View>
-        </View>
 
-        <View style={styles.activeMainRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.activeRemainLabel}>Осталось</Text>
-            <Text style={styles.activeRemainValue} numberOfLines={1} adjustsFontSizeToFit>
-              {formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
-            </Text>
-            {deltaToday > 0 ? (
-              <View style={styles.deltaRow}>
-                <MaterialIcons name="arrow-downward" size={12} color={tokens.semantic.positive} />
-                <Text style={styles.deltaText}>на {formatMoney(deltaToday, { currency: cur, kopecks: 'hide' })} ближе сегодня</Text>
+          <View style={styles.activeMainRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activeRemainLabel}>Осталось</Text>
+              <Text style={styles.activeRemainValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
+              </Text>
+              {deltaToday > 0 ? (
+                <View style={styles.deltaRow}>
+                  <MaterialIcons name="arrow-downward" size={12} color={tokens.semantic.positive} />
+                  <Text style={styles.deltaText}>на {formatMoney(deltaToday, { currency: cur, kopecks: 'hide' })} ближе сегодня</Text>
+                </View>
+              ) : null}
+            </View>
+            {daysRemaining !== null ? (
+              <View style={styles.etaBadge}>
+                <MaterialIcons name="event" size={14} color={tokens.accent.base} />
+                <Text style={styles.etaBadgeValue}>≈{daysRemaining} {pluralDays(daysRemaining)}</Text>
+                <Text style={styles.etaBadgeLabel}>до достижения</Text>
               </View>
             ) : null}
           </View>
-          {daysRemaining !== null ? (
-            <View style={styles.etaBadge}>
-              <MaterialIcons name="event" size={14} color={tokens.accent.base} />
-              <Text style={styles.etaBadgeValue}>≈{daysRemaining} {pluralDays(daysRemaining)}</Text>
-              <Text style={styles.etaBadgeLabel}>до достижения</Text>
-            </View>
-          ) : null}
-        </View>
 
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }]} />
+          <View style={styles.track}>
+            <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }]} />
+          </View>
+          <Text style={styles.activeSummary}>
+            {formatMoney(filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })} • {Math.round(progressPct)}% выполнено
+          </Text>
         </View>
-        <Text style={styles.activeSummary}>
-          {formatMoney(filledAmount, { currency: cur, kopecks: 'hide' })} из {formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })} • {Math.round(progressPct)}% выполнено
-        </Text>
       </Card>
     </Pressable>
   );
@@ -242,7 +237,7 @@ function QueuedGoalRow({
       <View style={styles.queuedIconBox}>
         <MaterialIcons name="flag" size={16} color={tokens.text.tertiary} />
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={styles.queuedTopRow}>
           <Text style={styles.queuedTitle} numberOfLines={1}>{goal.title}</Text>
           <View style={styles.waitBadge}>
@@ -267,47 +262,49 @@ function MetricCard({ m, cur, onPress }: { m: GoalMetric; cur: CurrencyCode; onP
   const growthSuffix = kind === 'incomeRate' ? periodSuffix : '/мес';
   return (
     <Pressable onPress={onPress}>
-      <Card style={styles.metricCard}>
-        <View style={styles.rowTop}>
-          <Text style={styles.rowTitle} numberOfLines={1}>{goal.title}</Text>
-          {isComplete ? (
-            <View style={styles.doneBadge}>
-              <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-              <Text style={styles.doneBadgeText}>Достигнуто</Text>
-            </View>
-          ) : (
-            <Text style={styles.rowPct}>{Math.round(progressPct)}%</Text>
-          )}
-        </View>
-
-        <View style={styles.metricCompareRow}>
-          <View>
-            <Text style={styles.metricCompareLabel}>Сейчас</Text>
-            <Text style={styles.metricCompareValue}>{formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
+      <Card>
+        <View style={styles.cardInner}>
+          <View style={styles.rowTop}>
+            <Text style={styles.rowTitle} numberOfLines={1}>{goal.title}</Text>
+            {isComplete ? (
+              <View style={styles.doneBadge}>
+                <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                <Text style={styles.doneBadgeText}>Достигнуто</Text>
+              </View>
+            ) : (
+              <Text style={styles.rowPct}>{Math.round(progressPct)}%</Text>
+            )}
           </View>
-          <MaterialIcons name="arrow-forward" size={16} color={tokens.text.tertiary} />
-          <View>
-            <Text style={styles.metricCompareLabel}>Цель</Text>
-            <Text style={styles.metricCompareValue}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
-          </View>
-        </View>
 
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
-        </View>
-
-        <View style={styles.metricBottomRow}>
-          {daysRemaining !== null ? (
-            <View style={styles.etaBadgeSmall}>
-              <MaterialIcons name="event" size={12} color={tokens.text.tertiary} />
-              <Text style={styles.etaBadgeSmallText}>≈{formatDurationApprox(daysRemaining)} до достижения</Text>
+          <View style={styles.metricCompareRow}>
+            <View>
+              <Text style={styles.metricCompareLabel}>Сейчас</Text>
+              <Text style={styles.metricCompareValue}>{formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
             </View>
-          ) : <View />}
-          <View style={styles.growthPill}>
-            <MaterialIcons name="trending-up" size={12} color={tokens.semantic.positive} />
-            <Text style={styles.growthPillText}>
-              +{formatMoney(growthPerPeriod, { currency: cur, kopecks: 'hide' })}{growthSuffix} текущий прирост
-            </Text>
+            <MaterialIcons name="arrow-forward" size={16} color={tokens.text.tertiary} />
+            <View>
+              <Text style={styles.metricCompareLabel}>Цель</Text>
+              <Text style={styles.metricCompareValue}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
+            </View>
+          </View>
+
+          <View style={styles.track}>
+            <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
+          </View>
+
+          <View style={styles.metricBottomRow}>
+            {daysRemaining !== null ? (
+              <View style={styles.metricHintRow}>
+                <MaterialIcons name="event" size={12} color={tokens.text.tertiary} />
+                <Text style={styles.metricHintText}>≈{formatDurationApprox(daysRemaining)} до достижения</Text>
+              </View>
+            ) : <View />}
+            <View style={styles.metricHintRow}>
+              <MaterialIcons name="trending-up" size={12} color={tokens.semantic.positive} />
+              <Text style={[styles.metricHintText, { color: tokens.semantic.positive }]}>
+                +{formatMoney(growthPerPeriod, { currency: cur, kopecks: 'hide' })}{growthSuffix} прирост
+              </Text>
+            </View>
           </View>
         </View>
       </Card>
@@ -341,30 +338,20 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
 
-  statsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 20,
-    paddingVertical: 16,
-    backgroundColor: tokens.surface.rowTint,
-    ...boxShadow(tokens.shadow.subtle),
-  },
-  statItem: { flex: 1, alignItems: 'center', gap: 4 },
-  statDivider: { width: 1, alignSelf: 'stretch', backgroundColor: tokens.surface.hairline },
-  statValue: { fontFamily: font.bold, fontSize: 20, color: tokens.text.primary, letterSpacing: -0.2 },
-  statLabel: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary, textAlign: 'center' },
+  // Card применяет `style` к внешнему теневому слою, а не к контенту — поэтому
+  // gap для внутренних отступов вешаем на собственную обёртку внутри Card,
+  // а не на сам Card (иначе gap молча не работает и всё слипается).
+  cardInner: { gap: tokens.spacing.md },
 
-  nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: tokens.spacing.md, paddingHorizontal: 4 },
-  nearestText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.text.secondary },
+  heroLabel: { fontFamily: font.medium, fontSize: tokens.typography.label, color: tokens.text.tertiary },
+  heroValue: { fontFamily: font.extrabold, fontSize: 28, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 4 },
+  statsRow: { flexDirection: 'row', gap: tokens.spacing.sm },
+  statTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 12 },
+  statTileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statTileLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary, flexShrink: 1 },
+  statTileValue: { fontFamily: font.bold, fontSize: tokens.typography.body, color: tokens.text.primary, marginTop: 6 },
 
   list: { gap: 10 },
-  row: {
-    borderRadius: 20,
-    padding: 16,
-    backgroundColor: tokens.surface.rowTint,
-    gap: 10,
-    ...boxShadow(tokens.shadow.subtle),
-  },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
   rowTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary },
   rowPct: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.accent.base },
@@ -377,7 +364,6 @@ const styles = StyleSheet.create({
   section: { fontFamily: font.semibold, fontSize: 20, color: tokens.text.primary, letterSpacing: -0.2, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
 
   // --- Активная цель (крупная карточка) ---
-  activeCard: { gap: tokens.spacing.md },
   activeTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
   activeIconTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, minWidth: 0 },
   activeIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
@@ -386,18 +372,18 @@ const styles = StyleSheet.create({
   activeBadgeText: { fontFamily: font.semibold, fontSize: tokens.typography.micro, color: tokens.accent.base },
   activeMainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md },
   activeRemainLabel: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
-  activeRemainValue: { fontFamily: font.bold, fontSize: 28, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 2 },
-  deltaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 6 },
+  activeRemainValue: { fontFamily: font.bold, fontSize: 28, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 4 },
+  deltaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   deltaText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.semantic.positive },
   etaBadge: {
-    alignItems: 'center', backgroundColor: hexToRgba(tokens.accent.base, 0.08),
+    alignItems: 'center', backgroundColor: tokens.surface.neutral,
     borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 8, gap: 2,
   },
   etaBadgeValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.accent.base },
   etaBadgeLabel: { fontFamily: font.regular, fontSize: 10, color: tokens.text.tertiary },
   activeSummary: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
 
-  // --- Следующие цели (компактные строки очереди) ---
+  // --- Следующие цели (компактные строки очереди — та же секция, что активная) ---
   queuedRow: {
     flexDirection: 'row', gap: tokens.spacing.md,
     borderRadius: 20, padding: 16,
@@ -408,23 +394,16 @@ const styles = StyleSheet.create({
   queuedTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary },
   waitBadge: { backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   waitBadgeText: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  queuedAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary, marginTop: 2 },
-  queuedHint: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },
+  queuedAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
+  queuedHint: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
 
   // --- Метрики (Темп дохода / Капитал) ---
-  metricCard: { gap: tokens.spacing.md },
   metricCompareRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.lg },
   metricCompareLabel: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  metricCompareValue: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary, marginTop: 2 },
+  metricCompareValue: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary, marginTop: 3 },
   metricBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
-  etaBadgeSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  etaBadgeSmallText: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  growthPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: hexToRgba(tokens.semantic.positive, 0.1), borderRadius: tokens.radius.pill,
-    paddingHorizontal: 8, paddingVertical: 4,
-  },
-  growthPillText: { fontFamily: font.semibold, fontSize: tokens.typography.micro, color: tokens.semantic.positive },
+  metricHintRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  metricHintText: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
 
   archivedRow: {
     flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md,
