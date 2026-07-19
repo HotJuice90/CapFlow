@@ -818,22 +818,24 @@ export default function AssetFormScreen() {
                   grouped
                 />
                 <Field label="Валюта">
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.currencyBar}>
-                      {ALL_CURRENCIES.map((c) => {
-                        const active = c === currency;
-                        return (
-                          <Pressable
-                            key={c}
-                            style={[styles.currencyTab, active && styles.currencyTabActive]}
-                            onPress={() => { tapBuzz(); setCurrency(c); }}
-                          >
-                            <Text style={[styles.currencyTabText, active && styles.currencyTabTextActive]}>{c}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
+                  <View style={styles.currencyBarClip}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={styles.currencyBar}>
+                        {ALL_CURRENCIES.map((c) => {
+                          const active = c === currency;
+                          return (
+                            <Pressable
+                              key={c}
+                              style={[styles.currencyTab, active && styles.currencyTabActive]}
+                              onPress={() => { tapBuzz(); setCurrency(c); }}
+                            >
+                              <Text style={[styles.currencyTabText, active && styles.currencyTabTextActive]}>{c}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                  </View>
                 </Field>
                 <NumberField label="Ставка" value={rate} onChange={setRate} suffix="%" placeholder="0" />
                 <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} />
@@ -950,6 +952,9 @@ const styles = StyleSheet.create({
   // Тот же стиль, что и таб-бар «Динамика курса» в конвертере (валют/истории) —
   // единая пилюля-подложка с ползущим активным сегментом, просто без фиксированной
   // ширины на 4 таба: тут 10 валют, лента сама растёт и скроллится.
+  // Обёртка со скруглением+обрезкой: у самой пилюли-трека правый край торчит
+  // за пределы видимой области скролла и без неё резался бы прямым углом.
+  currencyBarClip: { borderRadius: tokens.radius.pill, overflow: 'hidden' },
   currencyBar: { flexDirection: 'row', backgroundColor: 'rgba(215,226,235,0.2)', borderRadius: tokens.radius.pill, padding: 1, gap: 2 },
   currencyTab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pill },
   currencyTabActive: { backgroundColor: tokens.accent.light },
