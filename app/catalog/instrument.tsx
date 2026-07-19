@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { GradientFooter } from '@/components/GradientFooter';
 import { Card } from '@/components/Card';
 import { Toggle } from '@/components/Toggle';
 import { TextField, SelectField, Segmented } from '@/components/form/fields';
@@ -230,11 +231,11 @@ export default function InstrumentFormScreen() {
         </Card>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + tokens.spacing.md }]}>
+      <GradientFooter style={[styles.footer, { paddingBottom: insets.bottom + tokens.spacing.md }]}>
         <Pressable style={[styles.saveBtn, !canSave && styles.disabled]} disabled={!canSave} onPress={onSave}>
           <Text style={styles.saveText}>Сохранить</Text>
         </Pressable>
-      </View>
+      </GradientFooter>
     </ScreenBackground>
   );
 }
@@ -302,7 +303,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: tokens.spacing.screenH,
     paddingTop: tokens.spacing.md,
-    backgroundColor: hexToRgba('#F5F7FF', 0.7),
   },
   saveBtn: {
     backgroundColor: tokens.accent.base,
