@@ -1,7 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Dimensions,
   Pressable,
   ScrollView,
@@ -13,6 +12,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  cancelAnimation,
+  Easing as ReanimatedEasing,
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { Sparkline } from '@/components/Sparkline';
@@ -76,20 +86,36 @@ function pluralPlatform(n: number): string {
   return n === 1 ? 'площадке' : 'площадках';
 }
 
+/**
+ * Точка пагинации слайдера целей — растёт и высветляется как чистая функция
+ * расстояния между pos (непрерывная позиция слайдера) и «родной» позицией
+ * этой точки (index * SLIDE_W). Никакой привязки к дискретному активному
+ * индексу — поэтому анимация синхронна с пальцем, а не догоняет его постфактум.
+ */
+function GoalDot({ index, pos }: { index: number; pos: SharedValue<number> }) {
+  const style = useAnimatedStyle(() => {
+    const input = [(index - 1) * SLIDE_W, index * SLIDE_W, (index + 1) * SLIDE_W];
+    return {
+      width: interpolate(pos.value, input, [DOT_W, DOT_ACTIVE_W, DOT_W], Extrapolation.CLAMP),
+      opacity: interpolate(pos.value, input, [0.3, 1, 0.3], Extrapolation.CLAMP),
+    };
+  });
+  return <Animated.View style={[styles.goalDotBase, style]} />;
+}
+
 export default function HomeScreen() {
   const { data, loading, updateGoal } = useData();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sortIdx, setSortIdx] = useState(0);
-  // Скролл-позиция слайдера целей — точки пагинации следуют за ней 1:1 (медленно
-  // тянешь — медленно перетекает). Раньше пробовали через width/backgroundColor —
-  // те не поддерживают нативный драйвер, поэтому на нативном снэпе страницы
-  // анимация «спотыкалась» (JS-поток не успевал). Теперь каждая точка — это
-  // неподвижный серый кружок фиксированного размера (без анимации вообще, слот
-  // не меняет ширину) плюс акцентная заливка ТОГО ЖЕ слота, чьи opacity/scaleX
-  // (оба — нативный драйвер) проявляют её поверх при подходе скролла. Так и
-  // 1:1 следует за пальцем, и без «колбасы», ползущей поверх соседей.
-  const goalScrollX = useRef(new Animated.Value(0)).current;
+  // Слайдер целей — на reanimated+gesture-handler (UI-поток целиком, без
+  // ScrollView/onScroll): pos — непрерывная позиция в пикселях, всё остальное
+  // (сдвиг трека, ширина/прозрачность точек) — interpolate от расстояния до
+  // «родной» позиции элемента. Раньше гоняли через RN Animated + onScroll —
+  // width/backgroundColor не поддерживают нативный драйвер, поэтому анимация
+  // спотыкалась на нативном снэпе страницы (JS-поток не поспевал).
+  const goalPos = useSharedValue(0);
+  const goalStartPos = useSharedValue(0);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -143,6 +169,42 @@ export default function HomeScreen() {
     tapBuzz();
     await updateGoal({ ...goal, status: 'archived', archivedAt: new Date().toISOString() });
   };
+
+  // Если архивировали слайд и число страниц сократилось — позиция могла
+  // указывать за пределы нового списка, подтягиваем её обратно.
+  useEffect(() => {
+    const max = Math.max(0, goalSlides.length - 1) * SLIDE_W;
+    if (goalPos.value > max) goalPos.value = withTiming(max, { duration: 240 });
+  }, [goalSlides.length, goalPos]);
+
+  const goalMaxIdx = Math.max(0, goalSlides.length - 1);
+  const goalPan = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-16, 16])
+    .onStart(() => {
+      cancelAnimation(goalPos);
+      goalStartPos.value = goalPos.value;
+    })
+    .onUpdate((e) => {
+      const max = goalMaxIdx * SLIDE_W;
+      let p = goalStartPos.value - e.translationX;
+      if (p < 0) p = p / 3;
+      else if (p > max) p = max + (p - max) / 3;
+      goalPos.value = p;
+    })
+    .onEnd((e) => {
+      const cur = goalStartPos.value - e.translationX;
+      const startIdx = Math.round(goalStartPos.value / SLIDE_W);
+      let idx = Math.round(cur / SLIDE_W);
+      if (e.velocityX < -250 && idx <= startIdx) idx = startIdx + 1;
+      else if (e.velocityX > 250 && idx >= startIdx) idx = startIdx - 1;
+      if (idx < 0) idx = 0;
+      else if (idx > goalMaxIdx) idx = goalMaxIdx;
+      goalPos.value = withTiming(idx * SLIDE_W, { duration: 420, easing: ReanimatedEasing.out(ReanimatedEasing.cubic) });
+    });
+  const goalTrackStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -goalPos.value }],
+  }));
 
   if (loading) {
     return (
@@ -282,70 +344,42 @@ export default function HomeScreen() {
             </View>
             {goalSlides.length > 0 ? (
               <>
-                {/* Каждая «страница» — во весь экран (а не в ширину карточки), сама карточка
-                    внутри неё с обычным паддингом 16 — визуально всё как было, ровно по центру,
-                    ничего не торчит. Разрыв паддинга экрана на самом ScrollView (marginHorizontal:
-                    -screenH) — это не сдвигает карточку, а просто убирает жёсткую границу клипа
-                    ровно по 16px: раньше вьюпорт скролла обрезался там же, где кончается карточка,
-                    и тень тыкалась в невидимую стену; теперь у неё есть прозрачный запас с боков
-                    и сверху/снизу (paddingVertical страницы) под тень и под въезд соседней карточки. */}
+                {/* Слайдер целиком на UI-потоке (reanimated + gesture-handler, без
+                    ScrollView/onScroll): goalPos — непрерывная позиция в пикселях,
+                    трек и точки пагинации — чистые interpolate от неё же. Синхронно
+                    с пальцем в любой момент, включая финальный снэп после отпускания. */}
                 <View style={styles.goalSliderClip}>
-                  <Animated.ScrollView
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    scrollEventThrottle={16}
-                    onScroll={Animated.event(
-                      [{ nativeEvent: { contentOffset: { x: goalScrollX } } }],
-                      { useNativeDriver: true },
-                    )}
-                  >
-                    {/* Карточки на главной специально нетапабельны (onPress не передаём) —
-                        экран целей открывается через «Все цели» рядом с заголовком, а не
-                        случайным тапом по карточке во время свайпа слайдера. */}
-                    {goalSlides.map((slide, i) => (
-                      <View key={i} style={styles.goalSlidePage}>
-                        {slide.kind === 'amount' ? (
-                          <ActiveGoalCard
-                            p={slide.p}
-                            cur={cur}
-                            onArchive={() => archiveGoal(slide.p.goal)}
-                          />
-                        ) : (
-                          <MetricCard
-                            m={slide.m}
-                            cur={cur}
-                            onArchive={() => archiveGoal(slide.m.goal)}
-                          />
-                        )}
-                      </View>
-                    ))}
-                  </Animated.ScrollView>
+                  <GestureDetector gesture={goalPan}>
+                    <Animated.View style={[styles.goalTrack, goalTrackStyle]}>
+                      {/* Карточки на главной специально нетапабельны (onPress не передаём) —
+                          экран целей открывается через «Все цели» рядом с заголовком, а не
+                          случайным тапом по карточке во время свайпа слайдера. */}
+                      {goalSlides.map((slide, i) => (
+                        <View key={i} style={styles.goalSlidePage}>
+                          {slide.kind === 'amount' ? (
+                            <ActiveGoalCard
+                              p={slide.p}
+                              cur={cur}
+                              onArchive={() => archiveGoal(slide.p.goal)}
+                            />
+                          ) : (
+                            <MetricCard
+                              m={slide.m}
+                              cur={cur}
+                              onArchive={() => archiveGoal(slide.m.goal)}
+                            />
+                          )}
+                        </View>
+                      ))}
+                    </Animated.View>
+                  </GestureDetector>
                 </View>
                 {goalSlides.length > 1 ? (
                   <View style={styles.goalDotsWrap}>
                     <View style={styles.goalDots}>
-                      {goalSlides.map((_, i) => {
-                        const dotInputRange = [(i - 1) * SLIDE_W, i * SLIDE_W, (i + 1) * SLIDE_W];
-                        const fillOpacity = goalScrollX.interpolate({
-                          inputRange: dotInputRange,
-                          outputRange: [0, 1, 0],
-                          extrapolate: 'clamp',
-                        });
-                        const fillScaleX = goalScrollX.interpolate({
-                          inputRange: dotInputRange,
-                          outputRange: [DOT_W / DOT_ACTIVE_W, 1, DOT_W / DOT_ACTIVE_W],
-                          extrapolate: 'clamp',
-                        });
-                        return (
-                          <View key={i} style={styles.goalDotSlot}>
-                            <View style={styles.goalDotBase} />
-                            <Animated.View
-                              style={[styles.goalDotFill, { opacity: fillOpacity, transform: [{ scaleX: fillScaleX }] }]}
-                            />
-                          </View>
-                        );
-                      })}
+                      {goalSlides.map((_, i) => i).reverse().map((i) => (
+                        <GoalDot key={i} index={i} pos={goalPos} />
+                      ))}
                     </View>
                   </View>
                 ) : null}
@@ -591,10 +625,8 @@ function EmptyAssets() {
 const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 const SLIDE_W = Dimensions.get('window').width;
 const DOT_W = 6;
-const DOT_GAP = 4;
-const DOT_ACTIVE_W = 10;
-const GOAL_DOT_OFF = hexToRgba(tokens.text.tertiary, 0.3);
-const GOAL_DOT_ON = hexToRgba(tokens.accent.base, 1);
+const DOT_GAP = 5;
+const DOT_ACTIVE_W = 16;
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -697,20 +729,15 @@ const styles = StyleSheet.create({
   heroLeaderLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
   heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
   heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
-  goalSliderClip: { marginHorizontal: -tokens.spacing.screenH },
+  goalSliderClip: { marginHorizontal: -tokens.spacing.screenH, overflow: 'hidden' },
+  goalTrack: { flexDirection: 'row' },
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
   goalDotsWrap: { alignItems: 'center', marginTop: tokens.spacing.sm },
-  goalDots: { flexDirection: 'row', gap: DOT_GAP },
-  // Слот шириной под активную заливку (не под точку) — база и заливка обе
-  // центрируются в нём, а не растут наружу за пределы слота. Так соседний
-  // зазор не «съедается» ростом активной точки сильнее, чем на пару пикселей
-  // (при growth-в-обе-стороны идеально ровного зазора не бывает физически —
-  // либо не растёт вовсе, либо съедает соседний зазор хоть немного).
-  goalDotSlot: { width: DOT_ACTIVE_W, height: DOT_W, alignItems: 'center', justifyContent: 'center' },
-  goalDotBase: { position: 'absolute', width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_OFF },
-  goalDotFill: {
-    position: 'absolute', width: DOT_ACTIVE_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_ON,
-  },
+  // row-reverse + точки рендерятся в перевёрнутом порядке индексов (см. JSX) —
+  // визуальный порядок остаётся 0..N слева направо, но стартовый край для
+  // роста ширины у каждой точки становится правым, а не обеими сторонами.
+  goalDots: { flexDirection: 'row-reverse', alignItems: 'center', gap: DOT_GAP },
+  goalDotBase: { height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: tokens.accent.base },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
   goalEmptyTitle: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
