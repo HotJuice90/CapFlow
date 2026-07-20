@@ -16,12 +16,12 @@ import type { GoalProgress, GoalMetric } from '@/state/selectors';
 
 export function ActiveGoalCard({
   p, cur, onPress, onArchive,
-}: { p: GoalProgress; cur: CurrencyCode; onPress: () => void; onArchive?: () => void }) {
+}: { p: GoalProgress; cur: CurrencyCode; onPress?: () => void; onArchive?: () => void }) {
   const { goal, filledAmount, targetAmount, progressPct, isComplete, deltaToday, daysRemaining, completedInDays } = p;
   const remaining = Math.max(0, targetAmount - filledAmount);
   const canArchive = !!onArchive && goal.status === 'active';
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} disabled={!onPress}>
       <Card>
         <View style={styles.cardInner}>
           <View style={styles.topRow}>
@@ -100,7 +100,7 @@ export function ActiveGoalCard({
 
 export function MetricCard({
   m, cur, onPress, onArchive,
-}: { m: GoalMetric; cur: CurrencyCode; onPress: () => void; onArchive?: () => void }) {
+}: { m: GoalMetric; cur: CurrencyCode; onPress?: () => void; onArchive?: () => void }) {
   const { goal, currentValue, targetValue, progressPct, isComplete, daysRemaining } = m;
   const kind = goal.kind as GoalKind;
   const isCapital = kind === 'capital';
@@ -108,7 +108,7 @@ export function MetricCard({
   const remaining = Math.max(0, targetValue - currentValue);
   const canArchive = !!onArchive && goal.status === 'active';
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} disabled={!onPress}>
       <Card>
         <View style={styles.cardInner}>
           <View style={styles.topRow}>

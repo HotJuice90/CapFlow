@@ -300,20 +300,21 @@ export default function HomeScreen() {
                       { useNativeDriver: true },
                     )}
                   >
+                    {/* Карточки на главной специально нетапабельны (onPress не передаём) —
+                        экран целей открывается через «Все цели» рядом с заголовком, а не
+                        случайным тапом по карточке во время свайпа слайдера. */}
                     {goalSlides.map((slide, i) => (
                       <View key={i} style={styles.goalSlidePage}>
                         {slide.kind === 'amount' ? (
                           <ActiveGoalCard
                             p={slide.p}
                             cur={cur}
-                            onPress={() => router.push(`/settings/goal-form?id=${slide.p.goal.id}`)}
                             onArchive={() => archiveGoal(slide.p.goal)}
                           />
                         ) : (
                           <MetricCard
                             m={slide.m}
                             cur={cur}
-                            onPress={() => router.push(`/settings/goal-form?id=${slide.m.goal.id}`)}
                             onArchive={() => archiveGoal(slide.m.goal)}
                           />
                         )}
