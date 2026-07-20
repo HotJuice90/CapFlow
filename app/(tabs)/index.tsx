@@ -700,11 +700,15 @@ const styles = StyleSheet.create({
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
   goalDotsWrap: { alignItems: 'center', marginTop: tokens.spacing.sm },
   goalDots: { flexDirection: 'row', gap: DOT_GAP },
-  // Слот фиксированного размера (под самую широкую, активную, заливку) — сама
-  // разметка ряда не меняется от анимации, меняется только то, что внутри.
-  goalDotSlot: { width: DOT_ACTIVE_W, height: DOT_W, alignItems: 'center', justifyContent: 'center' },
-  goalDotBase: { position: 'absolute', width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_OFF },
-  goalDotFill: { position: 'absolute', width: DOT_ACTIVE_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_ON },
+  // Слот в ширину обычной точки — под разметку ряда идёт только она, реальный
+  // размер заливки в это не входит (position:absolute не участвует в layout),
+  // поэтому расстояние между точками остаётся тем же, что и в неактивном виде.
+  goalDotSlot: { width: DOT_W, height: DOT_W },
+  goalDotBase: { width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_OFF },
+  goalDotFill: {
+    position: 'absolute', top: 0, left: -(DOT_ACTIVE_W - DOT_W) / 2,
+    width: DOT_ACTIVE_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_ON,
+  },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
   goalEmptyTitle: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
