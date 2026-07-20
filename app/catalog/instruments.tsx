@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { OrgLogo } from '@/components/BankLogo';
+import { TabChip } from '@/components/TabChip';
 import { FILTER_ICON } from './organizations';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
@@ -129,18 +130,26 @@ export default function InstrumentsScreen() {
             {TABS.map((tab) => {
               const active = tab.id === activeTab;
               return (
-                <Pressable
+                <TabChip
                   key={tab.id}
-                  style={[styles.tabChip, active && styles.tabChipActive]}
+                  active={active}
                   onPress={() => setActiveTab(tab.id)}
-                >
-                  <MaterialCommunityIcons
-                    name={tab.id === 'all' ? 'view-grid-outline' : TYPE_ICON[tab.id]}
-                    size={16}
-                    color={active ? tokens.text.inverse : tab.id === 'all' ? tokens.accent.base : tokens.category[tab.id]}
-                  />
-                  <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab.label}</Text>
-                </Pressable>
+                  label={tab.label}
+                  icon={(
+                    <MaterialCommunityIcons
+                      name={tab.id === 'all' ? 'view-grid-outline' : TYPE_ICON[tab.id]}
+                      size={16}
+                      color={active ? tokens.text.inverse : tab.id === 'all' ? tokens.accent.base : tokens.category[tab.id]}
+                    />
+                  )}
+                  chipStyle={styles.tabChip}
+                  bgOff={tokens.surface.tabOff}
+                  bgOn={tokens.accent.light}
+                  textStyle={styles.tabChipText}
+                  textColorOff={hexToRgba(tokens.text.primary, 0.6)}
+                  textColorOn={tokens.text.inverse}
+                  activeFontFamily={font.semibold}
+                />
               );
             })}
           </ScrollView>
@@ -284,9 +293,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: tokens.surface.tabOff,
   },
-  tabChipActive: { backgroundColor: tokens.accent.light },
   tabChipText: { fontFamily: font.medium, fontSize: 14, color: hexToRgba(tokens.text.primary, 0.6) },
-  tabChipTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
 
   group: { marginBottom: 28 },
   groupHeader: {

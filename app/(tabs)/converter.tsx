@@ -28,6 +28,8 @@ import { CURRENCY_SYMBOL, formatMoney } from '@/format';
 import { timeAgo } from '@/format/date';
 import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { Flag } from '@/components/Flag';
+import { SegmentedTabs } from '@/components/SegmentedTabs';
+import { SlidingChipTabs } from '@/components/SlidingChipTabs';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { ScreenTitle } from '@/components/ScreenTitle';
 import { Toggle } from '@/components/Toggle';
@@ -485,20 +487,20 @@ export default function ConverterScreen() {
 
         {/* ── Режим: валюты / вклад — на всю ширину, текстом (иконки-кружки
             терялись на фоне карточек, тут акцент виден однозначно) ── */}
-        <View style={s.modeBar}>
-          {([
+        <SegmentedTabs
+          segments={[
             { key: 'currency' as const, label: 'Валюты' },
             { key: 'deposit' as const, label: 'Вклад' },
-          ]).map(({ key, label }) => (
-            <Pressable
-              key={key}
-              style={[s.modeTab, mode === key && s.modeTabActive]}
-              onPress={() => { if (mode !== key) { tapBuzz(); setMode(key); } }}
-            >
-              <Text style={[s.modeTabText, mode === key && s.modeTabTextActive]}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
+          ]}
+          value={mode}
+          onChange={setMode}
+          style={s.modeBar}
+          trackColor={D.tabBarBg}
+          pillColor={tokens.accent.base}
+          renderLabel={(seg, active) => (
+            <Text style={[s.modeTabText, active && s.modeTabTextActive]}>{seg.label}</Text>
+          )}
+        />
 
         {mode === 'currency' ? (
         <>
@@ -560,16 +562,18 @@ export default function ConverterScreen() {
 
           <View style={s.histHeaderRow}>
             <View style={s.tabBarClip}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabBar}>
-                {histTabs.map((c) => (
-                  <Pressable
-                    key={c}
-                    style={[s.tab, histTab === c && s.tabActive]}
-                    onPress={() => { tapBuzz(); setHistTab(c); }}
-                  >
-                    <Text style={[s.tabText, histTab === c && s.tabTextActive]}>{c}</Text>
-                  </Pressable>
-                ))}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <SlidingChipTabs
+                  items={histTabs.map((c) => ({ key: c, label: c }))}
+                  value={histTab}
+                  onChange={setHistTab}
+                  trackStyle={s.tabBar}
+                  chipStyle={s.tab}
+                  pillColor={D.tabActiveBg}
+                  textStyle={s.tabText}
+                  textColorOff={tokens.text.tertiary}
+                  textColorOn={tokens.text.inverse}
+                />
               </ScrollView>
             </View>
             <Text style={s.bigRate}>{displayAmount((rates[histTab] ?? 0) / (rates[base] ?? 1))} {CURRENCY_SYMBOL[base]}</Text>
@@ -804,7 +808,6 @@ const s = StyleSheet.create({
   tabBarClip: { width: 204, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   tabBar: { flexDirection: 'row', backgroundColor: D.tabBarBg, padding: 1 },
   tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pill },
-  tabActive: { backgroundColor: D.tabActiveBg },
   // letterSpacing -0.56 — не декоративный, а часть расчёта ширины: tabBarClip
   // (204px) откалиброван ровно под 4 валюты с этим трекингом, без него текст
   // шире и «хвост» пятой валюты вылезает из-под обрезки.
@@ -812,7 +815,6 @@ const s = StyleSheet.create({
     fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase',
     letterSpacing: -0.56, color: tokens.text.tertiary,
   },
-  tabTextActive: { color: tokens.text.inverse },
   bigRate: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24, flexShrink: 0 },
   badge: {
     borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.chip, paddingVertical: tokens.spacing.xs, gap: tokens.spacing.chip,
@@ -842,12 +844,10 @@ const s = StyleSheet.create({
   },
   // Высота — естественная (paddingVertical 11×2 + lineHeight 16 = 38),
   // без forced height: lineHeight fontSize+2 — тот же минимум, что и везде.
-  modeTab: {
-    flex: 1, paddingVertical: 11, borderRadius: tokens.radius.pill,
-    alignItems: 'center', justifyContent: 'center',
+  modeTabText: {
+    fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.accent.base,
+    paddingVertical: 11,
   },
-  modeTabActive: { backgroundColor: tokens.accent.base },
-  modeTabText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', color: tokens.accent.base },
   modeTabTextActive: { color: tokens.text.inverse, fontFamily: 'Onest_600SemiBold' },
 
   // ── Калькулятор вклада ──

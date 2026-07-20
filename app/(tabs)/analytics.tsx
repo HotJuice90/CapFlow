@@ -13,6 +13,8 @@ import { OrgLogo } from '@/components/BankLogo';
 import { InfoTap } from '@/components/InfoTap';
 import { CompareDonut } from '@/components/CompareDonut';
 import { CapitalAxisChart } from '@/components/CapitalAxisChart';
+import { SegmentedTabs } from '@/components/SegmentedTabs';
+import { SlidingChipTabs } from '@/components/SlidingChipTabs';
 import { useData } from '@/state/DataContext';
 import { tapBuzz } from '@/lib/haptics';
 import {
@@ -266,17 +268,17 @@ export default function AnalyticsScreen() {
 
             <View style={styles.heroSummaryCard}>
               <View style={styles.heroSummaryLeft}>
-                <View style={styles.heroPeriodRow}>
-                  {HERO_PERIODS.map((p) => (
-                    <Pressable
-                      key={p.key}
-                      style={[styles.heroPeriodChip, heroPeriod === p.key && styles.heroPeriodChipActive]}
-                      onPress={() => { tapBuzz(); setHeroPeriod(p.key); }}
-                    >
-                      <Text style={[styles.heroPeriodText, heroPeriod === p.key && styles.heroPeriodTextActive]}>{p.label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <SlidingChipTabs
+                  items={HERO_PERIODS.map((p) => ({ key: p.key, label: p.label }))}
+                  value={heroPeriod}
+                  onChange={setHeroPeriod}
+                  trackStyle={styles.heroPeriodRow}
+                  chipStyle={styles.heroPeriodChip}
+                  pillColor={tokens.accent.light}
+                  textStyle={styles.heroPeriodText}
+                  textColorOff={hexToRgba(tokens.text.primary, 0.5)}
+                  textColorOn={tokens.text.inverse}
+                />
                 <View style={{ minWidth: 0 }}>
                   <Text
                     style={[styles.heroEarnedValue, { color: earnedPeriod >= 0 ? tokens.semantic.positive : tokens.semantic.negative }]}
@@ -587,20 +589,20 @@ export default function AnalyticsScreen() {
               {taxAssetRows.length > 0 || taxOrgRows.length > 0 ? (
                 <>
                   <View style={styles.taxSepToTabs} />
-                  <View style={styles.taxTabPillWrap}>
-                    <Pressable
-                      style={[styles.taxTabSegment, taxTab === 'assets' && styles.taxTabSegmentActive]}
-                      onPress={() => { tapBuzz(); setTaxTab('assets'); }}
-                    >
-                      <Text style={[styles.taxTabSegmentText, taxTab === 'assets' && styles.taxTabSegmentTextActive]}>Активы</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.taxTabSegment, taxTab === 'orgs' && styles.taxTabSegmentActive]}
-                      onPress={() => { tapBuzz(); setTaxTab('orgs'); }}
-                    >
-                      <Text style={[styles.taxTabSegmentText, taxTab === 'orgs' && styles.taxTabSegmentTextActive]}>Площадки</Text>
-                    </Pressable>
-                  </View>
+                  <SegmentedTabs
+                    segments={[
+                      { key: 'assets' as const, label: 'Активы' },
+                      { key: 'orgs' as const, label: 'Площадки' },
+                    ]}
+                    value={taxTab}
+                    onChange={setTaxTab}
+                    style={styles.taxTabPillWrap}
+                    trackColor={tokens.surface.tabOff}
+                    pillColor={tokens.accent.light}
+                    renderLabel={(seg, active) => (
+                      <Text style={[styles.taxTabSegmentText, active && styles.taxTabSegmentTextActive]}>{seg.label}</Text>
+                    )}
+                  />
                   {taxRows.map((r, i) => {
                     const primary = r.taxToDate ?? r.tax;
                     const secondary = r.taxToDate !== undefined ? r.tax : undefined;
@@ -804,9 +806,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(215,226,235,0.2)',
   },
   heroPeriodChip: { alignItems: 'center', justifyContent: 'center', height: 25, paddingHorizontal: tokens.spacing.tight, borderRadius: tokens.radius.pill },
-  heroPeriodChipActive: { backgroundColor: tokens.accent.light },
   heroPeriodText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.26 },
-  heroPeriodTextActive: { color: tokens.text.inverse },
   heroEarnedValue: { fontSize: 26, lineHeight: 28, fontFamily: font.semibold, letterSpacing: -0.24 },
   heroEarnedLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 4 },
   heroDivider: { width: 1, alignSelf: 'stretch', backgroundColor: tokens.surface.hairline },
@@ -935,11 +935,12 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.surface.tabOff,
     marginBottom: tokens.spacing.xl,
   },
-  taxTabSegment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: tokens.radius.pill },
-  taxTabSegmentActive: { backgroundColor: tokens.accent.light },
   // lineHeight не был задан явно — нативный интерлиньяж Onest раздувал таб
   // выше паддинга, из-за чего он казался «толще», чем 10px на самом деле.
-  taxTabSegmentText: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.14 },
+  taxTabSegmentText: {
+    fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium,
+    color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.14, paddingVertical: 10,
+  },
   taxTabSegmentTextActive: { fontFamily: font.semibold, color: tokens.text.inverse },
   taxRowIconBox: { width: 34, height: 34, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
   taxByInstrumentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
