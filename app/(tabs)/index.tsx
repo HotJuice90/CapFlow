@@ -323,28 +323,26 @@ export default function HomeScreen() {
                 </View>
                 {goalSlides.length > 1 ? (
                   <View style={styles.goalDotsWrap}>
-                    <View style={styles.goalDots}>
-                      {goalSlides.map((_, i) => {
-                        const dotInputRange = [(i - 1) * SLIDE_W, i * SLIDE_W, (i + 1) * SLIDE_W];
-                        const fillOpacity = goalScrollX.interpolate({
-                          inputRange: dotInputRange,
-                          outputRange: [0, 1, 0],
-                          extrapolate: 'clamp',
-                        });
-                        const fillScaleX = goalScrollX.interpolate({
-                          inputRange: dotInputRange,
-                          outputRange: [DOT_W / DOT_ACTIVE_W, 1, DOT_W / DOT_ACTIVE_W],
-                          extrapolate: 'clamp',
-                        });
-                        return (
-                          <View key={i} style={styles.goalDotSlot}>
-                            <View style={styles.goalDotBase} />
-                            <Animated.View
-                              style={[styles.goalDotFill, { opacity: fillOpacity, transform: [{ scaleX: fillScaleX }] }]}
-                            />
-                          </View>
-                        );
-                      })}
+                    <View style={styles.goalDotsTrack}>
+                      <View style={styles.goalDots}>
+                        {goalSlides.map((_, i) => (
+                          <View key={i} style={styles.goalDotBase} />
+                        ))}
+                      </View>
+                      <Animated.View
+                        style={[
+                          styles.goalDotFill,
+                          {
+                            transform: [{
+                              translateX: goalScrollX.interpolate({
+                                inputRange: goalSlides.map((_, i) => i * SLIDE_W),
+                                outputRange: goalSlides.map((_, i) => i * DOT_PITCH),
+                                extrapolate: 'clamp',
+                              }),
+                            }],
+                          },
+                        ]}
+                      />
                     </View>
                   </View>
                 ) : null}
@@ -590,7 +588,8 @@ function EmptyAssets() {
 const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 const SLIDE_W = Dimensions.get('window').width;
 const DOT_W = 6;
-const DOT_GAP = 6;
+const DOT_GAP = 10;
+const DOT_PITCH = DOT_W + DOT_GAP;
 const DOT_ACTIVE_W = 16;
 const GOAL_DOT_OFF = hexToRgba(tokens.text.tertiary, 0.3);
 const GOAL_DOT_ON = hexToRgba(tokens.accent.base, 1);
@@ -699,12 +698,14 @@ const styles = StyleSheet.create({
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH },
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
   goalDotsWrap: { alignItems: 'center', marginTop: tokens.spacing.sm },
+  // Трек — без явной ширины, чтобы сжаться ровно по ряду точек (единственный
+  // child здесь), тогда абсолютно спозиционированная пилюля-заливка внутри
+  // окажется точно на первой точке, а не где-то в центре широкого враппера.
+  goalDotsTrack: { position: 'relative' },
   goalDots: { flexDirection: 'row', gap: DOT_GAP },
-  // Слот в ширину обычной точки — под разметку ряда идёт только она, реальный
-  // размер заливки в это не входит (position:absolute не участвует в layout),
-  // поэтому расстояние между точками остаётся тем же, что и в неактивном виде.
-  goalDotSlot: { width: DOT_W, height: DOT_W },
   goalDotBase: { width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_OFF },
+  // Одна бегущая пилюля поверх — едет translateX'ом синхронно со скроллом
+  // (нативный драйвер, направленно — не «раздувается» на месте в обе стороны).
   goalDotFill: {
     position: 'absolute', top: 0, left: -(DOT_ACTIVE_W - DOT_W) / 2,
     width: DOT_ACTIVE_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_ON,
