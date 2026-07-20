@@ -199,11 +199,14 @@ export default function GoalsScreen() {
                           <View style={styles.archivedTrack}>
                             <View style={styles.archivedFill} />
                           </View>
-                          <Text style={styles.archivedDoneSub}>
-                            {doneP.completedInDays !== null
-                              ? `Выполнено за ${doneP.completedInDays} ${pluralDays(doneP.completedInDays)}`
-                              : formatMoney(g.targetAmount, { currency: g.currency, kopecks: 'hide' })}
-                          </Text>
+                          <View style={styles.archivedDoneRow}>
+                            <Text style={styles.archivedDoneSum}>
+                              {formatMoney(g.targetAmount, { currency: g.currency, kopecks: 'hide' })}
+                            </Text>
+                            {doneP.completedInDays !== null ? (
+                              <Text style={styles.archivedDoneSub}>за {doneP.completedInDays} {pluralDays(doneP.completedInDays)}</Text>
+                            ) : null}
+                          </View>
                         </>
                       ) : (
                         <Text style={styles.archivedSub}>
@@ -318,6 +321,8 @@ const styles = StyleSheet.create({
   archivedSub: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
   archivedTrack: { height: 6, borderRadius: 3, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden' },
   archivedFill: { height: '100%', width: '100%', borderRadius: 3, backgroundColor: tokens.semantic.positive },
+  archivedDoneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  archivedDoneSum: { fontFamily: font.semibold, fontSize: tokens.typography.hint, color: tokens.text.secondary },
   archivedDoneSub: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },

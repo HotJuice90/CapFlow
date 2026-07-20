@@ -71,15 +71,17 @@ export function ActiveGoalCard({
 
           {isComplete ? (
             <View style={styles.footerRow}>
-              <Text style={styles.footerDoneText} numberOfLines={1}>
-                🎉 Достигнута{completedInDays !== null ? ` за ${completedInDays} ${pluralDays(completedInDays)}` : ''}
-              </Text>
-              {canArchive ? (
-                <Pressable style={styles.archiveInlineBtn} onPress={onArchive} hitSlop={8}>
-                  <MaterialIcons name="archive" size={14} color={tokens.accent.base} />
-                  <Text style={styles.archiveInlineText}>В архив</Text>
-                </Pressable>
-              ) : null}
+              <Text style={styles.footerDoneSum}>{formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })}</Text>
+              <View style={styles.footerDoneRight}>
+                <Text style={styles.footerDoneText} numberOfLines={1}>
+                  {completedInDays !== null ? `за ${completedInDays} ${pluralDays(completedInDays)}` : 'Достигнута'}
+                </Text>
+                {canArchive ? (
+                  <Pressable onPress={onArchive} hitSlop={8}>
+                    <MaterialIcons name="archive" size={16} color={tokens.text.tertiary} />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ) : (
             <View style={styles.footerRow}>
@@ -160,13 +162,15 @@ export function MetricCard({
 
           {isComplete ? (
             <View style={styles.footerRow}>
-              <Text style={styles.footerDoneText} numberOfLines={1}>🎉 Цель достигнута!</Text>
-              {canArchive ? (
-                <Pressable style={styles.archiveInlineBtn} onPress={onArchive} hitSlop={8}>
-                  <MaterialIcons name="archive" size={14} color={tokens.accent.base} />
-                  <Text style={styles.archiveInlineText}>В архив</Text>
-                </Pressable>
-              ) : null}
+              <Text style={styles.footerDoneSum}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
+              <View style={styles.footerDoneRight}>
+                <Text style={styles.footerDoneText} numberOfLines={1}>Достигнута</Text>
+                {canArchive ? (
+                  <Pressable onPress={onArchive} hitSlop={8}>
+                    <MaterialIcons name="archive" size={16} color={tokens.text.tertiary} />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ) : isCapital ? (
             <View style={styles.footerRow}>
@@ -223,11 +227,7 @@ const styles = StyleSheet.create({
   footerPct: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.accent.base },
   footerAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
   footerTargetHint: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  footerDoneText: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.hint, color: tokens.semantic.positive },
-  archiveInlineBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: hexToRgba(tokens.accent.base, 0.1), borderRadius: tokens.radius.pill,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  archiveInlineText: { fontFamily: font.semibold, fontSize: tokens.typography.micro, color: tokens.accent.base },
+  footerDoneSum: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.semantic.positive },
+  footerDoneRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  footerDoneText: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
 });
