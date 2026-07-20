@@ -110,16 +110,17 @@ export default function HomeScreen() {
   const goals = useMemo(() => goalsProgress(data), [data]);
   // Приоритет как на экране «Цели»: сперва уже достигнутая-но-неархивная (её
   // давно пора отметить/убрать в архив), потом та, что реально ещё копится.
+  // Архивную НЕ подставляем как заглушку — если активных/неархивных нет,
+  // слайда для этой категории просто не будет (не висит мёртвым грузом).
   const activeGoal = goals.find((g) => g.isComplete && g.goal.status === 'active')
-    ?? goals.find((g) => !g.isComplete && g.goal.status === 'active')
-    ?? goals[goals.length - 1];
+    ?? goals.find((g) => !g.isComplete && g.goal.status === 'active');
   // «Темп дохода»/«Капитал» — измерители, не участвуют в очереди, поэтому
-  // на Главную попадает просто первая активная цель каждого вида (createdAt).
-  // Архивная-но-достигнутая тоже подходит (не перестаёт быть достижением),
-  // архивная-и-недостигнутая — нет (это просто отложенная запись).
+  // на Главную попадает первая ещё не архивная цель каждого вида (createdAt) —
+  // достигнутая-но-неархивная тоже годится (не перестаёт быть достижением),
+  // архивная — нет, вне зависимости от isComplete.
   const metrics = useMemo(() => standaloneGoalsProgress(data), [data]);
-  const incomeRateGoal = metrics.find((m) => m.goal.kind === 'incomeRate' && (m.goal.status === 'active' || m.isComplete));
-  const capitalGoal = metrics.find((m) => m.goal.kind === 'capital' && (m.goal.status === 'active' || m.isComplete));
+  const incomeRateGoal = metrics.find((m) => m.goal.kind === 'incomeRate' && m.goal.status === 'active');
+  const capitalGoal = metrics.find((m) => m.goal.kind === 'capital' && m.goal.status === 'active');
   const hasAnyGoal = !!activeGoal || !!incomeRateGoal || !!capitalGoal;
   type GoalSlide =
     | { kind: 'amount'; p: GoalProgress }
@@ -263,7 +264,7 @@ export default function HomeScreen() {
             ) : null}
 
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Цель</Text>
+              <Text style={styles.sectionTitle}>Текущие цели</Text>
               {hasAnyGoal ? (
                 <Pressable onPress={() => router.push('/settings/goals')} hitSlop={8}>
                   <Text style={styles.link}>Все цели</Text>
