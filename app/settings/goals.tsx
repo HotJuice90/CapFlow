@@ -23,9 +23,15 @@ export default function GoalsScreen() {
 
   const progress = useMemo(() => goalsProgress(data), [data]);
   const metrics = useMemo(() => standaloneGoalsProgress(data), [data]);
-  // Архивная-но-достигнутая метрика тоже остаётся видна в своей секции (та же
-  // логика, что и для «Суммы») — а вот архивная-и-НЕ-достигнутая туда не
-  // попадает, это просто отложенная в архив запись, без активного прогресса.
+  // Полные списки (для счётчиков наверху) — завершённые считаем независимо от
+  // статуса, это факт, а не текущее место в очереди. Видимые же секции ниже
+  // показывают только status==='active': как только цель архивируешь кнопкой
+  // в карточке, она пропадает из своей секции и уезжает в «Архив» —
+  // подтверждение, что тап реально что-то сделал, а не просто спрятал иконку.
+  // Архивная-и-НЕ-достигнутая метрика — по сути отложенная запись без
+  // активного прогресса, в счёт «в игре» не идёт вообще (ни в счётчики,
+  // ни в секции). Архивная-но-достигнутая считается (это факт), но видна
+  // только в «Архиве» — из своей секции она уезжает при архивировании.
   const incomeRateMetrics = useMemo(
     () => metrics.filter((m) => m.goal.kind === 'incomeRate' && (m.goal.status === 'active' || m.isComplete)),
     [metrics],
@@ -34,11 +40,12 @@ export default function GoalsScreen() {
     () => metrics.filter((m) => m.goal.kind === 'capital' && (m.goal.status === 'active' || m.isComplete)),
     [metrics],
   );
+  const incomeRateMetricsVisible = useMemo(() => incomeRateMetrics.filter((m) => m.goal.status === 'active'), [incomeRateMetrics]);
+  const capitalMetricsVisible = useMemo(() => capitalMetrics.filter((m) => m.goal.status === 'active'), [capitalMetrics]);
 
-  // Завершённые остаются завершёнными и после архивации — это факт, а не
-  // текущий статус в очереди, поэтому completeAmount не фильтруем по status.
   const incompleteAmount = useMemo(() => progress.filter((p) => !p.isComplete && p.goal.status === 'active'), [progress]);
   const completeAmount = useMemo(() => progress.filter((p) => p.isComplete), [progress]);
+  const completeAmountVisible = useMemo(() => completeAmount.filter((p) => p.goal.status === 'active'), [completeAmount]);
   const activeAmountGoal = incompleteAmount[0];
   const queuedAmountGoals = incompleteAmount.slice(1);
 
@@ -46,10 +53,7 @@ export default function GoalsScreen() {
     () => new Set([...completeAmount.map((p) => p.goal.id), ...metrics.filter((m) => m.isComplete).map((m) => m.goal.id)]),
     [completeAmount, metrics],
   );
-  const archived = useMemo(
-    () => data.goals.filter((g) => g.status === 'archived' && !completeGoalIds.has(g.id)),
-    [data.goals, completeGoalIds],
-  );
+  const archived = useMemo(() => data.goals.filter((g) => g.status === 'archived'), [data.goals]);
 
   // Три параллельных типа целей не противоречат друг другу — счётчик наверху
   // просто суммирует все, независимо от типа (в отличие от очереди-водопада,
@@ -141,33 +145,33 @@ export default function GoalsScreen() {
               </>
             ) : null}
 
-            {incomeRateMetrics.length > 0 ? (
+            {incomeRateMetricsVisible.length > 0 ? (
               <>
                 <Text style={styles.section}>Цели по доходу</Text>
                 <View style={styles.list}>
-                  {incomeRateMetrics.map((m) => (
+                  {incomeRateMetricsVisible.map((m) => (
                     <MetricCard key={m.goal.id} m={m} cur={cur} onPress={() => goTo(m.goal.id)} onArchive={() => archiveGoal(m.goal)} />
                   ))}
                 </View>
               </>
             ) : null}
 
-            {capitalMetrics.length > 0 ? (
+            {capitalMetricsVisible.length > 0 ? (
               <>
                 <Text style={styles.section}>Цели по капиталу</Text>
                 <View style={styles.list}>
-                  {capitalMetrics.map((m) => (
+                  {capitalMetricsVisible.map((m) => (
                     <MetricCard key={m.goal.id} m={m} cur={cur} onPress={() => goTo(m.goal.id)} onArchive={() => archiveGoal(m.goal)} />
                   ))}
                 </View>
               </>
             ) : null}
 
-            {completeAmount.length > 0 ? (
+            {completeAmountVisible.length > 0 ? (
               <>
                 <Text style={styles.section}>Завершённые цели</Text>
                 <View style={styles.list}>
-                  {completeAmount.map((p) => (
+                  {completeAmountVisible.map((p) => (
                     <CompletedGoalRow key={p.goal.id} p={p} cur={cur} onPress={() => goTo(p.goal.id)} onArchive={() => archiveGoal(p.goal)} />
                   ))}
                 </View>
@@ -189,6 +193,12 @@ export default function GoalsScreen() {
                       {g.kind === 'incomeRate' ? `/${g.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : ''}
                     </Text>
                   </View>
+                  {completeGoalIds.has(g.id) ? (
+                    <View style={styles.doneBadge}>
+                      <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                      <Text style={styles.doneBadgeText}>{g.kind === 'amount' || !g.kind ? 'Выполнено' : 'Достигнуто'}</Text>
+                    </View>
+                  ) : null}
                   <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
                 </Pressable>
               ))}
