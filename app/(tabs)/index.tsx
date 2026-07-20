@@ -268,23 +268,22 @@ export default function HomeScreen() {
             </View>
             {goalSlides.length > 0 ? (
               <>
-                {/* Разрываем паддинг экрана (marginHorizontal:-screenH), чтобы у карточек
-                    было место под тень и они реально выезжали с края экрана, а не из
-                    сейф-зоны; gap между слайдами — иначе тени соседних карточек режутся
-                    друг о друга. Из-за этого paging теперь на snapToInterval, не pagingEnabled
-                    (тот снэпит на ширину вьюпорта, а вьюпорт теперь во весь экран). */}
+                {/* Каждая «страница» — во весь экран (а не в ширину карточки), сама карточка
+                    внутри неё с обычным паддингом 16 — визуально всё как было, ровно по центру,
+                    ничего не торчит. Разрыв паддинга экрана на самом ScrollView (marginHorizontal:
+                    -screenH) — это не сдвигает карточку, а просто убирает жёсткую границу клипа
+                    ровно по 16px: раньше вьюпорт скролла обрезался там же, где кончается карточка,
+                    и тень тыкалась в невидимую стену; теперь у неё есть прозрачный запас с боков
+                    и сверху/снизу (paddingVertical страницы) под тень и под въезд соседней карточки. */}
                 <View style={styles.goalSliderClip}>
                   <ScrollView
                     horizontal
-                    decelerationRate="fast"
-                    snapToInterval={SPARK_W + tokens.spacing.md}
-                    snapToAlignment="start"
+                    pagingEnabled
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.goalSliderContent}
-                    onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / (SPARK_W + tokens.spacing.md)))}
+                    onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / SLIDE_W))}
                   >
                     {goalSlides.map((slide, i) => (
-                      <View key={i} style={{ width: SPARK_W }}>
+                      <View key={i} style={styles.goalSlidePage}>
                         {slide.kind === 'amount' ? (
                           <ActiveGoalCard
                             p={slide.p}
@@ -551,6 +550,7 @@ function EmptyAssets() {
 }
 
 const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
+const SLIDE_W = Dimensions.get('window').width;
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
   heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
   heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH },
-  goalSliderContent: { gap: tokens.spacing.md, paddingVertical: 4 },
+  goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
   goalDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: tokens.spacing.sm },
   goalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: hexToRgba(tokens.text.tertiary, 0.3) },
   goalDotActive: { backgroundColor: tokens.accent.base, width: 16 },
