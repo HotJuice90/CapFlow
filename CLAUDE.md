@@ -90,6 +90,29 @@ ETF, облигации-флоатеры, структурные продукт�
   ОБЯЗАТЕЛЬНО передавать `offColor: tokens.surface.tabOff` (тот же токен, что
   у неактивных чипов в `app/catalog/instruments.tsx` → `tabChip`), иначе трек
   сливается с фоном. Пример: `app/settings/data-format.tsx`.
+- **Свайп-карусель / пагинация (жестовая анимация)**: только через
+  `react-native-reanimated` + `react-native-gesture-handler`, НЕ через классический
+  `Animated` API. Причина: `Animated` не даёт native driver на `width`/`backgroundColor`,
+  из-за этого анимация точек/пилюли дёргается на JS-потоке при нативном fling —
+  этого категорически нельзя вылечить внутри `Animated`, проверено на практике
+  (см. историю мучений с пагинацией целей на главном экране). Принцип:
+  - Один `SharedValue<number>` = позиция скролла в пикселях (`pos`). НЕ дискретный
+    индекс — вся анимация выводится как `interpolate(pos.value, [...], [...])`
+    от расстояния до "домашней" позиции каждого элемента (`index * SLIDE_WIDTH`).
+  - `Gesture.Pan().activeOffsetX([-12,12]).failOffsetY([-16,16])` — так горизонтальный
+    свайп забирает жест, а вертикальный проваливается в скролл экрана.
+  - `onStart`: `cancelAnimation(pos)` + запомнить стартовую позицию.
+  - `onUpdate`: rubber-band за краями (делить избыток на 3).
+  - `onEnd`: `Math.round` до ближайшего индекса + оверрайд по `velocityX`
+    (флик быстрее ~250px/s продвигает на слайд дальше, даже если сам drag
+    не дотянул до половины) → `withTiming(idx * SLIDE_WIDTH, {duration:420,
+    easing: Easing.out(Easing.cubic)})`.
+  - Однонаправленный рост точки при активности (без раздувания в обе стороны):
+    рендерить ряд точек с `flexDirection: 'row-reverse'` + маппить по
+    `[...indices].reverse()`.
+  - `GestureDetector` можно юзать где угодно без доп. настройки — `GestureHandlerRootView`
+    уже оборачивает всё приложение в `app/_layout.tsx`.
+  - Образец: `app/(tabs)/index.tsx` — слайдер целей (`goalPos`, `GoalDot`, `goalPan`).
 
 ## DO NOT (грабли)
 
