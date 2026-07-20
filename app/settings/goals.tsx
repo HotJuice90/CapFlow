@@ -53,6 +53,9 @@ export default function GoalsScreen() {
     () => new Set([...completeAmount.map((p) => p.goal.id), ...metrics.filter((m) => m.isComplete).map((m) => m.goal.id)]),
     [completeAmount, metrics],
   );
+  // Для архивной секции: у целей по сумме есть completedInDays (сколько заняло
+  // достижение) — у метрик такого нет, они не «копятся» во времени.
+  const completeAmountById = useMemo(() => new Map(completeAmount.map((p) => [p.goal.id, p])), [completeAmount]);
   const archived = useMemo(() => data.goals.filter((g) => g.status === 'archived'), [data.goals]);
 
   // Три параллельных типа целей не противоречат друг другу — счётчик наверху
@@ -129,8 +132,11 @@ export default function GoalsScreen() {
               <>
                 <Text style={styles.section}>Цели по сумме</Text>
                 <View style={styles.list}>
+                  {completeAmountVisible.map((p) => (
+                    <ActiveGoalCard key={p.goal.id} p={p} cur={cur} onPress={() => goTo(p.goal.id)} onArchive={() => archiveGoal(p.goal)} />
+                  ))}
                   {activeAmountGoal ? (
-                    <ActiveGoalCard p={activeAmountGoal} cur={cur} onPress={() => goTo(activeAmountGoal.goal.id)} />
+                    <ActiveGoalCard p={activeAmountGoal} cur={cur} onPress={() => goTo(activeAmountGoal.goal.id)} onArchive={() => archiveGoal(activeAmountGoal.goal)} />
                   ) : null}
                   {queuedAmountGoals.map((p, i) => (
                     <QueuedGoalRow
@@ -166,17 +172,6 @@ export default function GoalsScreen() {
                 </View>
               </>
             ) : null}
-
-            {completeAmountVisible.length > 0 ? (
-              <>
-                <Text style={styles.section}>Завершённые цели</Text>
-                <View style={styles.list}>
-                  {completeAmountVisible.map((p) => (
-                    <CompletedGoalRow key={p.goal.id} p={p} cur={cur} onPress={() => goTo(p.goal.id)} onArchive={() => archiveGoal(p.goal)} />
-                  ))}
-                </View>
-              </>
-            ) : null}
           </>
         )}
 
@@ -184,24 +179,43 @@ export default function GoalsScreen() {
           <>
             <Text style={styles.section}>Архив</Text>
             <View style={styles.list}>
-              {archived.map((g) => (
-                <Pressable key={g.id} style={styles.archivedRow} onPress={() => goTo(g.id)}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.archivedTitle} numberOfLines={1}>{g.title}</Text>
-                    <Text style={styles.archivedSub}>
-                      {formatMoney(g.targetAmount, { currency: g.currency, kopecks: 'hide' })}
-                      {g.kind === 'incomeRate' ? `/${g.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : ''}
-                    </Text>
-                  </View>
-                  {completeGoalIds.has(g.id) ? (
-                    <View style={styles.doneBadge}>
-                      <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-                      <Text style={styles.doneBadgeText}>{g.kind === 'amount' || !g.kind ? 'Выполнено' : 'Достигнуто'}</Text>
+              {archived.map((g) => {
+                const doneP = completeAmountById.get(g.id);
+                const isDoneMetric = !doneP && completeGoalIds.has(g.id);
+                return (
+                  <Pressable key={g.id} style={styles.archivedRow} onPress={() => goTo(g.id)}>
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <View style={styles.archivedTopRow}>
+                        <Text style={styles.archivedTitle} numberOfLines={1}>{g.title}</Text>
+                        {doneP || isDoneMetric ? (
+                          <View style={styles.doneBadge}>
+                            <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                            <Text style={styles.doneBadgeText}>{g.kind === 'amount' || !g.kind ? 'Выполнено' : 'Достигнуто'}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      {doneP ? (
+                        <>
+                          <View style={styles.archivedTrack}>
+                            <View style={styles.archivedFill} />
+                          </View>
+                          <Text style={styles.archivedDoneSub}>
+                            {doneP.completedInDays !== null
+                              ? `Выполнено за ${doneP.completedInDays} ${pluralDays(doneP.completedInDays)}`
+                              : formatMoney(g.targetAmount, { currency: g.currency, kopecks: 'hide' })}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={styles.archivedSub}>
+                          {formatMoney(g.targetAmount, { currency: g.currency, kopecks: 'hide' })}
+                          {g.kind === 'incomeRate' ? `/${g.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : ''}
+                        </Text>
+                      )}
                     </View>
-                  ) : null}
-                  <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
-                </Pressable>
-              ))}
+                    <MaterialIcons name="chevron-right" size={22} color={tokens.text.tertiary} />
+                  </Pressable>
+                );
+              })}
             </View>
           </>
         ) : null}
@@ -253,32 +267,6 @@ function QueuedGoalRow({
   );
 }
 
-function CompletedGoalRow({
-  p, cur, onPress, onArchive,
-}: { p: GoalProgress; cur: CurrencyCode; onPress: () => void; onArchive: () => void }) {
-  const { goal, targetAmount, completedInDays } = p;
-  return (
-    <View style={styles.archivedRow}>
-      <Pressable style={{ flex: 1 }} onPress={onPress}>
-        <Text style={styles.archivedTitle} numberOfLines={1}>{goal.title}</Text>
-        <Text style={styles.archivedSub}>
-          {formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })}
-          {completedInDays !== null ? ` • Выполнено за ${completedInDays} ${pluralDays(completedInDays)}` : ''}
-        </Text>
-      </Pressable>
-      <View style={styles.doneBadge}>
-        <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-        <Text style={styles.doneBadgeText}>Выполнено</Text>
-      </View>
-      {goal.status === 'active' ? (
-        <Pressable onPress={onArchive} hitSlop={10}>
-          <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.xl },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
@@ -325,8 +313,12 @@ const styles = StyleSheet.create({
     borderRadius: 20, paddingHorizontal: 16, paddingVertical: 16,
     backgroundColor: tokens.surface.rowTint, ...boxShadow(tokens.shadow.subtle),
   },
-  archivedTitle: { fontFamily: font.medium, fontSize: tokens.typography.label, color: tokens.text.secondary },
-  archivedSub: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary, marginTop: 2 },
+  archivedTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
+  archivedTitle: { flex: 1, fontFamily: font.medium, fontSize: tokens.typography.label, color: tokens.text.secondary },
+  archivedSub: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
+  archivedTrack: { height: 6, borderRadius: 3, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden' },
+  archivedFill: { height: '100%', width: '100%', borderRadius: 3, backgroundColor: tokens.semantic.positive },
+  archivedDoneSub: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontFamily: font.semibold, fontSize: tokens.typography.title, color: tokens.text.primary, marginTop: tokens.spacing.md },
