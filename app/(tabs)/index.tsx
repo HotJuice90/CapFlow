@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -81,9 +82,20 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sortIdx, setSortIdx] = useState(0);
-  // Скролл-позиция слайдера целей — гоняет анимированную пилюлю-индикатор под
-  // пагинацией плавно вместе с пальцем, а не скачком по onMomentumScrollEnd.
-  const goalScrollX = useRef(new Animated.Value(0)).current;
+  // Индекс текущего слайда целей + анимированное значение под него — точки
+  // пагинации плавно доезжают (Animated.timing) при смене индекса, а не
+  // дёргаются вслед за сырыми пикселями скролла (тот скачет на iOS/Android
+  // по-разному в момент снэпа страницы).
+  const [goalSlideIdx, setGoalSlideIdx] = useState(0);
+  const goalDotAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(goalDotAnim, {
+      toValue: goalSlideIdx,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [goalSlideIdx, goalDotAnim]);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -137,6 +149,11 @@ export default function HomeScreen() {
     tapBuzz();
     await updateGoal({ ...goal, status: 'archived', archivedAt: new Date().toISOString() });
   };
+  // Если архивировали слайд и число страниц сократилось — индекс мог указывать
+  // за пределы нового списка, точки пагинации тогда рисовали бы не то.
+  useEffect(() => {
+    if (goalSlideIdx > Math.max(0, goalSlides.length - 1)) setGoalSlideIdx(0);
+  }, [goalSlides.length, goalSlideIdx]);
 
   if (loading) {
     return (
@@ -284,15 +301,12 @@ export default function HomeScreen() {
                     и тень тыкалась в невидимую стену; теперь у неё есть прозрачный запас с боков
                     и сверху/снизу (paddingVertical страницы) под тень и под въезд соседней карточки. */}
                 <View style={styles.goalSliderClip}>
-                  <Animated.ScrollView
+                  <ScrollView
                     horizontal
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
-                    scrollEventThrottle={16}
-                    onScroll={Animated.event(
-                      [{ nativeEvent: { contentOffset: { x: goalScrollX } } }],
-                      { useNativeDriver: true },
-                    )}
+                    onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / SLIDE_W))}
+                    onScrollEndDrag={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / SLIDE_W))}
                   >
                     {goalSlides.map((slide, i) => (
                       <View key={i} style={styles.goalSlidePage}>
@@ -313,25 +327,25 @@ export default function HomeScreen() {
                         )}
                       </View>
                     ))}
-                  </Animated.ScrollView>
+                  </ScrollView>
                 </View>
                 {goalSlides.length > 1 ? (
                   <View style={styles.goalDotsWrap}>
                     <View style={styles.goalDots}>
                       {goalSlides.map((_, i) => {
-                        const dotInputRange = [(i - 1) * SLIDE_W, i * SLIDE_W, (i + 1) * SLIDE_W];
+                        const dotInputRange = [i - 1, i, i + 1];
                         return (
                           <Animated.View
                             key={i}
                             style={[
                               styles.goalDot,
                               {
-                                width: goalScrollX.interpolate({
+                                width: goalDotAnim.interpolate({
                                   inputRange: dotInputRange,
                                   outputRange: [DOT_W, DOT_ACTIVE_W, DOT_W],
                                   extrapolate: 'clamp',
                                 }),
-                                backgroundColor: goalScrollX.interpolate({
+                                backgroundColor: goalDotAnim.interpolate({
                                   inputRange: dotInputRange,
                                   outputRange: [GOAL_DOT_OFF, GOAL_DOT_ON, GOAL_DOT_OFF],
                                   extrapolate: 'clamp',
