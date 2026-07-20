@@ -590,8 +590,8 @@ function EmptyAssets() {
 const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 const SLIDE_W = Dimensions.get('window').width;
 const DOT_W = 6;
-const DOT_GAP = 8;
-const DOT_ACTIVE_W = 16;
+const DOT_GAP = 4;
+const DOT_ACTIVE_W = 10;
 const GOAL_DOT_OFF = hexToRgba(tokens.text.tertiary, 0.3);
 const GOAL_DOT_ON = hexToRgba(tokens.accent.base, 1);
 
@@ -700,13 +700,15 @@ const styles = StyleSheet.create({
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
   goalDotsWrap: { alignItems: 'center', marginTop: tokens.spacing.sm },
   goalDots: { flexDirection: 'row', gap: DOT_GAP },
-  // Слот в ширину обычной точки — заливка шире, но она position:absolute и
-  // в разметку ряда не входит, поэтому расстояние между точками не раздувается.
-  goalDotSlot: { width: DOT_W, height: DOT_W },
-  goalDotBase: { width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_OFF },
+  // Слот шириной под активную заливку (не под точку) — база и заливка обе
+  // центрируются в нём, а не растут наружу за пределы слота. Так соседний
+  // зазор не «съедается» ростом активной точки сильнее, чем на пару пикселей
+  // (при growth-в-обе-стороны идеально ровного зазора не бывает физически —
+  // либо не растёт вовсе, либо съедает соседний зазор хоть немного).
+  goalDotSlot: { width: DOT_ACTIVE_W, height: DOT_W, alignItems: 'center', justifyContent: 'center' },
+  goalDotBase: { position: 'absolute', width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_OFF },
   goalDotFill: {
-    position: 'absolute', top: 0, left: -(DOT_ACTIVE_W - DOT_W) / 2,
-    width: DOT_ACTIVE_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_ON,
+    position: 'absolute', width: DOT_ACTIVE_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: GOAL_DOT_ON,
   },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
