@@ -45,11 +45,9 @@ export function ActiveGoalCard({
 
           <View style={styles.mainRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.remainLabel}>Осталось</Text>
+              <Text style={styles.remainLabel}>{isComplete ? 'Цель' : 'Осталось'}</Text>
               <Text style={styles.remainValue} numberOfLines={1} adjustsFontSizeToFit>
-                {isComplete
-                  ? `${formatMoney(remaining, { currency: cur, kopecks: 'hide' })} из ${formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })}`
-                  : formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
+                {formatMoney(isComplete ? targetAmount : remaining, { currency: cur, kopecks: 'hide' })}
               </Text>
               {!isComplete && deltaToday > 0 ? (
                 <View style={styles.deltaRow}>
@@ -135,11 +133,9 @@ export function MetricCard({
           {isCapital ? (
             <View style={styles.mainRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.remainLabel}>Осталось</Text>
+                <Text style={styles.remainLabel}>{isComplete ? 'Цель' : 'Осталось'}</Text>
                 <Text style={styles.remainValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {isComplete
-                    ? `${formatMoney(remaining, { currency: cur, kopecks: 'hide' })} из ${formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}`
-                    : formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
+                  {formatMoney(isComplete ? targetValue : remaining, { currency: cur, kopecks: 'hide' })}
                 </Text>
               </View>
               {daysRemaining !== null ? (
