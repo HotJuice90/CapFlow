@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   Pressable,
   ScrollView,
@@ -80,7 +81,9 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sortIdx, setSortIdx] = useState(0);
-  const [goalSlideIdx, setGoalSlideIdx] = useState(0);
+  // Скролл-позиция слайдера целей — гоняет анимированную пилюлю-индикатор под
+  // пагинацией плавно вместе с пальцем, а не скачком по onMomentumScrollEnd.
+  const goalScrollX = useRef(new Animated.Value(0)).current;
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -281,11 +284,15 @@ export default function HomeScreen() {
                     и тень тыкалась в невидимую стену; теперь у неё есть прозрачный запас с боков
                     и сверху/снизу (paddingVertical страницы) под тень и под въезд соседней карточки. */}
                 <View style={styles.goalSliderClip}>
-                  <ScrollView
+                  <Animated.ScrollView
                     horizontal
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
-                    onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / SLIDE_W))}
+                    scrollEventThrottle={16}
+                    onScroll={Animated.event(
+                      [{ nativeEvent: { contentOffset: { x: goalScrollX } } }],
+                      { useNativeDriver: true },
+                    )}
                   >
                     {goalSlides.map((slide, i) => (
                       <View key={i} style={styles.goalSlidePage}>
@@ -306,13 +313,31 @@ export default function HomeScreen() {
                         )}
                       </View>
                     ))}
-                  </ScrollView>
+                  </Animated.ScrollView>
                 </View>
                 {goalSlides.length > 1 ? (
-                  <View style={styles.goalDots}>
-                    {goalSlides.map((_, i) => (
-                      <View key={i} style={[styles.goalDot, i === goalSlideIdx && styles.goalDotActive]} />
-                    ))}
+                  <View style={styles.goalDotsWrap}>
+                    <View style={styles.goalDotsInner}>
+                      <View style={styles.goalDots}>
+                        {goalSlides.map((_, i) => (
+                          <View key={i} style={styles.goalDot} />
+                        ))}
+                      </View>
+                      <Animated.View
+                        style={[
+                          styles.goalDotActivePill,
+                          {
+                            transform: [{
+                              translateX: goalScrollX.interpolate({
+                                inputRange: goalSlides.map((_, i) => i * SLIDE_W),
+                                outputRange: goalSlides.map((_, i) => i * DOT_PITCH),
+                                extrapolate: 'clamp',
+                              }),
+                            }],
+                          },
+                        ]}
+                      />
+                    </View>
                   </View>
                 ) : null}
               </>
@@ -556,6 +581,10 @@ function EmptyAssets() {
 
 const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 const SLIDE_W = Dimensions.get('window').width;
+const DOT_W = 6;
+const DOT_GAP = 6;
+const DOT_PITCH = DOT_W + DOT_GAP;
+const DOT_ACTIVE_W = 16;
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -660,9 +689,19 @@ const styles = StyleSheet.create({
   heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH },
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
-  goalDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: tokens.spacing.sm },
-  goalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: hexToRgba(tokens.text.tertiary, 0.3) },
-  goalDotActive: { backgroundColor: tokens.accent.base, width: 16 },
+  goalDotsWrap: { alignItems: 'center', marginTop: tokens.spacing.sm },
+  goalDotsInner: { position: 'relative' },
+  goalDots: { flexDirection: 'row', gap: DOT_GAP },
+  goalDot: { width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: hexToRgba(tokens.text.tertiary, 0.3) },
+  goalDotActivePill: {
+    position: 'absolute',
+    top: 0,
+    left: -(DOT_ACTIVE_W - DOT_W) / 2,
+    width: DOT_ACTIVE_W,
+    height: DOT_W,
+    borderRadius: DOT_W / 2,
+    backgroundColor: tokens.accent.base,
+  },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
   goalEmptyTitle: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
