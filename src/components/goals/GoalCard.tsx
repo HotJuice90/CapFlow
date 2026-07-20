@@ -110,6 +110,7 @@ export function MetricCard({
   const isCapital = kind === 'capital';
   const periodSuffix = kind === 'incomeRate' ? `/${goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : '';
   const remaining = Math.max(0, targetValue - currentValue);
+  const canArchive = !!onArchive && goal.status === 'active';
   return (
     <Pressable onPress={onPress}>
       <Card>
@@ -121,26 +122,37 @@ export function MetricCard({
               </View>
               <Text style={styles.title} numberOfLines={1}>{goal.title}</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
-              {isComplete ? (
-                <View style={styles.doneBadge}>
-                  <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
-                  <Text style={styles.doneBadgeText}>Достигнуто</Text>
-                </View>
-              ) : (
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>Активная цель</Text>
-                </View>
-              )}
-              {isComplete && onArchive && goal.status === 'active' ? (
-                <Pressable onPress={onArchive} hitSlop={10}>
-                  <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
-                </Pressable>
-              ) : null}
-            </View>
+            {isComplete ? (
+              <View style={styles.doneBadge}>
+                <MaterialIcons name="check" size={12} color={tokens.semantic.positive} />
+                <Text style={styles.doneBadgeText}>Достигнуто</Text>
+              </View>
+            ) : (
+              <View style={styles.activeBadge}>
+                <Text style={styles.activeBadgeText}>Активная цель</Text>
+              </View>
+            )}
           </View>
 
-          {isCapital ? (
+          {isComplete ? (
+            <>
+              <View style={styles.track}>
+                <View style={[styles.fill, styles.fillDone, { width: '100%' }]} />
+              </View>
+              <View style={styles.celebrateBlock}>
+                <Text style={styles.celebrateTitle}>🎉 Цель достигнута!</Text>
+                <Text style={styles.celebrateSub}>
+                  Сейчас: {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
+                </Text>
+                {canArchive ? (
+                  <Pressable style={styles.archiveBtn} onPress={onArchive}>
+                    <MaterialIcons name="archive" size={16} color={tokens.accent.base} />
+                    <Text style={styles.archiveBtnText}>В архив</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </>
+          ) : isCapital ? (
             <>
               <View style={styles.mainRow}>
                 <View style={{ flex: 1 }}>
@@ -158,7 +170,7 @@ export function MetricCard({
                 ) : null}
               </View>
               <View style={styles.track}>
-                <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
+                <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }]} />
               </View>
               <View style={styles.footerRow}>
                 <Text style={styles.footerPct}>{Math.round(progressPct)}%</Text>
@@ -178,7 +190,7 @@ export function MetricCard({
                 </View>
               </View>
               <View style={styles.track}>
-                <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
+                <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }]} />
               </View>
               <View style={styles.footerRow}>
                 <Text style={styles.footerPct}>{Math.round(progressPct)}%</Text>
