@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { RatesSection } from '@/components/RatesSection';
+import { SpinIcon } from '@/components/SpinIcon';
+import { RefreshIcon } from '@/components/RefreshIcon';
 import { useData } from '@/state/DataContext';
 import { tokens, font, hexToRgba } from '@/theme';
 
@@ -44,11 +46,9 @@ export default function RatesScreen() {
               <MaterialIcons name="edit" size={20} color={tokens.accent.base} />
             </Pressable>
             <Pressable onPress={onRefresh} hitSlop={12} style={styles.refreshBtn} disabled={refreshing}>
-              {refreshing ? (
-                <ActivityIndicator size="small" color={tokens.accent.base} />
-              ) : (
-                <MaterialIcons name="refresh" size={20} color={tokens.accent.base} />
-              )}
+              <SpinIcon spinning={refreshing}>
+                <RefreshIcon size={20} color={tokens.accent.base} />
+              </SpinIcon>
             </Pressable>
           </View>
         </View>

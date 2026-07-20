@@ -30,6 +30,8 @@ import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { Flag } from '@/components/Flag';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { SlidingChipTabs } from '@/components/SlidingChipTabs';
+import { SpinIcon, RotateOnTap } from '@/components/SpinIcon';
+import { RefreshIcon } from '@/components/RefreshIcon';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { ScreenTitle } from '@/components/ScreenTitle';
 import { Toggle } from '@/components/Toggle';
@@ -348,15 +350,19 @@ export default function ConverterScreen() {
     setActiveIdx(idx);
   };
 
+  const [resetSpin, setResetSpin] = useState(0);
   const resetAmounts = () => {
     tapBuzz();
     setAmountText('');
     setActiveIdx(0);
+    setResetSpin((n) => n + 1);
   };
 
+  const [resetDepSpin, setResetDepSpin] = useState(0);
   const resetDeposit = () => {
     tapBuzz();
     setDepAmountText('');
+    setResetDepSpin((n) => n + 1);
   };
 
   const openPicker = (slotIdx: number) => {
@@ -541,7 +547,9 @@ export default function ConverterScreen() {
 
           {/* Кнопка сброса показаний */}
           <Pressable style={[s.resetBtn, { top: topCardH - 22 }]} onPress={resetAmounts} hitSlop={8}>
-            <RotateLeftIcon width={20} height={20} color={tokens.text.inverse} />
+            <RotateOnTap trigger={resetSpin}>
+              <RotateLeftIcon width={20} height={20} color={tokens.text.inverse} />
+            </RotateOnTap>
           </Pressable>
         </View>
 
@@ -552,7 +560,9 @@ export default function ConverterScreen() {
             <Text style={s.updatedText}>
               {refreshing ? 'Обновляю…' : `Обновлено: ${data.ratesUpdatedAt ? timeAgo(data.ratesUpdatedAt) : '—'}`}
             </Text>
-            <MaterialIcons name="refresh" size={13} color={tokens.text.tertiary} />
+            <SpinIcon spinning={refreshing}>
+              <RefreshIcon size={13} color={tokens.text.tertiary} />
+            </SpinIcon>
           </Pressable>
         </View>
 
@@ -642,7 +652,9 @@ export default function ConverterScreen() {
 
           {/* Кнопка сброса — тот же rotate-left, что у валют */}
           <Pressable style={[s.resetBtn, { top: topCardH - 22 }]} onPress={resetDeposit} hitSlop={8}>
-            <RotateLeftIcon width={20} height={20} color={tokens.text.inverse} />
+            <RotateOnTap trigger={resetDepSpin}>
+              <RotateLeftIcon width={20} height={20} color={tokens.text.inverse} />
+            </RotateOnTap>
           </Pressable>
 
           <View style={s.bottomCard}>
