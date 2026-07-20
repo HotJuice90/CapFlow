@@ -268,32 +268,42 @@ export default function HomeScreen() {
             </View>
             {goalSlides.length > 0 ? (
               <>
-                <ScrollView
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / SPARK_W))}
-                >
-                  {goalSlides.map((slide, i) => (
-                    <View key={i} style={{ width: SPARK_W }}>
-                      {slide.kind === 'amount' ? (
-                        <ActiveGoalCard
-                          p={slide.p}
-                          cur={cur}
-                          onPress={() => router.push(`/settings/goal-form?id=${slide.p.goal.id}`)}
-                          onArchive={() => archiveGoal(slide.p.goal)}
-                        />
-                      ) : (
-                        <MetricCard
-                          m={slide.m}
-                          cur={cur}
-                          onPress={() => router.push(`/settings/goal-form?id=${slide.m.goal.id}`)}
-                          onArchive={() => archiveGoal(slide.m.goal)}
-                        />
-                      )}
-                    </View>
-                  ))}
-                </ScrollView>
+                {/* Разрываем паддинг экрана (marginHorizontal:-screenH), чтобы у карточек
+                    было место под тень и они реально выезжали с края экрана, а не из
+                    сейф-зоны; gap между слайдами — иначе тени соседних карточек режутся
+                    друг о друга. Из-за этого paging теперь на snapToInterval, не pagingEnabled
+                    (тот снэпит на ширину вьюпорта, а вьюпорт теперь во весь экран). */}
+                <View style={styles.goalSliderClip}>
+                  <ScrollView
+                    horizontal
+                    decelerationRate="fast"
+                    snapToInterval={SPARK_W + tokens.spacing.md}
+                    snapToAlignment="start"
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.goalSliderContent}
+                    onMomentumScrollEnd={(e) => setGoalSlideIdx(Math.round(e.nativeEvent.contentOffset.x / (SPARK_W + tokens.spacing.md)))}
+                  >
+                    {goalSlides.map((slide, i) => (
+                      <View key={i} style={{ width: SPARK_W }}>
+                        {slide.kind === 'amount' ? (
+                          <ActiveGoalCard
+                            p={slide.p}
+                            cur={cur}
+                            onPress={() => router.push(`/settings/goal-form?id=${slide.p.goal.id}`)}
+                            onArchive={() => archiveGoal(slide.p.goal)}
+                          />
+                        ) : (
+                          <MetricCard
+                            m={slide.m}
+                            cur={cur}
+                            onPress={() => router.push(`/settings/goal-form?id=${slide.m.goal.id}`)}
+                            onArchive={() => archiveGoal(slide.m.goal)}
+                          />
+                        )}
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
                 {goalSlides.length > 1 ? (
                   <View style={styles.goalDots}>
                     {goalSlides.map((_, i) => (
@@ -643,6 +653,8 @@ const styles = StyleSheet.create({
   heroLeaderLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
   heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
   heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
+  goalSliderClip: { marginHorizontal: -tokens.spacing.screenH },
+  goalSliderContent: { gap: tokens.spacing.md, paddingVertical: 4 },
   goalDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: tokens.spacing.sm },
   goalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: hexToRgba(tokens.text.tertiary, 0.3) },
   goalDotActive: { backgroundColor: tokens.accent.base, width: 16 },

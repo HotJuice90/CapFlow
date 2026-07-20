@@ -89,7 +89,7 @@ export function ActiveGoalCard({
 export function MetricCard({
   m, cur, onPress, onArchive,
 }: { m: GoalMetric; cur: CurrencyCode; onPress: () => void; onArchive?: () => void }) {
-  const { goal, currentValue, targetValue, progressPct, isComplete, daysRemaining, growthPerPeriod } = m;
+  const { goal, currentValue, targetValue, progressPct, isComplete, daysRemaining } = m;
   const kind = goal.kind as GoalKind;
   const isCapital = kind === 'capital';
   const periodSuffix = kind === 'incomeRate' ? `/${goal.incomeRatePeriod === 'month' ? 'мес' : 'день'}` : '';
@@ -170,12 +170,9 @@ export function MetricCard({
               </View>
               <View style={styles.footerRow}>
                 <Text style={styles.footerPct}>{Math.round(progressPct)}%</Text>
-                <View style={styles.growthRow}>
-                  <MaterialIcons name="trending-up" size={12} color={tokens.semantic.positive} />
-                  <Text style={styles.growthText}>
-                    +{formatMoney(growthPerPeriod, { currency: cur, kopecks: 'hide' })}{periodSuffix} прирост
-                  </Text>
-                </View>
+                <Text style={styles.footerAmount}>
+                  {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix} из {formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
+                </Text>
               </View>
             </>
           )}
@@ -218,6 +215,4 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   footerPct: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.accent.base },
   footerAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
-  growthRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  growthText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.semantic.positive },
 });

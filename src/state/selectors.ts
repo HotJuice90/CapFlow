@@ -1771,9 +1771,6 @@ export interface GoalMetric {
    *  (капитал растёт доходом, без учёта будущих пополнений/снятий). Для
    *  incomeRate не считается — цель не накопительная, «ждать дни» бессмысленно. */
   daysRemaining: number | null;
-  /** темп прироста «сейчас» в основной валюте — для incomeRate это currentValue
-   *  за period цели (день/месяц), для capital — доход портфеля в месяц. */
-  growthPerPeriod: number;
 }
 
 /**
@@ -1812,7 +1809,6 @@ export function standaloneGoalsProgress(data: AppData, now: Date = new Date()): 
       progressPct: targetValue > 0 ? Math.min(100, (currentValue / targetValue) * 100) : 100,
       isComplete,
       daysRemaining,
-      growthPerPeriod: g.kind === 'incomeRate' ? currentValue : ps.incomePerMonth,
     };
   });
 }
