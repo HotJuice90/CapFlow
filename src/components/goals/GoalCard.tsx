@@ -160,18 +160,14 @@ export function MetricCard({
                     {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
                   </Text>
                 </View>
-                <View style={styles.etaBadge}>
-                  <Text style={styles.etaBadgeLabel}>Цель</Text>
-                  <Text style={styles.etaBadgeValue}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
-                </View>
               </View>
               <View style={styles.track}>
                 <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
               </View>
               <View style={styles.footerRow}>
                 <Text style={styles.footerPct}>{Math.round(progressPct)}%</Text>
-                <Text style={styles.footerAmount}>
-                  {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix} из {formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
+                <Text style={styles.footerTargetHint}>
+                  Цель: {formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
                 </Text>
               </View>
             </>
@@ -215,4 +211,5 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   footerPct: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.accent.base },
   footerAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
+  footerTargetHint: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
 });
