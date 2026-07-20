@@ -108,7 +108,11 @@ export default function HomeScreen() {
   // очереди» (первую незаполненную) — остальные ждут своей очереди, отдельно
   // им сейчас копиться не в что.
   const goals = useMemo(() => goalsProgress(data), [data]);
-  const activeGoal = goals.find((g) => !g.isComplete && g.goal.status === 'active') ?? goals[goals.length - 1];
+  // Приоритет как на экране «Цели»: сперва уже достигнутая-но-неархивная (её
+  // давно пора отметить/убрать в архив), потом та, что реально ещё копится.
+  const activeGoal = goals.find((g) => g.isComplete && g.goal.status === 'active')
+    ?? goals.find((g) => !g.isComplete && g.goal.status === 'active')
+    ?? goals[goals.length - 1];
   // «Темп дохода»/«Капитал» — измерители, не участвуют в очереди, поэтому
   // на Главную попадает просто первая активная цель каждого вида (createdAt).
   // Архивная-но-достигнутая тоже подходит (не перестаёт быть достижением),
