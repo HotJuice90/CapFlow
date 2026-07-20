@@ -41,7 +41,7 @@ export function ActiveGoalCard({
                   <Text style={styles.activeBadgeText}>Активная цель</Text>
                 </View>
               )}
-              {isComplete && onArchive ? (
+              {isComplete && onArchive && goal.status === 'active' ? (
                 <Pressable onPress={onArchive} hitSlop={10}>
                   <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
                 </Pressable>
@@ -116,7 +116,7 @@ export function MetricCard({
                   <Text style={styles.activeBadgeText}>Активная цель</Text>
                 </View>
               )}
-              {isComplete && onArchive ? (
+              {isComplete && onArchive && goal.status === 'active' ? (
                 <Pressable onPress={onArchive} hitSlop={10}>
                   <MaterialIcons name="archive" size={18} color={tokens.text.tertiary} />
                 </Pressable>
