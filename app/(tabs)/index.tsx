@@ -317,26 +317,30 @@ export default function HomeScreen() {
                 </View>
                 {goalSlides.length > 1 ? (
                   <View style={styles.goalDotsWrap}>
-                    <View style={styles.goalDotsInner}>
-                      <View style={styles.goalDots}>
-                        {goalSlides.map((_, i) => (
-                          <View key={i} style={styles.goalDot} />
-                        ))}
-                      </View>
-                      <Animated.View
-                        style={[
-                          styles.goalDotActivePill,
-                          {
-                            transform: [{
-                              translateX: goalScrollX.interpolate({
-                                inputRange: goalSlides.map((_, i) => i * SLIDE_W),
-                                outputRange: goalSlides.map((_, i) => i * DOT_PITCH),
-                                extrapolate: 'clamp',
-                              }),
-                            }],
-                          },
-                        ]}
-                      />
+                    <View style={styles.goalDots}>
+                      {goalSlides.map((_, i) => {
+                        const dotInputRange = [(i - 1) * SLIDE_W, i * SLIDE_W, (i + 1) * SLIDE_W];
+                        return (
+                          <Animated.View
+                            key={i}
+                            style={[
+                              styles.goalDot,
+                              {
+                                width: goalScrollX.interpolate({
+                                  inputRange: dotInputRange,
+                                  outputRange: [DOT_W, DOT_ACTIVE_W, DOT_W],
+                                  extrapolate: 'clamp',
+                                }),
+                                backgroundColor: goalScrollX.interpolate({
+                                  inputRange: dotInputRange,
+                                  outputRange: [GOAL_DOT_OFF, GOAL_DOT_ON, GOAL_DOT_OFF],
+                                  extrapolate: 'clamp',
+                                }),
+                              },
+                            ]}
+                          />
+                        );
+                      })}
                     </View>
                   </View>
                 ) : null}
@@ -583,8 +587,9 @@ const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 const SLIDE_W = Dimensions.get('window').width;
 const DOT_W = 6;
 const DOT_GAP = 6;
-const DOT_PITCH = DOT_W + DOT_GAP;
 const DOT_ACTIVE_W = 16;
+const GOAL_DOT_OFF = hexToRgba(tokens.text.tertiary, 0.3);
+const GOAL_DOT_ON = hexToRgba(tokens.accent.base, 1);
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -690,18 +695,8 @@ const styles = StyleSheet.create({
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH },
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
   goalDotsWrap: { alignItems: 'center', marginTop: tokens.spacing.sm },
-  goalDotsInner: { position: 'relative' },
-  goalDots: { flexDirection: 'row', gap: DOT_GAP },
-  goalDot: { width: DOT_W, height: DOT_W, borderRadius: DOT_W / 2, backgroundColor: hexToRgba(tokens.text.tertiary, 0.3) },
-  goalDotActivePill: {
-    position: 'absolute',
-    top: 0,
-    left: -(DOT_ACTIVE_W - DOT_W) / 2,
-    width: DOT_ACTIVE_W,
-    height: DOT_W,
-    borderRadius: DOT_W / 2,
-    backgroundColor: tokens.accent.base,
-  },
+  goalDots: { flexDirection: 'row', alignItems: 'center', gap: DOT_GAP },
+  goalDot: { height: DOT_W, borderRadius: DOT_W / 2 },
   goalEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   goalEmptyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: hexToRgba(tokens.accent.base, 0.12), alignItems: 'center', justifyContent: 'center' },
   goalEmptyTitle: { fontSize: tokens.typography.label, fontFamily: font.semibold, color: tokens.text.primary },
