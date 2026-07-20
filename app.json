@@ -2,7 +2,7 @@
   "expo": {
     "name": "CapFlow",
     "slug": "capflow",
-    "version": "0.8.32",
+    "version": "0.8.33",
     "scheme": "capflow",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
