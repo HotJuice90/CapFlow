@@ -47,7 +47,9 @@ export function ActiveGoalCard({
             <View style={{ flex: 1 }}>
               <Text style={styles.remainLabel}>Осталось</Text>
               <Text style={styles.remainValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
+                {isComplete
+                  ? `${formatMoney(remaining, { currency: cur, kopecks: 'hide' })} из ${formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })}`
+                  : formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
               </Text>
               {!isComplete && deltaToday > 0 ? (
                 <View style={styles.deltaRow}>
@@ -70,18 +72,19 @@ export function ActiveGoalCard({
           </View>
 
           {isComplete ? (
-            <View style={styles.footerRow}>
-              <Text style={styles.footerDoneSum}>{formatMoney(targetAmount, { currency: cur, kopecks: 'hide' })}</Text>
-              <View style={styles.footerDoneRight}>
-                <Text style={styles.footerDoneText} numberOfLines={1}>
-                  {completedInDays !== null ? `за ${completedInDays} ${pluralDays(completedInDays)}` : 'Достигнута'}
+            <View style={styles.doneRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.celebrateTitle}>🎉 Цель достигнута!</Text>
+                <Text style={styles.celebrateSub}>
+                  {completedInDays !== null ? `Выполнена за ${completedInDays} ${pluralDays(completedInDays)}` : 'Выполнена'}
                 </Text>
-                {canArchive ? (
-                  <Pressable onPress={onArchive} hitSlop={8}>
-                    <MaterialIcons name="archive" size={16} color={tokens.text.tertiary} />
-                  </Pressable>
-                ) : null}
               </View>
+              {canArchive ? (
+                <Pressable style={styles.archiveBtn} onPress={onArchive}>
+                  <MaterialIcons name="archive" size={16} color={tokens.accent.base} />
+                  <Text style={styles.archiveBtnText}>В архив</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             <View style={styles.footerRow}>
@@ -134,7 +137,9 @@ export function MetricCard({
               <View style={{ flex: 1 }}>
                 <Text style={styles.remainLabel}>Осталось</Text>
                 <Text style={styles.remainValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
+                  {isComplete
+                    ? `${formatMoney(remaining, { currency: cur, kopecks: 'hide' })} из ${formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}`
+                    : formatMoney(remaining, { currency: cur, kopecks: 'hide' })}
                 </Text>
               </View>
               {daysRemaining !== null ? (
@@ -161,16 +166,19 @@ export function MetricCard({
           </View>
 
           {isComplete ? (
-            <View style={styles.footerRow}>
-              <Text style={styles.footerDoneSum}>{formatMoney(targetValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}</Text>
-              <View style={styles.footerDoneRight}>
-                <Text style={styles.footerDoneText} numberOfLines={1}>Достигнута</Text>
-                {canArchive ? (
-                  <Pressable onPress={onArchive} hitSlop={8}>
-                    <MaterialIcons name="archive" size={16} color={tokens.text.tertiary} />
-                  </Pressable>
-                ) : null}
+            <View style={styles.doneRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.celebrateTitle}>🎉 Цель достигнута!</Text>
+                <Text style={styles.celebrateSub}>
+                  Сейчас: {formatMoney(currentValue, { currency: cur, kopecks: 'hide' })}{periodSuffix}
+                </Text>
               </View>
+              {canArchive ? (
+                <Pressable style={styles.archiveBtn} onPress={onArchive}>
+                  <MaterialIcons name="archive" size={16} color={tokens.accent.base} />
+                  <Text style={styles.archiveBtnText}>В архив</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : isCapital ? (
             <View style={styles.footerRow}>
@@ -227,7 +235,13 @@ const styles = StyleSheet.create({
   footerPct: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.accent.base },
   footerAmount: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
   footerTargetHint: { fontFamily: font.regular, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  footerDoneSum: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.semantic.positive },
-  footerDoneRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  footerDoneText: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  celebrateTitle: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.text.primary },
+  celebrateSub: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.secondary, marginTop: 2 },
+  archiveBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: hexToRgba(tokens.accent.base, 0.1), borderRadius: tokens.radius.pill,
+    paddingHorizontal: 14, paddingVertical: 9,
+  },
+  archiveBtnText: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.accent.base },
 });
