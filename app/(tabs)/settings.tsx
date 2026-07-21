@@ -89,6 +89,14 @@ export default function SettingsScreen() {
           <SettingsRow icon="archive" color={tokens.accent.base} label="Архив активов" onPress={() => router.push('/archive')} />
           <Divider />
           <SettingsRow icon="flag" color={tokens.semantic.positive} label="Цели" onPress={() => router.push('/settings/goals')} />
+          <Divider />
+          <SettingsRow
+            icon="account-balance-wallet"
+            color="#7143AE"
+            label="Свободные деньги"
+            value={formatMoney(freeCapital, { currency: data.settings.defaultCurrency, kopecks: 'hide' })}
+            onPress={() => router.push('/settings/capital')}
+          />
           {/* Уведомления — временно скрыты, экран не готов. Не удалять роут/строку, просто не рендерим. */}
         </Group>
 
@@ -100,14 +108,6 @@ export default function SettingsScreen() {
           <SettingsRow icon="account-balance" color="#3E63DD" label="Ключевая ставка ЦБ" value={formatPercent(data.params.keyRate)} onPress={() => router.push('/settings/key-rate')} />
           <Divider />
           <SettingsRow icon="description" color="#FF5C00" label="Налоговые параметры" onPress={() => router.push('/settings/tax')} />
-          <Divider />
-          <SettingsRow
-            icon="account-balance-wallet"
-            color="#7143AE"
-            label="Свободные деньги"
-            value={formatMoney(freeCapital, { currency: data.settings.defaultCurrency, kopecks: 'hide' })}
-            onPress={() => router.push('/settings/capital')}
-          />
           <Divider />
           <SettingsRow icon="format-list-numbered" color="#3E63DD" label="Формат данных" onPress={() => router.push('/settings/data-format')} />
         </Group>
