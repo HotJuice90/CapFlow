@@ -5,6 +5,8 @@ import Svg, { Defs, LinearGradient, RadialGradient, Stop, Text as SvgText, Circl
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { SpinIcon } from '@/components/SpinIcon';
+import { RefreshIcon } from '@/components/RefreshIcon';
 import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
@@ -59,23 +61,6 @@ function RecordMark({ kind }: { kind: 'max' | 'min' }) {
   return (
     <Svg width={9} height={9} viewBox="0 0 12 12" style={[styles.recordMark, kind === 'min' && { transform: [{ rotate: '180deg' }] }]}>
       <Path d={TRIANGLE_PATH} fill={color} />
-    </Svg>
-  );
-}
-
-/** Иконка обновления из Figma — новая версия из двух отдельных заливок
- * (две дуги-стрелки), без общего контура с «дыркой» — раньше рисовалась криво. */
-function RefreshIcon({ size = 18, color = tokens.text.primary }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 18 18">
-      <Path
-        d="M16.5 8.25001C16.9142 8.25001 17.25 8.5858 17.25 9.00001C17.25 13.5564 13.5563 17.25 9 17.25C6.73436 17.25 4.68357 16.3339 3.19336 14.8565C3.18825 15.083 3.18793 15.3567 3.18945 15.6973L3.19629 17.1865C3.19804 17.6005 2.86413 17.9374 2.4502 17.9395C2.03609 17.9413 1.69831 17.6074 1.69629 17.1934L1.68945 15.7041C1.68688 15.1281 1.6839 14.6323 1.72754 14.2324C1.77286 13.8174 1.87675 13.4111 2.15332 13.0537C2.26917 12.904 2.40305 12.7692 2.55273 12.6533C2.91011 12.3768 3.31642 12.2738 3.73145 12.2285C4.13139 12.1848 4.62693 12.1879 5.20312 12.1904L6.69238 12.1973C7.10652 12.1991 7.44119 12.5361 7.43945 12.9502C7.4376 13.3644 7.09976 13.6991 6.68555 13.6973L5.19629 13.6904C4.7497 13.6884 4.41848 13.688 4.15723 13.7002C5.38472 14.9648 7.09994 15.75 9 15.75C12.7279 15.75 15.75 12.7279 15.75 9.00001C15.75 8.5858 16.0858 8.25001 16.5 8.25001Z"
-        fill={color}
-      />
-      <Path
-        d="M15.4883 7.61573e-06C15.9025 -0.0018404 16.2403 0.332872 16.2422 0.747078L16.249 2.23634C16.2516 2.81237 16.2546 3.30816 16.2109 3.70802C16.1656 4.12289 16.0616 4.5285 15.7852 4.88575C15.6693 5.03542 15.5354 5.1703 15.3857 5.28614C15.0284 5.56271 14.6221 5.6666 14.207 5.71192C13.8071 5.7556 13.3115 5.7516 12.7354 5.74903L11.2461 5.7422C10.8319 5.74035 10.4972 5.40347 10.499 4.98927C10.5009 4.57508 10.8387 4.24035 11.2529 4.2422L12.7422 4.24903C13.1893 4.25103 13.5208 4.25156 13.7822 4.23927C12.5591 3.01057 10.8693 2.25001 9 2.25001C5.27208 2.25001 2.25 5.27209 2.25 9.00001C2.25 9.41422 1.91421 9.75001 1.5 9.75001C1.08579 9.75001 0.75 9.41422 0.75 9.00001C0.750004 4.44366 4.44365 0.750008 9 0.750008C11.2338 0.750008 13.2593 1.63999 14.7441 3.08106C14.7492 2.85495 14.7505 2.5817 14.749 2.2422L14.7422 0.752937C14.7406 0.339048 15.0744 0.00205927 15.4883 7.61573e-06Z"
-        fill={color}
-      />
     </Svg>
   );
 }
@@ -170,9 +155,9 @@ export default function KeyRateScreen() {
           <Text style={styles.headerTitle}>Ключевая ставка ЦБ</Text>
         </View>
         <Pressable onPress={onRefresh} hitSlop={12} style={styles.refreshBtn} disabled={loading}>
-          <View style={loading ? { opacity: 0.4 } : undefined}>
+          <SpinIcon spinning={loading}>
             <RefreshIcon size={18} color={tokens.accent.base} />
-          </View>
+          </SpinIcon>
         </Pressable>
       </View>
 

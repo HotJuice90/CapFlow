@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { OrgLogo } from '@/components/BankLogo';
+import { TabChip } from '@/components/TabChip';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
 import { tapBuzz, warnBuzz } from '@/lib/haptics';
@@ -89,16 +90,20 @@ export default function OrganizationsScreen() {
               const active = t === activeFilter;
               const color = FILTER_COLOR[t];
               return (
-                <Pressable
+                <TabChip
                   key={t}
-                  style={[styles.tabChip, active && { backgroundColor: color }]}
+                  active={active}
                   onPress={() => setActiveFilter(t)}
-                >
-                  <MaterialCommunityIcons name={FILTER_ICON[t]} size={16} color={active ? tokens.text.inverse : color} />
-                  <Text style={[styles.tabChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
-                    {t}
-                  </Text>
-                </Pressable>
+                  label={t}
+                  icon={<MaterialCommunityIcons name={FILTER_ICON[t]} size={16} color={active ? tokens.text.inverse : color} />}
+                  chipStyle={styles.tabChip}
+                  bgOff={tokens.surface.tabOff}
+                  bgOn={color}
+                  textStyle={styles.tabChipText}
+                  textColorOff={color}
+                  textColorOn={tokens.text.inverse}
+                  activeFontFamily={font.semibold}
+                />
               );
             })}
           </ScrollView>

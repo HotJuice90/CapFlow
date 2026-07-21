@@ -24,6 +24,8 @@ import { GradientFooter } from '@/components/GradientFooter';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { Toggle } from '@/components/Toggle';
+import { TabChip } from '@/components/TabChip';
+import { SlidingChipTabs } from '@/components/SlidingChipTabs';
 import {
   Field,
   TextField,
@@ -509,16 +511,20 @@ export default function AssetFormScreen() {
                     const active = t === platformFilter;
                     const color = FILTER_COLOR[t];
                     return (
-                      <Pressable
+                      <TabChip
                         key={t}
-                        style={[styles.tabChip, active && { backgroundColor: color }]}
+                        active={active}
                         onPress={() => setPlatformFilter(t)}
-                      >
-                        <MaterialCommunityIcons name={FILTER_ICON[t]} size={15} color={active ? tokens.text.inverse : color} />
-                        <Text style={[styles.tabChipText, active ? { color: tokens.text.inverse, fontFamily: font.semibold } : { color }]}>
-                          {t}
-                        </Text>
-                      </Pressable>
+                        label={t}
+                        icon={<MaterialCommunityIcons name={FILTER_ICON[t]} size={15} color={active ? tokens.text.inverse : color} />}
+                        chipStyle={styles.tabChip}
+                        bgOff={tokens.surface.tabOff}
+                        bgOn={color}
+                        textStyle={styles.tabChipText}
+                        textColorOff={color}
+                        textColorOn={tokens.text.inverse}
+                        activeFontFamily={font.semibold}
+                      />
                     );
                   })}
                 </ScrollView>
@@ -819,20 +825,17 @@ export default function AssetFormScreen() {
                 <Field label="Валюта">
                   <View style={styles.currencyBarClip}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      <View style={styles.currencyBar}>
-                        {ALL_CURRENCIES.map((c) => {
-                          const active = c === currency;
-                          return (
-                            <Pressable
-                              key={c}
-                              style={[styles.currencyTab, active && styles.currencyTabActive]}
-                              onPress={() => { tapBuzz(); setCurrency(c); }}
-                            >
-                              <Text style={[styles.currencyTabText, active && styles.currencyTabTextActive]}>{c}</Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
+                      <SlidingChipTabs
+                        items={ALL_CURRENCIES.map((c) => ({ key: c, label: c }))}
+                        value={currency}
+                        onChange={setCurrency}
+                        trackStyle={styles.currencyBar}
+                        chipStyle={styles.currencyTab}
+                        pillColor={tokens.accent.light}
+                        textStyle={styles.currencyTabText}
+                        textColorOff={hexToRgba(tokens.text.primary, 0.5)}
+                        textColorOn={tokens.text.inverse}
+                      />
                     </ScrollView>
                   </View>
                 </Field>
@@ -965,9 +968,7 @@ const styles = StyleSheet.create({
   currencyBarClip: { borderRadius: tokens.radius.pill, overflow: 'hidden' },
   currencyBar: { flexDirection: 'row', backgroundColor: 'rgba(215,226,235,0.2)', borderRadius: tokens.radius.pill, padding: 1, gap: 2 },
   currencyTab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: tokens.radius.pill },
-  currencyTabActive: { backgroundColor: tokens.accent.light },
   currencyTabText: { fontSize: 14, lineHeight: 16, fontFamily: 'Onest_500Medium', textTransform: 'uppercase', color: hexToRgba(tokens.text.primary, 0.5) },
-  currencyTabTextActive: { color: tokens.text.inverse },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
