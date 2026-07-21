@@ -59,6 +59,13 @@ const HERO_PERIODS: { key: HeroPeriod; label: string; days: number | 'all' | 'ye
 // только с обычным полем страницы по бокам (без доп. паддинга плашки).
 const GRAPH_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 
+// Высота плитки «Эффективность» — фиксированная, посчитана от ширины ОБЫЧНОЙ
+// (двух в ряд) плитки при aspectRatio 1.31. Если плиток нечётное число, последняя
+// в одиночной строке растягивается по ширине (flexGrow), но высота не должна
+// раздуваться следом — поэтому не aspectRatio на самой плитке, а готовое число.
+const EFF_TILE_W = (Dimensions.get('window').width - tokens.spacing.screenH * 2 - 10) / 2;
+const EFF_TILE_H = EFF_TILE_W / 1.31;
+
 // Точная ширина колонки «Состав портфеля», рассчитанная под ровно 3 карточки
 // в ряд: экран − поля страницы (16×2) − паддинг карточки (16×2) − 2 зазора
 // между колонками (4×2), делённое на 3. Меньше этого — уже не минимум, а
@@ -954,11 +961,11 @@ const styles = StyleSheet.create({
   // Сетка плиток-статов — сознательно другой паттерн, чем построчные списки
   // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
   effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  // maxWidth — иначе при нечётном числе плиток последняя в одиночной строке
-  // растягивается flexGrow-ом на всю ширину, а aspectRatio раздувает её по
-  // высоте вслед за шириной (плитка становится гигантской и полупустой).
+  // Высота — фиксированная (EFF_TILE_H), а не aspectRatio: при нечётном числе
+  // плиток последняя в одиночной строке растягивается по ширине (flexGrow),
+  // это нормально, но высота не должна раздуваться следом.
   effTile: {
-    flexBasis: '48%', flexGrow: 1, maxWidth: '48%', aspectRatio: 1.31, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18,
+    flexBasis: '48%', flexGrow: 1, height: EFF_TILE_H, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18,
     justifyContent: 'space-between', backgroundColor: '#F9FAFF', overflow: 'hidden',
   },
   effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
