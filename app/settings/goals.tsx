@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
-import { Card } from '@/components/Card';
 import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
 import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
@@ -110,23 +109,25 @@ export default function GoalsScreen() {
           </View>
         ) : (
           <>
-            <Card>
-              <View style={styles.cardInner}>
-                <View style={styles.counterRow}>
-                  <CounterTile icon="flag" color={tokens.accent.base} label="Все цели" value={allGoalsCount} />
-                  <CounterTile icon="bolt" color={tokens.semantic.warning} label="Активные" value={activeCount} />
-                  <CounterTile icon="emoji-events" color={tokens.semantic.positive} label="Завершённые" value={completedCount} />
-                </View>
-                {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
-                  <View style={styles.nearestRow}>
-                    <MaterialIcons name="event" size={14} color={tokens.text.tertiary} />
-                    <Text style={styles.nearestText}>
-                      Ближайшее достижение — через ~ {formatDurationApprox(activeAmountGoal.daysRemaining)}
-                    </Text>
-                  </View>
-                ) : null}
+            {/* Сводка — сознательно БЕЗ карточки (лежит прямо на фоне экрана), чтобы
+                не сливаться с настоящими карточками целей ниже: тот же приём, что
+                и хиро на аналитике/главной. Крупные цифры, иконка+подпись — одной
+                строкой над числом (не рядом с ним, как в обычных тайлах). */}
+            <View style={styles.summaryRow}>
+              <SummaryStat icon="flag" color={tokens.accent.base} label="Все цели" value={allGoalsCount} />
+              <View style={styles.summaryDivider} />
+              <SummaryStat icon="bolt" color={tokens.semantic.warning} label="Активные" value={activeCount} />
+              <View style={styles.summaryDivider} />
+              <SummaryStat icon="emoji-events" color={tokens.semantic.positive} label="Завершённые" value={completedCount} />
+            </View>
+            {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
+              <View style={styles.nearestRow}>
+                <MaterialIcons name="event" size={14} color={tokens.text.tertiary} />
+                <Text style={styles.nearestText}>
+                  Ближайшее достижение — через ~ {formatDurationApprox(activeAmountGoal.daysRemaining)}
+                </Text>
               </View>
-            </Card>
+            ) : null}
 
             {progress.length > 0 ? (
               <>
@@ -227,18 +228,18 @@ export default function GoalsScreen() {
   );
 }
 
-function CounterTile({
+function SummaryStat({
   icon, color, label, value,
 }: { icon: React.ComponentProps<typeof MaterialIcons>['name']; color: string; label: string; value: number }) {
   return (
-    <View style={styles.counterTile}>
-      <View style={styles.counterTopRow}>
-        <View style={[styles.counterIconBox, { backgroundColor: hexToRgba(color, 0.12) }]}>
-          <MaterialIcons name={icon} size={15} color={color} />
+    <View style={styles.summaryStat}>
+      <View style={styles.summaryTopRow}>
+        <View style={[styles.summaryIconBox, { backgroundColor: hexToRgba(color, 0.12) }]}>
+          <MaterialIcons name={icon} size={13} color={color} />
         </View>
-        <Text style={styles.counterValue}>{value}</Text>
+        <Text style={styles.summaryLabel} numberOfLines={1}>{label}</Text>
       </View>
-      <Text style={styles.counterLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.summaryValue}>{value}</Text>
     </View>
   );
 }
@@ -277,18 +278,17 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
 
-  // Card применяет `style` к внешнему теневому слою, а не к контенту — поэтому
-  // gap для внутренних отступов вешаем на собственную обёртку внутри Card,
-  // а не на сам Card (иначе gap молча не работает и всё слипается).
-  cardInner: { gap: tokens.spacing.md },
-
-  counterRow: { flexDirection: 'row', gap: tokens.spacing.sm },
-  counterTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 10, gap: 6 },
-  counterTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  counterIconBox: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  counterValue: { fontFamily: font.extrabold, fontSize: 18, color: tokens.text.primary, letterSpacing: -0.2 },
-  counterLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: tokens.spacing.md, borderTopWidth: 1, borderTopColor: tokens.surface.hairline },
+  // Сводка — без карточки, прямо на фоне (см. комментарий у JSX). Иконка+подпись
+  // одной строкой НАД числом (не сбоку от него, как в обычных тайлах-плашках) —
+  // так крупная цифра ничем не разбавлена и сразу читается как главный акцент.
+  summaryRow: { flexDirection: 'row', alignItems: 'stretch', gap: tokens.spacing.md },
+  summaryStat: { flex: 1, minWidth: 0, gap: 8 },
+  summaryDivider: { width: 1, backgroundColor: tokens.surface.hairline },
+  summaryTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  summaryIconBox: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  summaryLabel: { fontFamily: font.medium, fontSize: tokens.typography.caption, color: tokens.text.tertiary, flexShrink: 1 },
+  summaryValue: { fontFamily: font.extrabold, fontSize: 34, lineHeight: 36, color: tokens.text.primary, letterSpacing: -0.5 },
+  nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: tokens.spacing.lg },
   nearestText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.text.secondary },
 
   list: { gap: 10 },
