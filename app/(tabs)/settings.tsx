@@ -10,7 +10,6 @@ import { Card } from '@/components/Card';
 import { SettingsRow } from '@/components/SettingsRow';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { useData } from '@/state/DataContext';
-import { freeCapitalBalance } from '@/state/selectors';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
 import { CURRENCY_SYMBOL, formatMoney, formatPercent } from '@/format';
@@ -30,7 +29,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { data, updateSettings, replaceAll, hasDemo, deleteDemoData, reseedDemo } = useData();
   const version = Constants.expoConfig?.version ?? '—';
-  const freeCapital = freeCapitalBalance(data);
 
   const openCurrency = () => {
     openCurrencyPicker((code) => { void updateSettings({ defaultCurrency: code }); }, data.settings.defaultCurrency);
@@ -90,13 +88,7 @@ export default function SettingsScreen() {
           <Divider />
           <SettingsRow icon="flag" color={tokens.semantic.positive} label="Цели" onPress={() => router.push('/settings/goals')} />
           <Divider />
-          <SettingsRow
-            icon="account-balance-wallet"
-            color="#7143AE"
-            label="Свободные деньги"
-            value={formatMoney(freeCapital, { currency: data.settings.defaultCurrency, kopecks: 'hide' })}
-            onPress={() => router.push('/settings/capital')}
-          />
+          <SettingsRow icon="account-balance-wallet" color="#7143AE" label="Свободные деньги" onPress={() => router.push('/settings/capital')} />
           {/* Уведомления — временно скрыты, экран не готов. Не удалять роут/строку, просто не рендерим. */}
         </Group>
 
