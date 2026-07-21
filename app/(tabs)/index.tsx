@@ -640,7 +640,9 @@ const styles = StyleSheet.create({
   },
   addBtn: { width: 44, height: 44, borderRadius: tokens.radius.pill, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
+  // Отступы/паддинг — канон заголовков секций, устоявшийся в аналитике
+  // (см. CLAUDE.md → «Канон экранов»): 40 сверху, 14 снизу, 8 слева.
+  sectionTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: 40, marginBottom: 14, paddingLeft: 8 },
   link: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
