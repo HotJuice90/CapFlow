@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
 
   mainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md },
   remainLabel: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
-  remainValue: { fontFamily: font.bold, fontSize: 28, color: tokens.text.primary, letterSpacing: -0.3, marginTop: 4 },
+  remainValue: { fontFamily: font.semibold, fontSize: 22, color: tokens.text.primary, letterSpacing: -0.2, marginTop: 4 },
   deltaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   deltaText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.semantic.positive },
   etaBadge: {

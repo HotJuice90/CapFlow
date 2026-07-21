@@ -9,7 +9,7 @@ import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
 import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
 import { goalsProgress, standaloneGoalsProgress, type GoalProgress } from '@/state/selectors';
-import { pluralDays, formatDurationApprox } from '@/format/date';
+import { pluralDays } from '@/format/date';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
 import { tapBuzz } from '@/lib/haptics';
@@ -118,14 +118,6 @@ export default function GoalsScreen() {
               <SummaryStat icon="bolt" color={tokens.semantic.warning} label="Активные" value={activeCount} />
               <SummaryStat icon="emoji-events" color={tokens.semantic.positive} label="Завершённые" value={completedCount} />
             </View>
-            {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
-              <View style={styles.nearestRow}>
-                <MaterialIcons name="event" size={14} color={tokens.text.tertiary} />
-                <Text style={styles.nearestText}>
-                  Ближайшее достижение — через ~ {formatDurationApprox(activeAmountGoal.daysRemaining)}
-                </Text>
-              </View>
-            ) : null}
 
             {progress.length > 0 ? (
               <>
@@ -298,8 +290,6 @@ const styles = StyleSheet.create({
   summaryIconBox: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   summaryLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   summaryValue: { fontFamily: font.extrabold, fontSize: tokens.typography.title, color: tokens.text.primary, letterSpacing: -0.2 },
-  nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: tokens.spacing.lg },
-  nearestText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.text.secondary },
 
   list: { gap: 10 },
   doneBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: hexToRgba(tokens.semantic.positive, 0.12), borderRadius: tokens.radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
