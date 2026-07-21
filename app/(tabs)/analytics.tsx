@@ -266,7 +266,7 @@ export default function AnalyticsScreen() {
                 ) : null}
               </View>
               <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(summary.totalCapital, { currency: cur })}
+                {formatMoney(summary.totalCapital + freeCapital, { currency: cur })}
               </Text>
             </View>
 
