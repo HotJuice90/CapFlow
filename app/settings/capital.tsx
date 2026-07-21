@@ -129,7 +129,7 @@ export default function CapitalScreen() {
         {entries.length > 0 ? (
           <>
             <Text style={styles.section}>История</Text>
-            <Text style={styles.hint}>Тап — изменить, смахните влево — удалить</Text>
+            <Text style={styles.hint}>Смахните влево — изменить, вправо — удалить</Text>
             {entries.map((e) => (
               <EntryRow key={e.id} entry={e} onDelete={onDelete} />
             ))}
@@ -148,10 +148,7 @@ function EntryRow({ entry, onDelete }: { entry: FreeCapitalEntry; onDelete: (id:
   const isUp = entry.amount >= 0;
 
   const row = (
-    <Pressable
-      style={styles.histRow}
-      onPress={() => { tapBuzz(); router.push({ pathname: '/settings/free-capital-entry', params: { id: entry.id } }); }}
-    >
+    <View style={styles.histRow}>
       <View style={[styles.histIcon, isUp ? styles.histIconUp : styles.histIconDown]}>
         <MaterialCommunityIcons name={isUp ? 'arrow-up' : 'arrow-down'} size={16} color={isUp ? tokens.semantic.positive : tokens.semantic.negative} />
       </View>
@@ -162,19 +159,38 @@ function EntryRow({ entry, onDelete }: { entry: FreeCapitalEntry; onDelete: (id:
       <Text style={[styles.histDelta, isUp ? styles.histDeltaUp : styles.histDeltaDown]}>
         {isUp ? '+' : '−'}{formatMoney(Math.abs(entry.amount), { currency: entry.currency, kopecks: 'hide' })}
       </Text>
-    </Pressable>
+    </View>
   );
 
   return (
     <Swipeable
       ref={swipeRef}
       overshootLeft={false}
+      overshootRight={false}
       friction={1.7}
       leftThreshold={72}
-      onSwipeableWillOpen={() => { warnBuzz(); swipeRef.current?.close(); onDelete(entry.id); }}
+      rightThreshold={72}
+      // Тот же паттерн, что и в catalog/instruments.tsx: влево — редактировать, вправо — удалить.
+      onSwipeableWillOpen={(direction) => {
+        swipeRef.current?.close();
+        if (direction === 'left') {
+          tapBuzz();
+          router.push({ pathname: '/settings/free-capital-entry', params: { id: entry.id } });
+        } else {
+          warnBuzz();
+          onDelete(entry.id);
+        }
+      }}
       renderLeftActions={() => (
         <View style={styles.swipeHint}>
-          <View style={styles.swipeHintBox}>
+          <View style={[styles.swipeHintBox, { backgroundColor: hexToRgba(tokens.accent.base, 0.14) }]}>
+            <MaterialCommunityIcons name="pencil-outline" size={20} color={tokens.accent.base} />
+          </View>
+        </View>
+      )}
+      renderRightActions={() => (
+        <View style={styles.swipeHint}>
+          <View style={[styles.swipeHintBox, { backgroundColor: hexToRgba(tokens.semantic.negative, 0.14) }]}>
             <MaterialCommunityIcons name="trash-can-outline" size={20} color={tokens.semantic.negative} />
           </View>
         </View>
@@ -213,11 +229,13 @@ const styles = StyleSheet.create({
   hint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: -8, marginBottom: tokens.spacing.sm, paddingLeft: 8 },
   emptyHint: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: tokens.spacing.lg, textAlign: 'center' },
 
+  // Заливка '#F9FAFF' — тот же приём, что и плитки в аналитике/пилюли в календаре
+  // и на карточке актива: близко к фону, но без прозрачности (не белая карточка).
   histRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 14, paddingVertical: 14,
     borderRadius: 16, marginBottom: 8,
-    backgroundColor: tokens.surface.neutral,
+    backgroundColor: '#F9FAFF',
   },
   histIcon: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.surface.white },
   histIconUp: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.12) },
@@ -229,5 +247,5 @@ const styles = StyleSheet.create({
   histDeltaDown: { color: tokens.semantic.negative },
 
   swipeHint: { width: 64, alignItems: 'center', justifyContent: 'center' },
-  swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: hexToRgba(tokens.semantic.negative, 0.14) },
+  swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });
