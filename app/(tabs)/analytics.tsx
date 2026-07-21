@@ -954,8 +954,11 @@ const styles = StyleSheet.create({
   // Сетка плиток-статов — сознательно другой паттерн, чем построчные списки
   // выше (Налоги/Размещение капитала), чтобы блок не сливался с ними.
   effGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  // maxWidth — иначе при нечётном числе плиток последняя в одиночной строке
+  // растягивается flexGrow-ом на всю ширину, а aspectRatio раздувает её по
+  // высоте вслед за шириной (плитка становится гигантской и полупустой).
   effTile: {
-    flexBasis: '48%', flexGrow: 1, aspectRatio: 1.31, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18,
+    flexBasis: '48%', flexGrow: 1, maxWidth: '48%', aspectRatio: 1.31, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18,
     justifyContent: 'space-between', backgroundColor: '#F9FAFF', overflow: 'hidden',
   },
   effTileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
