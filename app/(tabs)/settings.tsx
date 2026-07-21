@@ -104,7 +104,7 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="account-balance-wallet"
             color="#7143AE"
-            label="Капитал вне активов"
+            label="Свободные деньги"
             value={freeCapital > 0 ? formatMoney(freeCapital, { currency: data.settings.defaultCurrency, kopecks: 'hide' }) : 'Не задано'}
             onPress={() => router.push('/settings/capital')}
           />
