@@ -249,7 +249,7 @@ function QueuedGoalRow({
   return (
     <Pressable style={styles.queuedRow} onPress={onPress}>
       <View style={styles.queuedIconBox}>
-        <MaterialIcons name="flag" size={16} color={tokens.text.tertiary} />
+        <MaterialIcons name="adjust" size={16} color={tokens.text.tertiary} />
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={styles.queuedTopRow}>
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   queuedRow: {
     flexDirection: 'row', gap: tokens.spacing.md,
     borderRadius: 20, padding: 16,
-    backgroundColor: tokens.surface.rowTint, ...boxShadow(tokens.shadow.subtle),
+    backgroundColor: tokens.surface.white, ...boxShadow(tokens.shadow.subtle),
   },
   queuedIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: tokens.surface.neutral, alignItems: 'center', justifyContent: 'center' },
   queuedTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },

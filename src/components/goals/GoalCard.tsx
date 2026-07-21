@@ -27,7 +27,10 @@ export function ActiveGoalCard({
           <View style={styles.topRow}>
             <View style={styles.iconTitle}>
               <View style={styles.iconBox}>
-                <MaterialIcons name="flag" size={18} color={tokens.accent.base} />
+                {/* Временно у всех целей одна иконка-«прицел» — старые (флаг/график/
+                    баланс) намекали на то, с чем цель не связана, и путали. Пикер
+                    выбора иконки — следующим шагом. */}
+                <MaterialIcons name="adjust" size={18} color={tokens.accent.base} />
               </View>
               <Text style={styles.title} numberOfLines={1}>{goal.title}</Text>
             </View>
@@ -114,7 +117,7 @@ export function MetricCard({
           <View style={styles.topRow}>
             <View style={styles.iconTitle}>
               <View style={styles.iconBox}>
-                <MaterialIcons name={isCapital ? 'account-balance' : 'trending-up'} size={18} color={tokens.accent.base} />
+                <MaterialIcons name="adjust" size={18} color={tokens.accent.base} />
               </View>
               <Text style={styles.title} numberOfLines={1}>{goal.title}</Text>
             </View>
