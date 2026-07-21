@@ -1435,11 +1435,18 @@ function resolvePeriodStart(days: HeroWindow, now: Date, earliestOpen: number): 
  * Реконструкция РЕАЛЬНОГО капитала по дням (тело + начисленные проценты на каждый
  * день, а не только тело) — решение #9: из первичных данных, а не снимков.
  * Учитывает и уже закрытые/архивные активы за те дни, когда они были живы —
- * иначе прошлое занижается всякий раз, когда что-то закрывают.
+ * иначе прошлое занижается всякий раз, когда что-то закрывают. Плюс свободные
+ * деньги вне активов (лента `freeCapitalEntries`) — накопленный баланс на
+ * каждый день, тем же принципом «из первички», а не текущим числом задним
+ * числом на весь график.
  */
 export function capitalHistorySeries(data: AppData, days: HeroWindow, now: Date = new Date()): number[] {
   const { items, earliestOpen } = buildHistoryItems(data, now);
   const start = resolvePeriodStart(days, now, earliestOpen);
+
+  const freeEntries = data.freeCapitalEntries
+    .map((e) => ({ date: parseLocal(e.date), amount: convert(e.amount, e.currency, data) }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const totalDays = Math.max(0, diffDays(start, now));
   const out: number[] = [];
@@ -1451,6 +1458,9 @@ export function capitalHistorySeries(data: AppData, days: HeroWindow, now: Date 
       if (openDate > day) continue;
       if (closedAt && closedAt < day) continue;
       cap += convert(calculate(asset, instrument, data.params, day, 0).currentValue, asset.currency, data);
+    }
+    for (const { date, amount } of freeEntries) {
+      if (date <= day) cap += amount;
     }
     out.push(cap);
   }
