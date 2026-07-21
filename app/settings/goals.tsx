@@ -109,15 +109,12 @@ export default function GoalsScreen() {
           </View>
         ) : (
           <>
-            {/* Сводка — сознательно БЕЗ карточки (лежит прямо на фоне экрана), чтобы
-                не сливаться с настоящими карточками целей ниже: тот же приём, что
-                и хиро на аналитике/главной. Крупные цифры, иконка+подпись — одной
-                строкой над числом (не рядом с ним, как в обычных тайлах). */}
+            {/* Сводка — свои тайлы, но заливка близкая к фону ('#F9FAFF', тот же приём,
+                что и плитки аналитики/пилюли календаря), НЕ белая карточка — не
+                сливается с настоящими карточками целей ниже. */}
             <View style={styles.summaryRow}>
               <SummaryStat icon="flag" color={tokens.accent.base} label="Все цели" value={allGoalsCount} />
-              <View style={styles.summaryDivider} />
               <SummaryStat icon="bolt" color={tokens.semantic.warning} label="Активные" value={activeCount} />
-              <View style={styles.summaryDivider} />
               <SummaryStat icon="emoji-events" color={tokens.semantic.positive} label="Завершённые" value={completedCount} />
             </View>
             {activeAmountGoal && activeAmountGoal.daysRemaining !== null ? (
@@ -235,11 +232,11 @@ function SummaryStat({
     <View style={styles.summaryStat}>
       <View style={styles.summaryTopRow}>
         <View style={[styles.summaryIconBox, { backgroundColor: hexToRgba(color, 0.12) }]}>
-          <MaterialIcons name={icon} size={13} color={color} />
+          <MaterialIcons name={icon} size={15} color={color} />
         </View>
-        <Text style={styles.summaryLabel} numberOfLines={1}>{label}</Text>
+        <Text style={styles.summaryValue}>{value}</Text>
       </View>
-      <Text style={styles.summaryValue}>{value}</Text>
+      <Text style={styles.summaryLabel}>{label}</Text>
     </View>
   );
 }
@@ -278,16 +275,17 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
   addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
 
-  // Сводка — без карточки, прямо на фоне (см. комментарий у JSX). Иконка+подпись
-  // одной строкой НАД числом (не сбоку от него, как в обычных тайлах-плашках) —
-  // так крупная цифра ничем не разбавлена и сразу читается как главный акцент.
-  summaryRow: { flexDirection: 'row', alignItems: 'stretch', gap: tokens.spacing.md },
-  summaryStat: { flex: 1, minWidth: 0, gap: 8 },
-  summaryDivider: { width: 1, backgroundColor: tokens.surface.hairline },
+  // Сводка — свои тайлы (заливка '#F9FAFF', см. комментарий у JSX), НЕ карточка
+  // и НЕ белая. Иконка+число в одной строке по центру, подпись под ними.
+  summaryRow: { flexDirection: 'row', gap: tokens.spacing.sm },
+  summaryStat: {
+    flex: 1, minWidth: 0, alignItems: 'center', gap: 6,
+    backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingVertical: 14, paddingHorizontal: 6,
+  },
   summaryTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  summaryIconBox: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  summaryLabel: { fontFamily: font.medium, fontSize: tokens.typography.caption, color: tokens.text.tertiary, flexShrink: 1 },
-  summaryValue: { fontFamily: font.extrabold, fontSize: 34, lineHeight: 36, color: tokens.text.primary, letterSpacing: -0.5 },
+  summaryIconBox: { width: 26, height: 26, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
+  summaryLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
+  summaryValue: { fontFamily: font.extrabold, fontSize: tokens.typography.title, color: tokens.text.primary, letterSpacing: -0.2 },
   nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: tokens.spacing.lg },
   nearestText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.text.secondary },
 
