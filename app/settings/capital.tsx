@@ -14,7 +14,7 @@ import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
 import type { FreeCapitalEntry } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney } from '@/format';
+import { formatMoney, CURRENCY_SYMBOL } from '@/format';
 import { formatDateShort } from '@/format/date';
 
 function todayIso(): string {
@@ -89,11 +89,11 @@ export default function CapitalScreen() {
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
             <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Капитал вне активов</Text>
+          <Text style={styles.headerTitle}>Свободные деньги</Text>
         </View>
 
         <View style={styles.balanceBox}>
-          <Text style={styles.balanceLabel}>Свободные деньги</Text>
+          <Text style={styles.balanceLabel}>Баланс</Text>
           <Text style={styles.balanceValue}>{formatMoney(balance, { currency: cur, kopecks: 'hide' })}</Text>
         </View>
 
@@ -111,7 +111,7 @@ export default function CapitalScreen() {
           value={amount}
           onChange={setAmount}
           placeholder="0"
-          suffix={cur}
+          suffix={CURRENCY_SYMBOL[cur]}
           grouped
         />
         <DateField label="Дата" value={date} onChange={setDate} />
@@ -129,9 +129,9 @@ export default function CapitalScreen() {
         {entries.length > 0 ? (
           <>
             <Text style={styles.section}>История</Text>
-            <Text style={styles.hint}>Смахните запись влево — удалить</Text>
-            {entries.map((e, i) => (
-              <EntryRow key={e.id} entry={e} isLast={i === entries.length - 1} onDelete={onDelete} />
+            <Text style={styles.hint}>Тап — изменить, смахните влево — удалить</Text>
+            {entries.map((e) => (
+              <EntryRow key={e.id} entry={e} onDelete={onDelete} />
             ))}
           </>
         ) : (
@@ -142,12 +142,16 @@ export default function CapitalScreen() {
   );
 }
 
-function EntryRow({ entry, isLast, onDelete }: { entry: FreeCapitalEntry; isLast: boolean; onDelete: (id: string) => void }) {
+function EntryRow({ entry, onDelete }: { entry: FreeCapitalEntry; onDelete: (id: string) => void }) {
+  const router = useRouter();
   const swipeRef = useRef<Swipeable>(null);
   const isUp = entry.amount >= 0;
 
   const row = (
-    <View style={[styles.histRow, !isLast && styles.rowDivider]}>
+    <Pressable
+      style={styles.histRow}
+      onPress={() => { tapBuzz(); router.push({ pathname: '/settings/free-capital-entry', params: { id: entry.id } }); }}
+    >
       <View style={[styles.histIcon, isUp ? styles.histIconUp : styles.histIconDown]}>
         <MaterialCommunityIcons name={isUp ? 'arrow-up' : 'arrow-down'} size={16} color={isUp ? tokens.semantic.positive : tokens.semantic.negative} />
       </View>
@@ -158,7 +162,7 @@ function EntryRow({ entry, isLast, onDelete }: { entry: FreeCapitalEntry; isLast
       <Text style={[styles.histDelta, isUp ? styles.histDeltaUp : styles.histDeltaDown]}>
         {isUp ? '+' : '−'}{formatMoney(Math.abs(entry.amount), { currency: entry.currency, kopecks: 'hide' })}
       </Text>
-    </View>
+    </Pressable>
   );
 
   return (
@@ -209,9 +213,13 @@ const styles = StyleSheet.create({
   hint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: -8, marginBottom: tokens.spacing.sm, paddingLeft: 8 },
   emptyHint: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: tokens.spacing.lg, textAlign: 'center' },
 
-  histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: 'transparent' },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
-  histIcon: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.surface.neutral },
+  histRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 14, paddingVertical: 14,
+    borderRadius: 16, marginBottom: 8,
+    backgroundColor: tokens.surface.neutral,
+  },
+  histIcon: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.surface.white },
   histIconUp: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.12) },
   histIconDown: { backgroundColor: hexToRgba(tokens.semantic.negative, 0.12) },
   histDate: { fontFamily: font.medium, fontSize: tokens.typography.label, color: tokens.text.primary },
