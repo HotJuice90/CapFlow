@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
 import { boxShadow } from '@/theme/shadow';
@@ -230,6 +231,14 @@ function SummaryStat({
 }: { icon: React.ComponentProps<typeof MaterialIcons>['name']; color: string; label: string; value: number }) {
   return (
     <View style={styles.summaryStat}>
+      {/* Едва заметный градиент цвета иконки — тот же приём, что и в плитках
+          «Эффективность» на аналитике (LinearGradient transparent → 0.04). */}
+      <LinearGradient
+        colors={['transparent', hexToRgba(color, 0.04)]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <View style={styles.summaryTopRow}>
         <View style={[styles.summaryIconBox, { backgroundColor: hexToRgba(color, 0.12) }]}>
           <MaterialIcons name={icon} size={15} color={color} />
@@ -281,9 +290,12 @@ const styles = StyleSheet.create({
   summaryStat: {
     flex: 1, minWidth: 0, alignItems: 'center', gap: 6,
     backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingVertical: 14, paddingHorizontal: 6,
+    overflow: 'hidden',
   },
   summaryTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  summaryIconBox: { width: 26, height: 26, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
+  // Размер/радиус — 1:1 с effTileIconBox в аналитике: при радиусе, близком
+  // к половине стороны, квадрат читается как круг — тут разница заметна.
+  summaryIconBox: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   summaryLabel: { fontFamily: font.medium, fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   summaryValue: { fontFamily: font.extrabold, fontSize: tokens.typography.title, color: tokens.text.primary, letterSpacing: -0.2 },
   nearestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: tokens.spacing.lg },
