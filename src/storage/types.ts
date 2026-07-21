@@ -3,6 +3,7 @@ import type {
   CalcParams,
   CurrencyCode,
   FinancialInstrument,
+  FreeCapitalEntry,
   Goal,
   Organization,
   Snapshot,
@@ -18,16 +19,10 @@ export interface AppSettings {
   navBar: 'light' | 'dark'; // оформление плавающего навбара
   /** Сокращать суммы от 1 млн («2,4 млн ₽») в обзорных блоках — выкл. показывает полностью. */
   abbreviateMillions: boolean;
-  /** Ручной ввод «весь капитал, включая ещё не размещённый» — в валюте
-   *  manualTotalCapitalCurrency (не обязательно текущей defaultCurrency).
-   *  Временное решение для карточки «Можно разместить» в аналитике — до того,
-   *  как появится отдельная сущность для свободного капитала (не решено, как
-   *  именно). undefined — не задано, карточка не показывается. */
+  /** УСТАРЕЛО — заменено лентой `AppData.freeCapitalEntries`. Поля оставлены
+   *  только чтобы не терять данные из старых сохранений, больше не читаются
+   *  и не пишутся новым UI. */
   manualTotalCapital?: number;
-  /** Валюта, в которой введён manualTotalCapital — нужна, чтобы при смене
-   *  defaultCurrency число конвертировалось по курсу, а не переинтерпретировалось
-   *  как есть в новой валюте. undefined (старые записи) — считаем, что была
-   *  текущая defaultCurrency на момент чтения. */
   manualTotalCapitalCurrency?: CurrencyCode;
 }
 
@@ -60,6 +55,8 @@ export interface AppData {
   taxYearRecords: TaxYearRecord[];
   /** финансовые цели («копилки») — см. domain/types.ts → Goal */
   goals: Goal[];
+  /** свободные деньги вне активов — лента движений, см. domain/types.ts → FreeCapitalEntry */
+  freeCapitalEntries: FreeCapitalEntry[];
 }
 
 export interface RateSnapshot {
@@ -114,5 +111,6 @@ export function emptyAppData(): AppData {
     seededDemo: false,
     taxYearRecords: [],
     goals: [],
+    freeCapitalEntries: [],
   };
 }

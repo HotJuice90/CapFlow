@@ -16,13 +16,14 @@ import { computeTaxYearRecord } from './selectors';
 import { setAbbreviateMillionsDefault, setKopecksDefault } from '@/format';
 import { useAssetActions, type AssetActions } from './actions/useAssetActions';
 import { useCatalogActions, type CatalogActions } from './actions/useCatalogActions';
+import { useFreeCapitalActions, type FreeCapitalActions } from './actions/useFreeCapitalActions';
 import { useGoalActions, type GoalActions } from './actions/useGoalActions';
 import { useRatesActions, appendSnapshot, type RatesActions } from './actions/useRatesActions';
 import { useSettingsActions, type SettingsActions } from './actions/useSettingsActions';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
 
-interface DataContextValue extends AssetActions, CatalogActions, GoalActions, RatesActions, SettingsActions {
+interface DataContextValue extends AssetActions, CatalogActions, FreeCapitalActions, GoalActions, RatesActions, SettingsActions {
   data: AppData;
   loading: boolean;
   hasDemo: boolean;
@@ -159,6 +160,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const assetActions = useAssetActions(data, persist);
   const catalogActions = useCatalogActions(data, persist);
+  const freeCapitalActions = useFreeCapitalActions(data, persist);
   const goalActions = useGoalActions(data, persist);
   const ratesActions = useRatesActions(data, persist);
   const settingsActions = useSettingsActions(data, persist);
@@ -173,11 +175,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       reload,
       ...assetActions,
       ...catalogActions,
+      ...freeCapitalActions,
       ...goalActions,
       ...ratesActions,
       ...settingsActions,
     }),
-    [data, loading, hasDemo, reload, assetActions, catalogActions, goalActions, ratesActions, settingsActions],
+    [data, loading, hasDemo, reload, assetActions, catalogActions, freeCapitalActions, goalActions, ratesActions, settingsActions],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -29,20 +29,17 @@ export function crossRate(data: AppData, code: CurrencyCode, base: CurrencyCode)
   return effectiveRate(data, code) / effectiveRate(data, base);
 }
 
-/** manualTotalCapital, пересчитанный из валюты ввода в текущую defaultCurrency —
- *  иначе при смене валюты по умолчанию число просто переинтерпретируется как есть,
- *  без конвертации (см. AppSettings.manualTotalCapitalCurrency). */
-export function manualTotalCapitalConverted(data: AppData): number | undefined {
-  const raw = data.settings.manualTotalCapital;
-  if (raw === undefined) return undefined;
-  const from = data.settings.manualTotalCapitalCurrency ?? data.settings.defaultCurrency;
-  return raw * crossRate(data, from, data.settings.defaultCurrency);
-}
-
 /** Пересчёт суммы из валюты актива в основную валюту приложения (по последним курсам). */
 export function convert(amount: number, from: CurrencyCode, data: AppData): number {
   const inRub = amount * effectiveRate(data, from);
   return inRub / effectiveRate(data, data.settings.defaultCurrency);
+}
+
+/** Баланс свободных денег вне активов — сумма ленты движений в defaultCurrency.
+ *  Заменяет старый ручной manualTotalCapital (единое число, которое пользователь
+ *  перепечатывал) — теперь это настоящая сумма записей, а не производная разница. */
+export function freeCapitalBalance(data: AppData): number {
+  return data.freeCapitalEntries.reduce((sum, e) => sum + convert(e.amount, e.currency, data), 0);
 }
 
 /**
@@ -916,13 +913,13 @@ export function insights(data: AppData, now: Date = new Date()): Insight[] {
     }
   }
 
-  // 4. свободный капитал простаивает — только если задан вручную «капитал вне
-  // активов» и там реально лежит заметная доля (от 10%), иначе шум.
-  const manualTotal = manualTotalCapitalConverted(data);
-  if (manualTotal && manualTotal > 0) {
+  // 4. свободный капитал простаивает — только если в ленте свободных денег
+  // реально лежит заметная доля (от 10% от общего капитала), иначе шум.
+  const free = freeCapitalBalance(data);
+  if (free > 0) {
     const orgTotal = distributionByOrg(data, now).total;
-    const free = Math.max(0, manualTotal - orgTotal);
-    if (free / manualTotal >= 0.1) {
+    const grand = orgTotal + free;
+    if (grand > 0 && free / grand >= 0.1) {
       out.push({
         icon: 'savings',
         title: 'Есть свободный капитал',
@@ -1789,7 +1786,7 @@ export function standaloneGoalsProgress(data: AppData, now: Date = new Date()): 
   if (active.length === 0) return [];
 
   const ps = portfolioSummary(data, now);
-  const grandCapital = manualTotalCapitalConverted(data) ?? ps.workingCapital;
+  const grandCapital = ps.workingCapital + freeCapitalBalance(data);
 
   return active.map((g) => {
     const targetValue = convert(g.targetAmount, g.currency, data);

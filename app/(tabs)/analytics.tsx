@@ -25,7 +25,7 @@ import {
   capitalHistorySeries,
   earnedInPeriod,
   incomePaceWindows,
-  manualTotalCapitalConverted,
+  freeCapitalBalance,
   rateSpread,
   taxByInstrument,
   taxByOrganization,
@@ -107,17 +107,15 @@ export default function AnalyticsScreen() {
   const periodEndCap = capSeries[capSeries.length - 1] ?? 0;
   const periodGrowthPct = periodStartCap > 0 ? ((periodEndCap - periodStartCap) / periodStartCap) * 100 : 0;
 
-  // «Можно разместить» — временно ручной ввод (настройки → «Капитал вне
-  // активов»), пока не решено, как именно заводить свободный капитал как
-  // сущность. Не задано — карточку не показываем вообще.
-  const manualTotalCapital = manualTotalCapitalConverted(data);
-  const freeCapital = manualTotalCapital ? Math.max(0, manualTotalCapital - byOrg.total) : 0;
+  // «Можно разместить» — реальный баланс ленты свободных денег (настройки →
+  // «Капитал вне активов»), не разница с ручного тотала. Пусто — карточку не показываем.
+  const freeCapital = freeCapitalBalance(data);
   // Раз свободный капитал теперь занимает свой сегмент в той же полосе, доли площадок
   // тоже считаем от общего капитала (а не только суммы площадок) — иначе сегменты
   // перестают складываться в 100% одной полосы.
-  const grandTotal = manualTotalCapital || byOrg.total;
-  const freeCapitalShare = manualTotalCapital ? freeCapital / grandTotal : 0;
-  const orgShare = (capital: number) => (manualTotalCapital ? capital / grandTotal : capital / (byOrg.total || 1));
+  const grandTotal = byOrg.total + freeCapital;
+  const freeCapitalShare = grandTotal > 0 ? freeCapital / grandTotal : 0;
+  const orgShare = (capital: number) => capital / (grandTotal || byOrg.total || 1);
 
   // Плитки «Эффективность» — отдельный набор метрик, не строки списка (список
   // уже занят под «Налоги»/«Размещение капитала»), поэтому собираем массив и
@@ -152,12 +150,13 @@ export default function AnalyticsScreen() {
       valueColor: tokens.category.dfa,
     });
   }
-  if (manualTotalCapital) {
+  if (freeCapital > 0) {
     // % в работе вместо суммы в деньгах — сумма уже видна крупно в
     // «Размещении капитала» и в плашке «Можно разместить», дублировать не надо.
+    // Показываем только когда есть свободные деньги — иначе тут всегда 100%, бесполезно.
     effTiles.push({
       key: 'workingShare', icon: 'account-balance-wallet', color: tokens.accent.base,
-      label: 'Активный\nкапитал', value: `${Math.round((byOrg.total / manualTotalCapital) * 100)}%`,
+      label: 'Активный\nкапитал', value: `${Math.round((byOrg.total / grandTotal) * 100)}%`,
     });
   }
   // Чистая ставка — средняя ставка за вычетом НДФЛ. Именно от avgRate, а не от
@@ -468,7 +467,7 @@ export default function AnalyticsScreen() {
                     style={[styles.allocationSegment, { flex: Math.max(orgShare(g.capital), 0.01), backgroundColor: g.color }]}
                   />
                 ))}
-                {manualTotalCapital && freeCapital > 0 ? (
+                {freeCapital > 0 ? (
                   <View style={[styles.allocationSegment, styles.freeCapSegment, { flex: Math.max(freeCapitalShare, 0.01) }]}>
                     <Svg width="100%" height="100%">
                       <Defs>
@@ -483,7 +482,7 @@ export default function AnalyticsScreen() {
                 ) : null}
               </View>
 
-              {manualTotalCapital ? (
+              {freeCapital > 0 ? (
                 <ImageBackground
                   source={require('../../assets/decor/free-capital-jar.png')}
                   style={styles.freeCapCard}

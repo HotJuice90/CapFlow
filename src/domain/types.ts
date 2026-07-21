@@ -244,3 +244,19 @@ export interface Goal {
   archivedAt?: string;
   comment?: string;
 }
+
+/**
+ * Движение свободных денег — тех, что не заведены ни в один актив (получил,
+ * потратил, отложил на будущее размещение). ДЕЛЬТА, не абсолютный баланс
+ * (в отличие от `BalanceAdjustment`) — баланс считается суммой записей.
+ * Заменяет старый хак `settings.manualTotalCapital` (единое число, которое
+ * пользователь вручную перепечатывал) — тот больше не используется.
+ */
+export interface FreeCapitalEntry {
+  id: string;
+  date: string; // ISO 'YYYY-MM-DD'
+  amount: number; // + пополнение, − списание
+  currency: CurrencyCode;
+  comment?: string;
+  createdAt: string; // ISO datetime — момент создания записи (сортировка записей одной датой)
+}
