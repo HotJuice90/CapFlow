@@ -178,30 +178,37 @@ export default function HomeScreen() {
   }, [goalSlides.length, goalPos]);
 
   const goalMaxIdx = Math.max(0, goalSlides.length - 1);
-  const goalPan = Gesture.Pan()
-    .activeOffsetX([-12, 12])
-    .failOffsetY([-16, 16])
-    .onStart(() => {
-      cancelAnimation(goalPos);
-      goalStartPos.value = goalPos.value;
-    })
-    .onUpdate((e) => {
-      const max = goalMaxIdx * SLIDE_W;
-      let p = goalStartPos.value - e.translationX;
-      if (p < 0) p = p / 3;
-      else if (p > max) p = max + (p - max) / 3;
-      goalPos.value = p;
-    })
-    .onEnd((e) => {
-      const cur = goalStartPos.value - e.translationX;
-      const startIdx = Math.round(goalStartPos.value / SLIDE_W);
-      let idx = Math.round(cur / SLIDE_W);
-      if (e.velocityX < -250 && idx <= startIdx) idx = startIdx + 1;
-      else if (e.velocityX > 250 && idx >= startIdx) idx = startIdx - 1;
-      if (idx < 0) idx = 0;
-      else if (idx > goalMaxIdx) idx = goalMaxIdx;
-      goalPos.value = withTiming(idx * SLIDE_W, { duration: 420, easing: ReanimatedEasing.out(ReanimatedEasing.cubic) });
-    });
+  // useMemo обязателен для gesture-handler v2 (наша версия ~2.31) — без него
+  // объект жеста пересоздаётся на каждый рендер, и нативный распознаватель
+  // переприкрепляется и теряет состояние на середине свайпа.
+  const goalPan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-12, 12])
+        .failOffsetY([-16, 16])
+        .onStart(() => {
+          cancelAnimation(goalPos);
+          goalStartPos.value = goalPos.value;
+        })
+        .onUpdate((e) => {
+          const max = goalMaxIdx * SLIDE_W;
+          let p = goalStartPos.value - e.translationX;
+          if (p < 0) p = p / 3;
+          else if (p > max) p = max + (p - max) / 3;
+          goalPos.value = p;
+        })
+        .onEnd((e) => {
+          const cur = goalStartPos.value - e.translationX;
+          const startIdx = Math.round(goalStartPos.value / SLIDE_W);
+          let idx = Math.round(cur / SLIDE_W);
+          if (e.velocityX < -250 && idx <= startIdx) idx = startIdx + 1;
+          else if (e.velocityX > 250 && idx >= startIdx) idx = startIdx - 1;
+          if (idx < 0) idx = 0;
+          else if (idx > goalMaxIdx) idx = goalMaxIdx;
+          goalPos.value = withTiming(idx * SLIDE_W, { duration: 420, easing: ReanimatedEasing.out(ReanimatedEasing.cubic) });
+        }),
+    [goalMaxIdx, goalPos, goalStartPos],
+  );
   const goalTrackStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -goalPos.value }],
   }));

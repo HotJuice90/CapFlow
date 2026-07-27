@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -161,7 +161,7 @@ function OrgRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const swipeRef = useRef<Swipeable>(null);
+  const swipeRef = useRef<SwipeableMethods>(null);
   const typeIcon = (FILTER_ICON as Record<string, keyof typeof MaterialCommunityIcons.glyphMap>)[org.type] ?? 'view-grid-outline';
   const typeColor = (FILTER_COLOR as Record<string, string>)[org.type] ?? tokens.accent.base;
 
