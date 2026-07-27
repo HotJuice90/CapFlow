@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { TextField, NumberField, DateField, Segmented } from '@/components/form/fields';
@@ -238,7 +238,7 @@ function HistoryRow({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(String(Math.round(point.amount)));
   const [editTax, setEditTax] = useState(point.taxWithheld ? String(Math.round(point.taxWithheld)) : '');
-  const swipeRef = useRef<Swipeable>(null);
+  const swipeRef = useRef<SwipeableMethods>(null);
 
   const startEdit = () => {
     swipeRef.current?.close();
