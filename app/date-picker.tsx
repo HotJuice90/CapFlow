@@ -18,7 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { WEEKDAYS, buildIso } from '@/components/MonthCalendar';
 import { getDatePickerConfig, pickDateValue } from '@/lib/datePicker';
 import { tapBuzz } from '@/lib/haptics';
-import { tokens, font } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
 
 const MONTHS_NOMINATIVE = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -42,6 +42,15 @@ function chipLabel(iso: string): string {
   const dow = (new Date(y, m - 1, d).getDay() + 6) % 7;
   return `${WEEKDAYS[dow]}, ${d} ${MONTHS_SHORT[m - 1]} ${y}`;
 }
+/** ISO 'YYYY-MM-DD' сравнивается лексикографически — отдельный парсинг не нужен. */
+function outOfRange(iso: string, min?: string, max?: string): boolean {
+  return (!!min && iso < min) || (!!max && iso > max);
+}
+function clampIso(iso: string, min?: string, max?: string): string {
+  if (min && iso < min) return min;
+  if (max && iso > max) return max;
+  return iso;
+}
 
 /**
  * JS-driven bottom sheet (Modal + Animated), а не native formSheet — на Android
@@ -52,7 +61,11 @@ export default function DatePickerSheet() {
   const insets = useSafeAreaInsets();
   const cfg = getDatePickerConfig();
   const today = todayIso();
-  const initial = cfg?.value ?? today;
+  const minIso = cfg?.minDate;
+  const maxIso = cfg?.maxDate;
+  // Стартовое значение подтягиваем внутрь границ — иначе шит открывался бы на
+  // заведомо недоступной дате с полностью погашенной сеткой.
+  const initial = clampIso(cfg?.value ?? today, minIso, maxIso);
 
   const [year, setYear] = useState(Number(initial.slice(0, 4)));
   const [month, setMonth] = useState(Number(initial.slice(5, 7)) - 1);
@@ -123,12 +136,29 @@ export default function DatePickerSheet() {
   for (let d = 1; d <= dim; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const prevMonth = () => { if (month === 0) { setMonth(11); setYear((y) => y - 1); } else setMonth((m) => m - 1); };
-  const nextMonth = () => { if (month === 11) { setMonth(0); setYear((y) => y + 1); } else setMonth((m) => m + 1); };
+  // Листалка месяцев упирается в границы: если в соседнем месяце нет ни одного
+  // доступного дня, стрелка гаснет — уводить в заведомо пустой месяц незачем.
+  const prevLastIso = month === 0
+    ? buildIso(year - 1, 11, 31)
+    : buildIso(year, month - 1, daysInMonth(year, month - 1));
+  const nextFirstIso = month === 11 ? buildIso(year + 1, 0, 1) : buildIso(year, month + 1, 1);
+  const canPrev = !minIso || prevLastIso >= minIso;
+  const canNext = !maxIso || nextFirstIso <= maxIso;
+
+  const prevMonth = () => {
+    if (!canPrev) return;
+    if (month === 0) { setMonth(11); setYear((y) => y - 1); } else setMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (!canNext) return;
+    if (month === 11) { setMonth(0); setYear((y) => y + 1); } else setMonth((m) => m + 1);
+  };
 
   const pickDay = (day: number) => {
+    const iso = buildIso(year, month, day);
+    if (outOfRange(iso, minIso, maxIso)) return;
     tapBuzz();
-    setSelected(buildIso(year, month, day));
+    setSelected(iso);
   };
 
   const confirm = () => dismiss(() => { tapBuzz(); pickDateValue(selected); });
@@ -169,21 +199,23 @@ export default function DatePickerSheet() {
           {yearMode ? (
             <YearWheel
               year={pendingYear}
+              minYear={minIso ? Number(minIso.slice(0, 4)) : new Date().getFullYear() - 60}
+              maxYear={maxIso ? Number(maxIso.slice(0, 4)) : new Date().getFullYear() + 20}
               onSettle={setPendingYear}
               onPick={(y) => { tapBuzz(); setYear(y); setYearMode(false); }}
             />
           ) : (
             <View>
               <View style={s.monthRow}>
-                <Pressable onPress={prevMonth} hitSlop={12} style={s.navBtn}>
-                  <MaterialIcons name="chevron-left" size={22} color={tokens.accent.base} />
+                <Pressable onPress={prevMonth} hitSlop={12} disabled={!canPrev} style={[s.navBtn, !canPrev && s.navBtnOff]}>
+                  <MaterialIcons name="chevron-left" size={22} color={canPrev ? tokens.accent.base : tokens.text.tertiary} />
                 </Pressable>
                 <Pressable onPress={openYearMode} hitSlop={8} style={s.monthTitleWrap}>
                   <Text style={s.monthTitle}>{MONTHS_NOMINATIVE[month]} {year}</Text>
                   <MaterialIcons name="arrow-drop-down" size={20} color={tokens.text.tertiary} />
                 </Pressable>
-                <Pressable onPress={nextMonth} hitSlop={12} style={s.navBtn}>
-                  <MaterialIcons name="chevron-right" size={22} color={tokens.accent.base} />
+                <Pressable onPress={nextMonth} hitSlop={12} disabled={!canNext} style={[s.navBtn, !canNext && s.navBtnOff]}>
+                  <MaterialIcons name="chevron-right" size={22} color={canNext ? tokens.accent.base : tokens.text.tertiary} />
                 </Pressable>
               </View>
 
@@ -200,10 +232,18 @@ export default function DatePickerSheet() {
                   const isSelected = dayIso === selected;
                   const isToday = dayIso === today;
                   const isWeekend = idx % 7 >= 5;
+                  const isOff = outOfRange(dayIso, minIso, maxIso);
                   return (
-                    <Pressable key={idx} style={s.cell} onPress={() => pickDay(day)}>
+                    <Pressable key={idx} style={s.cell} disabled={isOff} onPress={() => pickDay(day)}>
                       <View style={[s.dayCircle, isSelected && s.daySelected, !isSelected && isToday && s.dayToday]}>
-                        <Text style={[s.dayText, isWeekend && !isSelected && s.weekend, isSelected && s.dayTextSelected]}>
+                        <Text
+                          style={[
+                            s.dayText,
+                            isWeekend && !isSelected && s.weekend,
+                            isSelected && s.dayTextSelected,
+                            isOff && s.dayTextOff,
+                          ]}
+                        >
                           {day}
                         </Text>
                       </View>
@@ -233,11 +273,11 @@ export default function DatePickerSheet() {
  * двигает подсветку (opacity/scale — нативный драйвер, без стейта на каждый
  * кадр, поэтому гладко). Значение фиксируется кнопкой OK либо прямым тапом.
  */
-function YearWheel({ year, onSettle, onPick }: { year: number; onSettle: (y: number) => void; onPick: (y: number) => void }) {
+function YearWheel({
+  year, minYear, maxYear, onSettle, onPick,
+}: { year: number; minYear: number; maxYear: number; onSettle: (y: number) => void; onPick: (y: number) => void }) {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const minYear = new Date().getFullYear() - 60;
-  const maxYear = new Date().getFullYear() + 20;
   const years: number[] = [];
   for (let y = minYear; y <= maxYear; y++) years.push(y);
   const selectedIndex = year - minYear;
@@ -303,6 +343,7 @@ const s = StyleSheet.create({
 
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   navBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: tokens.accent.soft, alignItems: 'center', justifyContent: 'center' },
+  navBtnOff: { backgroundColor: tokens.surface.neutral },
   monthTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   monthTitle: { fontFamily: font.semibold, fontSize: 17, color: tokens.text.primary },
 
@@ -317,6 +358,7 @@ const s = StyleSheet.create({
   dayToday: { borderWidth: 1.5, borderColor: tokens.accent.base, borderRadius: 19 },
   dayText: { fontFamily: font.medium, fontSize: tokens.typography.labelLg, color: tokens.text.primary },
   dayTextSelected: { fontFamily: font.semibold, color: tokens.text.inverse },
+  dayTextOff: { color: hexToRgba(tokens.text.tertiary, 0.4) },
 
   wheelWrap: { height: YEAR_ITEM_HEIGHT * 5, justifyContent: 'center' },
   wheelBand: {
