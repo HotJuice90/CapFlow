@@ -1384,6 +1384,10 @@ interface HistoryItem {
 
 /** Активы (любого статуса) + дата их реального открытия/закрытия — общая база
  *  для всех реконструкций «капитал/доход по дням из первичных данных». */
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 function buildHistoryItems(data: AppData, now: Date): { items: HistoryItem[]; earliestOpen: number } {
   const instrById = new Map(data.instruments.map((i) => [i.id, i]));
   const closedAtById = new Map<string, string>();
@@ -1397,7 +1401,15 @@ function buildHistoryItems(data: AppData, now: Date): { items: HistoryItem[]; ea
       const instrument = instrById.get(asset.instrumentId);
       if (!instrument) return null;
       const openDate = parseLocal(asset.openDate);
-      const closedAt = asset.status !== 'active' ? new Date(closedAtById.get(asset.id) ?? now) : null;
+      // Приоритет — фактическая дата закрытия, указанная пользователем. Снапшот
+      // (момент нажатия кнопки) остаётся фолбэком для старых записей, где поля
+      // ещё не было. Нормализуем к началу дня: закрытие — событие дня, а не
+      // «21:20», иначе актив доживал до конца своего последнего дня и на
+      // границе пересекался с новым, куда переложили те же деньги.
+      const closedRaw = asset.closedDate
+        ? parseLocal(asset.closedDate)
+        : new Date(closedAtById.get(asset.id) ?? now);
+      const closedAt = asset.status !== 'active' ? startOfDay(closedRaw) : null;
       return { asset, instrument, openDate, closedAt };
     })
     .filter((x): x is HistoryItem => x !== null);
@@ -1456,7 +1468,11 @@ export function capitalHistorySeries(data: AppData, days: HeroWindow, now: Date 
     let cap = 0;
     for (const { asset, instrument, openDate, closedAt } of items) {
       if (openDate > day) continue;
-      if (closedAt && closedAt < day) continue;
+      // `<=`, а не `<`: в день закрытия деньги уже ушли, актив в этот день НЕ
+      // считается. Открытие же считается со своего дня включительно — иначе на
+      // дне перевода капитала из вклада в новый счёт одни и те же деньги
+      // попадали в сумму дважды и график давал ложный пик.
+      if (closedAt && closedAt <= day) continue;
       cap += convert(calculate(asset, instrument, data.params, day, 0).currentValue, asset.currency, data);
     }
     for (const { date, amount } of freeEntries) {
@@ -1464,6 +1480,10 @@ export function capitalHistorySeries(data: AppData, days: HeroWindow, now: Date 
     }
     out.push(cap);
   }
+  // Один день в периоде (напр. единственный актив открыт сегодня) — график из
+  // одной точки нарисовать нельзя и он просто исчезал. Дублируем значение:
+  // честная прямая линия лучше пустого места.
+  if (out.length === 1) out.push(out[0]);
   return out;
 }
 

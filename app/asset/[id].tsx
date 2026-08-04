@@ -19,7 +19,13 @@ import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { diffDays } from '@/calc';
 import { tapBuzz, warnBuzz } from '@/lib/haptics';
+import { openDatePicker } from '@/lib/datePicker';
 import { t } from '@/i18n';
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const TYPE_LABEL: Record<string, string> = {
   deposit: 'Вклад',
@@ -82,18 +88,36 @@ export default function AssetScreen() {
       { text: 'Дублировать', onPress: () => router.push(`/asset/form?duplicateFrom=${id}`) },
     ]);
   };
+  /**
+   * Дату закрытия спрашиваем, а не берём момент нажатия: деньги могли уйти
+   * раньше, чем ты дошёл до кнопки, и тогда история капитала завышается на
+   * все дни между. Дефолт умный — у срочного вклада с прошедшим сроком это
+   * дата окончания, иначе сегодня.
+   */
+  const askClosedDate = (title: string, status: 'closed' | 'archived') => {
+    if (!id || !view) return;
+    const today = todayIso();
+    const matured = view.asset.endDate && view.asset.endDate <= today ? view.asset.endDate : undefined;
+    openDatePicker({
+      title,
+      value: matured ?? today,
+      minDate: view.asset.openDate,
+      maxDate: today,
+      onPick: async (iso) => { await setAssetStatus(id, status, iso); router.back(); },
+    });
+  };
   const onClose = () => {
     if (!id) return;
     appAlert('Закрыть актив?', 'Перейдёт в историю и перестанет участвовать в текущем капитале.', [
       { text: 'Отмена', style: 'cancel' },
-      { text: 'Закрыть', onPress: async () => { await setAssetStatus(id, 'closed'); router.back(); } },
+      { text: 'Закрыть', onPress: () => askClosedDate('Дата закрытия', 'closed') },
     ]);
   };
   const onArchive = () => {
     if (!id) return;
     appAlert('В архив?', 'Архивные записи не участвуют в расчётах.', [
       { text: 'Отмена', style: 'cancel' },
-      { text: 'В архив', onPress: async () => { await setAssetStatus(id, 'archived'); router.back(); } },
+      { text: 'В архив', onPress: () => askClosedDate('Дата закрытия', 'archived') },
     ]);
   };
   const onDelete = () => {

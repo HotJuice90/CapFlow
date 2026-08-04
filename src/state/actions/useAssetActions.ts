@@ -12,7 +12,9 @@ export interface AssetActions {
   createAssetBundle: (bundle: { organization?: Organization; instrument?: FinancialInstrument; asset: Asset }) => Promise<void>;
   updateAsset: (asset: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
-  setAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
+  /** `closedDate` (ISO 'YYYY-MM-DD') — фактический день закрытия, а не момент
+   *  нажатия кнопки: именно он определяет, до какого дня актив жил на графике. */
+  setAssetStatus: (id: string, status: AssetStatus, closedDate?: string) => Promise<void>;
 }
 
 export function useAssetActions(data: AppData, persist: (next: AppData) => Promise<void>): AssetActions {
@@ -53,7 +55,7 @@ export function useAssetActions(data: AppData, persist: (next: AppData) => Promi
   );
 
   const setAssetStatus = useCallback(
-    async (id: string, status: AssetStatus) => {
+    async (id: string, status: AssetStatus, closedDate?: string) => {
       const asset = data.assets.find((a) => a.id === id);
       let snapshots = data.snapshots;
       // фиксируем Snapshot при закрытии/архивации активного актива (решение #8)
@@ -68,14 +70,20 @@ export function useAssetActions(data: AppData, persist: (next: AppData) => Promi
             excludeFromAnalytics: status === 'archived',
             engineVersion: ENGINE_VERSION,
             derived: calculate(asset, instr, data.params),
-            assetSnapshot: { ...asset, status },
+            assetSnapshot: { ...asset, status, closedDate },
           };
           snapshots = [...data.snapshots, snap];
         }
       }
       await persist({
         ...data,
-        assets: data.assets.map((a) => (a.id === id ? { ...a, status } : a)),
+        assets: data.assets.map((a) =>
+          a.id === id
+            // Возврат в active (восстановление из архива) — дату закрытия убираем,
+            // иначе актив останется «мёртвым» на графике после восстановления.
+            ? { ...a, status, closedDate: status === 'active' ? undefined : closedDate ?? a.closedDate }
+            : a,
+        ),
         snapshots,
       });
     },
