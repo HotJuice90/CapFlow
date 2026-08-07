@@ -20,6 +20,12 @@ export function ActiveGoalCard({
   const { goal, filledAmount, targetAmount, progressPct, isComplete, deltaToday, daysRemaining, completedInDays } = p;
   const remaining = Math.max(0, targetAmount - filledAmount);
   const canArchive = !!onArchive && goal.status === 'active';
+  // Кусочек прогресса, добавленный именно сегодня — зелёным на переднем крае
+  // синей заливки. У маленьких целей deltaToday может быть заметной долей
+  // всего бара — это не баг, чем меньше цель, тем сильнее виден рост.
+  const filledPct = Math.min(100, Math.max(0, progressPct));
+  const todayPct = targetAmount > 0 ? Math.min(filledPct, (deltaToday / targetAmount) * 100) : 0;
+  const todayStartPct = filledPct - todayPct;
   return (
     <Pressable onPress={onPress} disabled={!onPress}>
       <Card>
@@ -69,7 +75,10 @@ export function ActiveGoalCard({
           </View>
 
           <View style={styles.track}>
-            <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progressPct))}%` }, isComplete && styles.fillDone]} />
+            <View style={[styles.fill, { width: `${filledPct}%` }, isComplete && styles.fillDone]} />
+            {!isComplete && todayPct > 0 ? (
+              <View style={[styles.fillToday, { left: `${todayStartPct}%`, width: `${todayPct}%` }]} />
+            ) : null}
           </View>
 
           {isComplete ? (
@@ -226,9 +235,11 @@ const styles = StyleSheet.create({
   etaBadgeValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.accent.base },
   etaBadgeLabel: { fontFamily: font.regular, fontSize: 10, color: tokens.text.tertiary },
 
-  track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden' },
+  track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden', position: 'relative' },
   fill: { height: '100%', borderRadius: 4, backgroundColor: tokens.accent.base },
   fillDone: { backgroundColor: tokens.semantic.positive },
+  // Прирост именно за сегодня — поверх синей заливки, встык к её переднему краю.
+  fillToday: { position: 'absolute', top: 0, bottom: 0, borderRadius: 4, backgroundColor: tokens.semantic.positive },
 
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   footerPct: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.accent.base },
