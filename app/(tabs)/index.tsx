@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -36,7 +36,6 @@ import {
   portfolioSummary,
   groupByInstrumentType,
   incomeSparkline,
-  monthComparison,
   analyticsSummary,
   liquidity,
   goalsProgress,
@@ -46,7 +45,7 @@ import {
 } from '@/state/selectors';
 import type { AssetView, Goal } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney, formatPercentSigned } from '@/format';
+import { formatMoney } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
 import { t } from '@/i18n';
@@ -121,7 +120,6 @@ export default function HomeScreen() {
   const summary = useMemo(() => portfolioSummary(data), [data]);
   const grouped = useMemo(() => groupByInstrumentType(data), [data]);
   const spark = useMemo(() => incomeSparkline(data, 30), [data]);
-  const comp = useMemo(() => monthComparison(data), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
   const liq = useMemo(() => liquidity(data), [data]);
   const liqTotal = liq.liquid + liq.frozen;
@@ -224,10 +222,19 @@ export default function HomeScreen() {
   const hasAssets = views.length > 0;
   const hasArchived = data.assets.some((a) => a.status !== 'active');
   const cur = data.settings.defaultCurrency;
-  const capitalDeltaPct = comp.capitalPrev > 0 ? ((comp.capitalNow - comp.capitalPrev) / comp.capitalPrev) * 100 : undefined;
-  const hasCapitalDelta = typeof capitalDeltaPct === 'number' && isFinite(capitalDeltaPct);
-  const capitalDeltaPositive = (capitalDeltaPct ?? 0) >= 0;
   const orgCount = new Set(views.map((v) => v.organization.id)).size;
+
+  const scrollRef = useRef<ScrollView>(null);
+  const assetsSectionRef = useRef<View>(null);
+  // Тап по «Активов в работе» — якорь вниз, к списку активов на этом же
+  // экране (не отдельный роут). measureLayout — координаты цели относительно
+  // ScrollView, а не окна, поэтому не зависит от текущей позиции скролла.
+  const scrollToAssets = () => {
+    assetsSectionRef.current?.measureLayout(
+      scrollRef.current as unknown as React.ComponentRef<typeof View>,
+      (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true }),
+    );
+  };
 
   // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
@@ -246,6 +253,7 @@ export default function HomeScreen() {
   return (
     <ScreenBackground>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{
           paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
@@ -292,30 +300,16 @@ export default function HomeScreen() {
             ) : null}
 
             <View style={styles.heroStatsRow}>
-              <View style={styles.heroStatTile}>
+              <Pressable style={styles.heroStatTile} onPress={() => router.push('/analytics')}>
                 <View style={styles.heroStatLabelRow}>
                   <MaterialCommunityIcons name="wallet-outline" size={14} color={tokens.text.tertiary} />
                   <Text style={styles.heroStatLabel} numberOfLines={1}>Капитал в работе</Text>
                 </View>
-                <View style={styles.heroStatValueRow}>
-                  <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
-                    {formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
-                  </Text>
-                  {hasCapitalDelta ? (
-                    <MaterialCommunityIcons
-                      name={capitalDeltaPositive ? 'trending-up' : 'trending-down'}
-                      size={14}
-                      color={capitalDeltaPositive ? tokens.semantic.positive : tokens.semantic.negative}
-                    />
-                  ) : null}
-                </View>
-                {hasCapitalDelta ? (
-                  <Text style={[styles.heroStatDelta, { color: capitalDeltaPositive ? tokens.semantic.positive : tokens.semantic.negative }]}>
-                    {formatPercentSigned(capitalDeltaPct as number)}
-                  </Text>
-                ) : null}
-              </View>
-              <View style={styles.heroStatTile}>
+                <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.heroStatTile} onPress={scrollToAssets}>
                 <View style={styles.heroStatLabelRow}>
                   <MaterialCommunityIcons name="star-outline" size={14} color={tokens.text.tertiary} />
                   <Text style={styles.heroStatLabel} numberOfLines={1}>Активов в работе</Text>
@@ -323,7 +317,7 @@ export default function HomeScreen() {
                 <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
                   {views.length} на {orgCount} {pluralPlatform(orgCount)}
                 </Text>
-              </View>
+              </Pressable>
             </View>
 
             {taxSummary.topInstrument ? (
@@ -342,7 +336,7 @@ export default function HomeScreen() {
             ) : null}
 
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Текущие цели</Text>
+              <Text style={styles.sectionTitleInline}>Текущие цели</Text>
               {hasAnyGoal ? (
                 <Pressable onPress={() => router.push('/settings/goals')} hitSlop={8}>
                   <Text style={styles.link}>Все цели</Text>
@@ -536,7 +530,7 @@ export default function HomeScreen() {
             {upcoming.length > 0 ? (
               <>
                 <View style={styles.sectionRow}>
-                  <Text style={styles.sectionTitle}>Ближайшие события</Text>
+                  <Text style={styles.sectionTitleInline}>Ближайшие события</Text>
                   <Pressable onPress={() => router.push('/calendar')} hitSlop={8}>
                     <Text style={styles.link}>Календарь</Text>
                   </Pressable>
@@ -576,8 +570,8 @@ export default function HomeScreen() {
               </>
             ) : null}
 
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>{t.home.yourAssets}</Text>
+            <View style={styles.sectionRow} ref={assetsSectionRef}>
+              <Text style={styles.sectionTitleInline}>{t.home.yourAssets}</Text>
               <Pressable
                 style={styles.sortBtn}
                 onPress={() => setSortIdx((i) => (i + 1) % SORTS.length)}
@@ -646,10 +640,15 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   addBtn: { width: 44, height: 44, borderRadius: tokens.radius.pill, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
-  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // marginTop/marginBottom — на самой строке, не на заголовке: раньше они висели
+  // на sectionTitle, и alignItems:'center' центрировал соседнюю ссылку по всей
+  // высоте ЭТИХ полей (40+14), а не по строке текста — ссылка «улетала» выше
+  // заголовка. Заголовок внутри строки — sectionTitleInline, без своих отступов.
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 40, marginBottom: 14 },
   // Отступы/паддинг — канон заголовков секций, устоявшийся в аналитике
   // (см. CLAUDE.md → «Канон экранов»): 40 сверху, 14 снизу, 8 слева.
   sectionTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: 40, marginBottom: 14, paddingLeft: 8 },
+  sectionTitleInline: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, paddingLeft: 8 },
   link: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
@@ -724,9 +723,7 @@ const styles = StyleSheet.create({
   heroStatTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 12 },
   heroStatLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   heroStatLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary, flexShrink: 1 },
-  heroStatValueRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  heroStatValue: { fontSize: tokens.typography.body, fontFamily: font.bold, color: tokens.text.primary },
-  heroStatDelta: { fontSize: tokens.typography.micro, fontFamily: font.semibold, marginTop: 2 },
+  heroStatValue: { fontSize: tokens.typography.body, fontFamily: font.bold, color: tokens.text.primary, marginTop: 6 },
   heroLeaderPill: {
     flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm,
     backgroundColor: hexToRgba(tokens.semantic.positive, 0.08),
