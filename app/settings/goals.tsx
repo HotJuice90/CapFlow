@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
@@ -14,6 +14,7 @@ import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
 import { tapBuzz } from '@/lib/haptics';
 import type { CurrencyCode, Goal } from '@/domain/types';
+import { DEFAULT_GOAL_ICON, type GoalIconName } from '@/domain/goalIcons';
 
 export default function GoalsScreen() {
   const router = useRouter();
@@ -249,7 +250,7 @@ function QueuedGoalRow({
   return (
     <Pressable style={styles.queuedRow} onPress={onPress}>
       <View style={styles.queuedIconBox}>
-        <MaterialIcons name="adjust" size={16} color={tokens.text.tertiary} />
+        <MaterialCommunityIcons name={(goal.icon as GoalIconName) ?? DEFAULT_GOAL_ICON} size={16} color={tokens.text.tertiary} />
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={styles.queuedTopRow}>

@@ -236,6 +236,8 @@ export type GoalKind = 'amount' | 'incomeRate' | 'capital';
 export interface Goal {
   id: string;
   title: string;
+  /** MaterialCommunityIcons glyph — см. src/domain/goalIcons.ts. Нет — DEFAULT_GOAL_ICON. */
+  icon?: string;
   kind?: GoalKind;
   /** 'amount'/'capital' — целевая сумма; 'incomeRate' — целевой доход за incomeRatePeriod */
   targetAmount: number;

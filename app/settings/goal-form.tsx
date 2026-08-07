@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { GradientFooter } from '@/components/GradientFooter';
 import { Card } from '@/components/Card';
-import { TextField, NumberField, DateField, Segmented } from '@/components/form/fields';
+import { Field, NumberField, DateField, Segmented } from '@/components/form/fields';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
 import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
 import type { Goal, GoalKind } from '@/domain/types';
+import { DEFAULT_GOAL_ICON, type GoalIconName } from '@/domain/goalIcons';
+import { openGoalIconPicker } from '@/lib/goalIconPicker';
 import { tokens, font, hexToRgba } from '@/theme';
 import { CURRENCY_SYMBOL } from '@/format';
 
@@ -40,6 +42,7 @@ export default function GoalFormScreen() {
   const editing = data.goals.find((g) => g.id === id);
 
   const [title, setTitle] = useState(editing?.title ?? '');
+  const [icon, setIcon] = useState<GoalIconName>((editing?.icon as GoalIconName) ?? DEFAULT_GOAL_ICON);
   const [kind, setKind] = useState<GoalKind>(editing?.kind ?? 'amount');
   const [incomeRatePeriod, setIncomeRatePeriod] = useState<'day' | 'month'>(editing?.incomeRatePeriod ?? 'day');
   const [targetAmount, setTargetAmount] = useState<number | undefined>(editing?.targetAmount);
@@ -53,6 +56,7 @@ export default function GoalFormScreen() {
     const goal: Goal = {
       id: editing?.id ?? uid('goal-'),
       title: title.trim(),
+      icon,
       kind,
       targetAmount,
       incomeRatePeriod: kind === 'incomeRate' ? incomeRatePeriod : undefined,
@@ -122,7 +126,27 @@ export default function GoalFormScreen() {
         </View>
 
         <Card>
-          <TextField label="Название" value={title} onChangeText={setTitle} placeholder="Например, «Подушка безопасности»" autoFocus={!editing} />
+          <Field label="Название">
+            <View style={styles.titleRow}>
+              <Pressable
+                style={styles.iconPickerBtn}
+                onPress={() => { tapBuzz(); openGoalIconPicker(setIcon, icon); }}
+              >
+                <MaterialCommunityIcons name={icon} size={22} color={tokens.accent.base} />
+                <View style={styles.iconPickerPencil}>
+                  <MaterialIcons name="edit" size={10} color={tokens.text.inverse} />
+                </View>
+              </Pressable>
+              <TextInput
+                style={styles.titleInput}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Например, «Подушка безопасности»"
+                placeholderTextColor={tokens.text.tertiary}
+                autoFocus={!editing}
+              />
+            </View>
+          </Field>
           <Segmented label="Тип цели" value={kind} options={KIND_OPTIONS} onChange={setKind} />
           {kind === 'incomeRate' ? (
             <>
@@ -181,6 +205,30 @@ export default function GoalFormScreen() {
 }
 
 const styles = StyleSheet.create({
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  iconPickerBtn: {
+    width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: hexToRgba(tokens.accent.base, 0.12),
+  },
+  // Бейдж-карандаш поверх иконки — сигнал «тапни, чтобы поменять».
+  iconPickerPencil: {
+    position: 'absolute', right: -2, bottom: -2, width: 18, height: 18, borderRadius: 9,
+    backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: tokens.surface.white,
+  },
+  titleInput: {
+    flex: 1,
+    backgroundColor: tokens.surface.white,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    borderColor: tokens.surface.hairline,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.md,
+    fontSize: tokens.typography.body,
+    color: tokens.text.primary,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
