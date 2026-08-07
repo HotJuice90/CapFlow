@@ -460,7 +460,7 @@ export default function HomeScreen() {
                             {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
                           </Text>
                           <Text style={styles.liqRowSub} numberOfLines={1}>
-                            через {it.daysRemaining} {pluralDays(it.daysRemaining)} · до {formatDateShort(it.unlockDate)}
+                            {it.orgName} · через {it.daysRemaining} {pluralDays(it.daysRemaining)} · до {formatDateShort(it.unlockDate)}
                           </Text>
                         </View>
                         <Text style={styles.liqRowValue}>{formatMoney(it.amountBase, { currency: cur, kopecks: 'hide' })}</Text>
