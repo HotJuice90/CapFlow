@@ -758,11 +758,12 @@ export interface LiquidityFrozenItem {
   assetId: string;
   instrumentName: string;
   title?: string;
+  orgName: string;
   typeId: string;
   color: string;
   logo?: string;
   customImageUri?: string;
-  amount: number; // в валюте актива — сумма к освобождению (итог на конец срока)
+  amount: number; // в валюте актива — номинал (тело без начисленного), не прогноз
   amountBase: number; // то же в основной валюте
   currency: CurrencyCode;
   unlockDate: string;
@@ -805,6 +806,7 @@ export function liquidity(data: AppData, now: Date = new Date()): Liquidity {
         assetId: v.asset.id,
         instrumentName: v.instrument.name,
         title: v.asset.title,
+        orgName: v.organization.name,
         typeId: v.instrument.typeId,
         color: v.organization.color,
         logo: v.organization.logo,
