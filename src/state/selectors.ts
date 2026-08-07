@@ -129,7 +129,6 @@ export function portfolioSummary(data: AppData, now: Date = new Date()): Portfol
   const views = buildAssetViews(data, now);
   let workingCapital = 0;
   let incomePerDay = 0;
-  let incomePerMonth = 0;
   let weightedRate = 0;
 
   for (const v of views) {
@@ -139,9 +138,14 @@ export function portfolioSummary(data: AppData, now: Date = new Date()): Portfol
     const cap = convert(v.derived.currentValue, c, data);
     workingCapital += cap;
     incomePerDay += convert(v.derived.incomePerDay, c, data);
-    incomePerMonth += convert(v.derived.incomePerMonth, c, data);
     weightedRate += v.derived.currentRate * cap;
   }
+
+  // Тот же движок, что и «Прогноз за месяц» на календаре (monthlyIncomeForecast) —
+  // не incomePerDay×daysInMonth: та формула не видит скачков капитализации
+  // внутри месяца, из-за чего числа на главной и на календаре расходились.
+  const incomePerMonth = monthlyIncomeForecast(data, now.getFullYear(), now.getMonth())
+    .reduce((sum, d) => sum + d.total, 0);
 
   const avgRate = workingCapital > 0 ? weightedRate / workingCapital : 0;
 
