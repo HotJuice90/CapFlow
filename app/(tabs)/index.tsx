@@ -288,7 +288,7 @@ export default function HomeScreen() {
                   <Text style={styles.heroMonthLabel}>в месяц</Text>
                 </View>
                 <Text style={styles.heroMonthValue} numberOfLines={1} adjustsFontSizeToFit>
-                  +{formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
+                  ~ +{formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
                 </Text>
               </View>
             </View>
@@ -335,7 +335,13 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            <View style={styles.sectionRow}>
+            {/* marginBottom:0, когда есть слайдер — его карточка сама даёт 14px
+                сверху через paddingVertical у goalSlidePage (нужен и для отступа
+                снизу тоже), обычные 14 от sectionRow добавились бы поверх этого,
+                и итоговый отступ стал бы вдвое больше, чем у других секций.
+                Без слайдера (пустое состояние — обычный Card без своего паддинга
+                сверху) — оставляем стандартные 14, как везде. */}
+            <View style={[styles.sectionRow, goalSlides.length > 0 && { marginBottom: 0 }]}>
               <Text style={styles.sectionTitleInline}>Текущие цели</Text>
               {hasAnyGoal ? (
                 <Pressable onPress={() => router.push('/settings/goals')} hitSlop={8}>
