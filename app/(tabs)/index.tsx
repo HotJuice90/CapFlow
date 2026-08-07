@@ -457,11 +457,10 @@ export default function HomeScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.liqRowName} numberOfLines={1}>
-                            {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
+                            {it.orgName} · {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
                           </Text>
-                          <Text style={styles.liqRowSub} numberOfLines={1}>{it.orgName}</Text>
                           <Text style={styles.liqRowSub} numberOfLines={1}>
-                            через {it.daysRemaining} {pluralDays(it.daysRemaining)} · до {formatDateShort(it.unlockDate)}
+                            {formatDateShort(it.unlockDate)} · {it.daysRemaining} {pluralDays(it.daysRemaining)}
                           </Text>
                         </View>
                         <Text style={styles.liqRowValue}>{formatMoney(it.amountBase, { currency: cur, kopecks: 'hide' })}</Text>
