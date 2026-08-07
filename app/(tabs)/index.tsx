@@ -459,8 +459,9 @@ export default function HomeScreen() {
                           <Text style={styles.liqRowName} numberOfLines={1}>
                             {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
                           </Text>
+                          <Text style={styles.liqRowSub} numberOfLines={1}>{it.orgName}</Text>
                           <Text style={styles.liqRowSub} numberOfLines={1}>
-                            {it.orgName} · через {it.daysRemaining} {pluralDays(it.daysRemaining)} · до {formatDateShort(it.unlockDate)}
+                            через {it.daysRemaining} {pluralDays(it.daysRemaining)} · до {formatDateShort(it.unlockDate)}
                           </Text>
                         </View>
                         <Text style={styles.liqRowValue}>{formatMoney(it.amountBase, { currency: cur, kopecks: 'hide' })}</Text>
