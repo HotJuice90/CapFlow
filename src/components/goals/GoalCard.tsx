@@ -1,12 +1,13 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
 import { formatDurationApprox, pluralDays } from '@/format/date';
 import type { CurrencyCode, GoalKind } from '@/domain/types';
 import type { GoalProgress, GoalMetric } from '@/state/selectors';
+import { DEFAULT_GOAL_ICON, type GoalIconName } from '@/domain/goalIcons';
 
 /**
  * Общие крупные карточки целей — единственное место, где они описаны.
@@ -33,10 +34,7 @@ export function ActiveGoalCard({
           <View style={styles.topRow}>
             <View style={styles.iconTitle}>
               <View style={styles.iconBox}>
-                {/* Временно у всех целей одна иконка-«прицел» — старые (флаг/график/
-                    баланс) намекали на то, с чем цель не связана, и путали. Пикер
-                    выбора иконки — следующим шагом. */}
-                <MaterialIcons name="adjust" size={18} color={tokens.accent.base} />
+                <MaterialCommunityIcons name={(goal.icon as GoalIconName) ?? DEFAULT_GOAL_ICON} size={18} color={tokens.accent.base} />
               </View>
               <Text style={styles.title} numberOfLines={1}>{goal.title}</Text>
             </View>
@@ -126,7 +124,7 @@ export function MetricCard({
           <View style={styles.topRow}>
             <View style={styles.iconTitle}>
               <View style={styles.iconBox}>
-                <MaterialIcons name="adjust" size={18} color={tokens.accent.base} />
+                <MaterialCommunityIcons name={(goal.icon as GoalIconName) ?? DEFAULT_GOAL_ICON} size={18} color={tokens.accent.base} />
               </View>
               <Text style={styles.title} numberOfLines={1}>{goal.title}</Text>
             </View>
