@@ -115,6 +115,8 @@ export default function HomeScreen() {
   // спотыкалась на нативном снэпе страницы (JS-поток не поспевал).
   const goalPos = useSharedValue(0);
   const goalStartPos = useSharedValue(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const assetsSectionRef = useRef<View>(null);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -224,8 +226,6 @@ export default function HomeScreen() {
   const cur = data.settings.defaultCurrency;
   const orgCount = new Set(views.map((v) => v.organization.id)).size;
 
-  const scrollRef = useRef<ScrollView>(null);
-  const assetsSectionRef = useRef<View>(null);
   // Тап по «Активов в работе» — якорь вниз, к списку активов на этом же
   // экране (не отдельный роут). measureLayout — координаты цели относительно
   // ScrollView, а не окна, поэтому не зависит от текущей позиции скролла.
