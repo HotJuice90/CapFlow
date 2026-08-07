@@ -1,15 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, StatusBar } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { GOAL_ICONS, type GoalIconName } from '@/domain/goalIcons';
+import { DEFAULT_GOAL_ICON, GOAL_ICONS, type GoalIconName } from '@/domain/goalIcons';
 import { pickGoalIconValue } from '@/lib/goalIconPicker';
-import { tapBuzz } from '@/lib/haptics';
+import { tapBuzz, successBuzz } from '@/lib/haptics';
 import { tokens, font, hexToRgba } from '@/theme';
 
 export default function GoalIconPickerSheet() {
   const { current } = useLocalSearchParams<{ current?: string }>();
-  const choose = (icon: GoalIconName) => { tapBuzz(); pickGoalIconValue(icon); router.back(); };
+  // Тап только подсвечивает выбор — не закрывает шит сразу, чтобы случайный
+  // тап мимо не подставил не ту иконку. Подтверждает «Сохранить».
+  const [selected, setSelected] = useState<GoalIconName>((current as GoalIconName) ?? DEFAULT_GOAL_ICON);
+
+  const confirm = () => { successBuzz(); pickGoalIconValue(selected); router.back(); };
 
   return (
     <View style={s.sheet}>
@@ -18,18 +22,21 @@ export default function GoalIconPickerSheet() {
       <Text style={s.title}>Иконка цели</Text>
       <ScrollView style={s.grid} contentContainerStyle={s.gridInner} showsVerticalScrollIndicator={false}>
         {GOAL_ICONS.map((icon) => {
-          const active = icon === current;
+          const active = icon === selected;
           return (
             <Pressable
               key={icon}
               style={[s.cell, active && s.cellActive]}
-              onPress={() => choose(icon)}
+              onPress={() => { tapBuzz(); setSelected(icon); }}
             >
               <MaterialCommunityIcons name={icon} size={24} color={active ? tokens.text.inverse : tokens.accent.base} />
             </Pressable>
           );
         })}
       </ScrollView>
+      <Pressable style={s.saveBtn} onPress={confirm}>
+        <Text style={s.saveText}>Сохранить</Text>
+      </Pressable>
     </View>
   );
 }
@@ -46,4 +53,12 @@ const s = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.accent.base, 0.1),
   },
   cellActive: { backgroundColor: tokens.accent.base },
+  saveBtn: {
+    marginTop: tokens.spacing.lg,
+    backgroundColor: tokens.accent.base,
+    borderRadius: tokens.radius.pill,
+    paddingVertical: tokens.spacing.lg,
+    alignItems: 'center',
+  },
+  saveText: { color: tokens.text.inverse, fontSize: tokens.typography.body, fontWeight: '700' },
 });
