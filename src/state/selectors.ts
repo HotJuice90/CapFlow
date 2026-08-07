@@ -792,11 +792,15 @@ export function liquidity(data: AppData, now: Date = new Date()): Liquidity {
   let frozen = 0;
   const frozenItems: LiquidityFrozenItem[] = [];
   for (const v of views) {
-    const cap = convert(v.derived.currentValue, v.asset.currency, data);
     const isFrozen = v.instrument.behavior === 'term' && (v.derived.daysRemaining ?? 0) > 0;
     if (isFrozen) {
-      frozen += cap;
-      const amount = v.derived.finalAmount ?? v.derived.currentValue;
+      // Номинал (balanceNow — тело без начисленного), не currentValue и не
+      // finalAmount: это виджет «сколько денег сейчас», без любых прогнозов.
+      // У срочных процент почти всегда платится в конце срока, а не копится
+      // ежедневно, поэтому «начисленное на сегодня» тут не деньги, а оценка
+      // будущей выплаты — ей не место рядом с честной ликвидностью.
+      const nominal = convert(v.derived.balanceNow, v.asset.currency, data);
+      frozen += nominal;
       frozenItems.push({
         assetId: v.asset.id,
         instrumentName: v.instrument.name,
@@ -805,15 +809,15 @@ export function liquidity(data: AppData, now: Date = new Date()): Liquidity {
         color: v.organization.color,
         logo: v.organization.logo,
         customImageUri: v.organization.customImageUri,
-        amount,
-        amountBase: convert(amount, v.asset.currency, data),
+        amount: v.derived.balanceNow,
+        amountBase: nominal,
         currency: v.asset.currency,
         unlockDate: v.asset.endDate ?? now.toISOString().slice(0, 10),
         daysRemaining: v.derived.daysRemaining ?? 0,
         termProgress: v.derived.termProgress ?? 0,
       });
     } else {
-      liquid += cap;
+      liquid += convert(v.derived.currentValue, v.asset.currency, data);
     }
   }
   frozenItems.sort((a, b) => a.daysRemaining - b.daysRemaining);
