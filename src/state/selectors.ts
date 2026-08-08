@@ -1548,10 +1548,13 @@ export function incomeRunRateSeries(data: AppData, days = 30, now: Date = new Da
 }
 
 /**
- * Средний темп дохода в двух соседних окнах по `windowDays` — не точка «ровно
- * N дней назад» против точки «сегодня» (которая целиком зависит от того, в
- * какой именно день внутри периода случилось разовое событие — пополнение,
- * правка ставки), а средняя тенденция по каждому куску времени целиком.
+ * Темп дохода: «месяц назад» — среднее за окно `windowDays` СТАРШИХ дней
+ * 60-дневной истории (не значение ровно N дней назад, которое целиком
+ * зависит от случайного события в тот день — пополнения, правки ставки),
+ * «сегодня» — буквальное сегодняшнее значение (тот же incomeRunRateOn, что
+ * видно и на главной). Раньше «сегодня» тоже было средним по последним 30
+ * дням — если за месяц добавлялись новые активы, средняя размазывалась вниз
+ * и расходилась с честной цифрой на главной, хотя подпись обещала «сегодня».
  */
 export function incomePaceWindows(
   data: AppData,
@@ -1560,7 +1563,7 @@ export function incomePaceWindows(
 ): { prev: number; now: number } {
   const series = incomeRunRateSeries(data, windowDays * 2, now);
   const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
-  return { prev: avg(series.slice(0, windowDays)), now: avg(series.slice(windowDays)) };
+  return { prev: avg(series.slice(0, windowDays)), now: incomeRunRateOn(data, now) };
 }
 
 export interface PeriodComparison {
