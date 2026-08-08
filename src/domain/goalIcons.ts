@@ -9,6 +9,9 @@ export const DEFAULT_GOAL_ICON: GoalIconName = 'target';
  * Набор иконок для целей — финансовые + самые популярные бытовые категории,
  * на что обычно копят. Без загрузки своего фото — только выбор из набора.
  */
+// 30 = ровно 5 рядов по 6 в сетке пикера (goal-icon-picker.tsx) — без
+// неровного хвоста в последнем ряду, добавляя новую иконку сюда, добавляй
+// сразу 6 (или столько, чтобы остаток снова делился на 6).
 export const GOAL_ICONS: GoalIconName[] = [
   'target',
   'piggy-bank-outline',
@@ -34,4 +37,10 @@ export const GOAL_ICONS: GoalIconName[] = [
   'paw',
   'diamond-stone',
   'party-popper',
+  'tshirt-crew-outline',
+  'shoe-heel',
+  'gamepad-variant',
+  'necklace',
+  'watch-variant',
+  'shopping-outline',
 ];
