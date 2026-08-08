@@ -73,9 +73,9 @@ export function ActiveGoalCard({
           </View>
 
           <View style={styles.track}>
-            <View style={[styles.fill, { width: `${filledPct}%` }, isComplete && styles.fillDone]} />
+            <View style={[styles.fill, { width: `${isComplete ? filledPct : todayStartPct}%` }, isComplete && styles.fillDone]} />
             {!isComplete && todayPct > 0 ? (
-              <View style={[styles.fillToday, { left: `${todayStartPct}%`, width: `${todayPct}%` }]} />
+              <View style={[styles.fillToday, { width: `${todayPct}%` }]} />
             ) : null}
           </View>
 
@@ -233,11 +233,16 @@ const styles = StyleSheet.create({
   etaBadgeValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.accent.base },
   etaBadgeLabel: { fontFamily: font.regular, fontSize: 10, color: tokens.text.tertiary },
 
-  track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden', position: 'relative' },
-  fill: { height: '100%', borderRadius: 4, backgroundColor: tokens.accent.base },
+  // flexDirection:'row' + overflow:'hidden' на треке — скругление только по
+  // краям ВСЕЙ полосы (задаёт сам track), сегменты внутри прямоугольные и
+  // просто примыкают друг к другу по прямой, без своего наложения/скругления
+  // (раньше fillToday лежал абсолютом поверх fill, оба со своим radius —
+  // получался шов и ощущение, что зелёный кусок «наклеен» сверху).
+  track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba('#909497', 0.16), overflow: 'hidden', flexDirection: 'row' },
+  fill: { height: '100%', backgroundColor: tokens.accent.base },
   fillDone: { backgroundColor: tokens.semantic.positive },
-  // Прирост именно за сегодня — поверх синей заливки, встык к её переднему краю.
-  fillToday: { position: 'absolute', top: 0, bottom: 0, borderRadius: 4, backgroundColor: tokens.semantic.positive },
+  // Прирост именно за сегодня — сразу после синей заливки, тем же прямым краем.
+  fillToday: { height: '100%', backgroundColor: tokens.semantic.positive },
 
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   footerPct: { fontFamily: font.bold, fontSize: tokens.typography.label, color: tokens.accent.base },
