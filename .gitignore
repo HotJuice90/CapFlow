@@ -33,3 +33,6 @@ yarn-error.*
 # misc
 *.log
 coverage/
+
+# Memora (MCP-память для агента) — локальная БД, не для коммита
+.memora/

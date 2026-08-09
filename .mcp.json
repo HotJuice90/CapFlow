@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "memora": {
+      "command": "C:\\Users\\hooot\\AppData\\Roaming\\Python\\Python314\\Scripts\\memora-server.exe",
+      "args": [],
+      "env": {
+        "MEMORA_DB_PATH": "C:\\Users\\hooot\\YandexDisk\\My apps\\Capital Flow app\\.memora\\memories.db",
+        "MEMORA_ALLOW_ANY_TAG": "1",
+        "MEMORA_GRAPH_PORT": "8765"
+      }
+    }
+  }
+}
