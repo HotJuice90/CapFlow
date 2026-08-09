@@ -13,6 +13,7 @@ import type { Asset, FinancialInstrument, Organization, Snapshot } from '@/domai
 import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent } from '@/format';
+import { formatDateShort } from '@/format/date';
 import { tapBuzz, warnBuzz, successBuzz } from '@/lib/haptics';
 
 // Иконка по типу инструмента — та же пара, что и в AssetRow/TypeCardsRow.
@@ -156,29 +157,50 @@ function ArchiveRow({
   // менялась при жизни актива, тут должна остаться та, что реально действовала.
   // Для «зависших» (ещё active) снимка нет — берём как есть, у них ставка живая.
   const frozenRate = snapshot?.derived.currentRate ?? asset.rate;
+  // closedDate — новое поле, у записей, закрытых до его появления, откатываемся
+  // на дату снимка (см. closedDateFallback в selectors.ts — тот же принцип).
+  const closedIso = asset.closedDate ?? snapshot?.createdAt.slice(0, 10);
 
   const row = (
-    <Pressable style={styles.row} onPress={isStale ? onOpen : undefined} disabled={!isStale}>
-      <OrgLogo
-        color={organization.color}
-        logo={organization.logo}
-        imageUri={organization.customImageUri}
-        size={44}
-        radius={16}
-        fallbackIcon={ICON_BY_TYPE[instrument.typeId] ?? 'bank-outline'}
-      />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowName} numberOfLines={1}>{instrument.name}</Text>
-        <Text style={styles.rowSub} numberOfLines={1}>
-          {organization.name} · {formatPercent(frozenRate)}
-        </Text>
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={styles.rowAmount}>{formatMoney(asset.amount, { currency: asset.currency })}</Text>
-        <View style={[styles.statusPill, isStale && styles.statusPillWarning]}>
-          <Text style={[styles.statusPillText, isStale && styles.statusPillTextWarning]}>{statusLabel}</Text>
+    <Pressable style={styles.card} onPress={onOpen}>
+      <View style={styles.rowTop}>
+        <OrgLogo
+          color={organization.color}
+          logo={organization.logo}
+          imageUri={organization.customImageUri}
+          size={44}
+          radius={16}
+          fallbackIcon={ICON_BY_TYPE[instrument.typeId] ?? 'bank-outline'}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowName} numberOfLines={1}>{instrument.name}</Text>
+          <Text style={styles.rowSub} numberOfLines={1}>
+            {organization.name} · {formatPercent(frozenRate)}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.rowAmount}>{formatMoney(asset.amount, { currency: asset.currency })}</Text>
+          <View style={[styles.statusPill, isStale && styles.statusPillWarning]}>
+            <Text style={[styles.statusPillText, isStale && styles.statusPillTextWarning]}>{statusLabel}</Text>
+          </View>
         </View>
       </View>
+
+      {/* Заработано/налог — из снимка на момент закрытия (решение #8), не
+          пересчитываем на сегодня: деньги ушли, дальше проценты не идут.
+          У «зависших» (ещё active, просто просрочен) снимка нет — они ещё
+          не закрыты, эта сводка для них не про историю, а про текущее. */}
+      {!isStale && snapshot ? (
+        <View style={styles.metaRow}>
+          <Text style={styles.metaDates} numberOfLines={1}>
+            {formatDateShort(asset.openDate)}{closedIso ? ` → ${formatDateShort(closedIso)}` : ''}
+          </Text>
+          <View style={styles.metaStats}>
+            <Text style={styles.metaEarned}>+{formatMoney(snapshot.derived.earnedSoFar, { currency: asset.currency, kopecks: 'hide' })}</Text>
+            <Text style={styles.metaTax}>налог {formatMoney(snapshot.derived.tax, { currency: asset.currency, kopecks: 'hide' })}</Text>
+          </View>
+        </View>
+      ) : null}
     </Pressable>
   );
 
@@ -242,16 +264,22 @@ const styles = StyleSheet.create({
   // Каждая запись — своя карточка (как в «Площадках»), а не общий контейнер с
   // overflow:hidden — иначе панель свайпа обрезается/наезжает вместо чистого раскрытия.
   list: { gap: 4 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  card: {
     borderRadius: 20,
     paddingHorizontal: tokens.spacing.lg,
     paddingVertical: tokens.spacing.lg,
     backgroundColor: tokens.surface.white,
     ...boxShadow(tokens.shadow.subtle),
   },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  metaRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: tokens.surface.hairline,
+  },
+  metaDates: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, flexShrink: 1 },
+  metaStats: { flexDirection: 'row', gap: 10 },
+  metaEarned: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.semantic.positive },
+  metaTax: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   rowName: { fontFamily: font.medium, fontSize: tokens.typography.body, color: tokens.text.primary },
   rowSub: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, marginTop: 2 },
   rowAmount: { fontFamily: font.semibold, fontSize: tokens.typography.label, color: tokens.text.primary },

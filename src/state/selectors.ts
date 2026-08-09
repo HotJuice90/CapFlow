@@ -113,7 +113,19 @@ export function findAssetView(data: AppData, id: string | undefined, now: Date =
   if (!instrument) return undefined;
   const organization = data.organizations.find((o) => o.id === instrument.organizationId);
   if (!organization) return undefined;
-  return { asset, instrument, organization, derived: calculate(asset, instrument, data.params, now, 0) };
+  // Закрыт/архивирован — деньги ушли, дальше проценты не идут. Считаем на дату
+  // закрытия, а не на «сейчас» — иначе открытый закрытый актив показывал бы
+  // бесконечно растущий доход, как будто он всё ещё работает. closedDate —
+  // новое поле (см. useAssetActions), для старых записей без него — дата
+  // последнего снимка.
+  const closedIso = asset.closedDate ?? closedDateFallback(data, asset.id);
+  const asOf = closedIso ? parseLocal(closedIso) : now;
+  return { asset, instrument, organization, derived: calculate(asset, instrument, data.params, asOf, 0) };
+}
+
+function closedDateFallback(data: AppData, assetId: string): string | undefined {
+  const snaps = data.snapshots.filter((s) => s.assetId === assetId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return snaps[0]?.createdAt.slice(0, 10);
 }
 
 export interface PortfolioSummary {
@@ -1291,8 +1303,13 @@ export function assetValueSeries(data: AppData, assetId: string, maxPoints = 30)
 
   const start = parseLocal(asset.openDate);
   const today = new Date();
+  // Закрыт раньше endDate (или у него его вообще нет — бессрочный) — график не
+  // должен дорисовывать рост до сегодня, деньги ушли в день закрытия.
+  const closedIso = asset.status !== 'active' ? (asset.closedDate ?? closedDateFallback(data, assetId)) : undefined;
   const end = asset.endDate ? parseLocal(asset.endDate) : null;
-  const last = end && end < today ? end : today;
+  const closedAt = closedIso ? parseLocal(closedIso) : null;
+  const cap = [end, closedAt].filter((d): d is Date => d !== null && d < today).sort((a, b) => a.getTime() - b.getTime())[0];
+  const last = cap ?? today;
 
   const totalDays = Math.max(0, diffDays(start, last));
   const step = Math.max(1, Math.ceil(totalDays / maxPoints));
