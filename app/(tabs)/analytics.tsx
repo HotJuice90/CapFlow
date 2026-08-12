@@ -483,22 +483,30 @@ export default function AnalyticsScreen() {
               </View>
 
               {freeCapital > 0 ? (
-                <ImageBackground
-                  source={require('../../assets/decor/free-capital-jar.png')}
-                  style={styles.freeCapCard}
-                  imageStyle={styles.freeCapBg}
-                  resizeMode="cover"
+                // ImageBackground сам не нажимается — оборачиваем в Pressable.
+                // Ведёт в кошелёк: увидел «можно разместить» — сразу к ленте
+                // свободных денег, а не искать её через настройки.
+                <Pressable
+                  style={({ pressed }) => pressed && styles.freeCapPressed}
+                  onPress={() => { tapBuzz(); router.push('/settings/capital'); }}
                 >
-                  <View style={styles.freeCapInfo}>
-                    <Text style={styles.freeCapValue}>
-                      {formatMoney(freeCapital, { currency: cur, kopecks: 'hide' })}
-                    </Text>
-                    <Text style={styles.freeCapLabel}>Можно разместить</Text>
-                  </View>
-                  <View style={styles.freeCapPctChip}>
-                    <Text style={styles.freeCapPctText}>{Math.round(freeCapitalShare * 100)}%</Text>
-                  </View>
-                </ImageBackground>
+                  <ImageBackground
+                    source={require('../../assets/decor/free-capital-jar.png')}
+                    style={styles.freeCapCard}
+                    imageStyle={styles.freeCapBg}
+                    resizeMode="cover"
+                  >
+                    <View style={styles.freeCapInfo}>
+                      <Text style={styles.freeCapValue}>
+                        {formatMoney(freeCapital, { currency: cur, kopecks: 'hide' })}
+                      </Text>
+                      <Text style={styles.freeCapLabel}>Можно разместить</Text>
+                    </View>
+                    <View style={styles.freeCapPctChip}>
+                      <Text style={styles.freeCapPctText}>{Math.round(freeCapitalShare * 100)}%</Text>
+                    </View>
+                  </ImageBackground>
+                </Pressable>
               ) : null}
             </View>
 
@@ -874,7 +882,7 @@ const styles = StyleSheet.create({
   orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: tokens.spacing.xs },
-  orgAmount: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
+  orgAmount: { fontSize: 17, lineHeight: 19, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
   orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary },
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
@@ -894,6 +902,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   freeCapBg: { borderRadius: 16 },
+  freeCapPressed: { opacity: 0.6 },
   freeCapInfo: { gap: 6 },
   freeCapValue: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: font.semibold, color: '#7143AE', letterSpacing: -0.2 },
   freeCapLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },

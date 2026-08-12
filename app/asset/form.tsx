@@ -38,8 +38,10 @@ import {
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
 import { calculate, diffDays } from '@/calc';
+import { openDatePicker } from '@/lib/datePicker';
 import type {
   Asset,
+  BalanceAdjustment,
   CapitalizationMode,
   CurrencyCode,
   FinancialInstrument,
@@ -391,6 +393,75 @@ export default function AssetFormScreen() {
     [data.freeCapitalEntries, currency],
   );
 
+  const commit = async (
+    asset: Asset,
+    organization: Organization | undefined,
+    instrument: FinancialInstrument | undefined,
+  ) => {
+    if (editing && !organization && !instrument) await updateAsset(asset);
+    else await createAssetBundle({ organization, instrument, asset });
+    if (!editing && fundFromFree && amount !== undefined) {
+      await addFreeCapitalEntry({
+        id: uid('fce-'),
+        date: asset.openDate,
+        amount: -amount,
+        currency,
+        comment: title.trim() || productName.trim() || undefined,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    successBuzz();
+    router.back();
+  };
+
+  /**
+   * Правка суммы у актива, который уже прожил хотя бы день, — развилка, без
+   * которой график капитала врёт. `asset.amount` — это тело НА ДАТУ ОТКРЫТИЯ, и
+   * история (`capitalHistorySeries`) пересчитывает каждый день от него. Значит
+   * молча переписать сумму = переписать всё прошлое актива задним числом: если
+   * часть денег реально ушла вчера на новый счёт, старый актив «всегда» был
+   * меньше, а новый добавляет свою сумму со своей даты — и на графике вылезает
+   * скачок капитала на пустом месте (деньги-то просто переложили).
+   * Поэтому спрашиваем то же, что и шит «Изменить баланс»: исправление это
+   * (сумма всегда была такой) или движение денег (изменилась с какой-то даты).
+   */
+  const askAmountChangeKind = (asset: Asset) => {
+    appAlert(
+      'Сумма изменилась',
+      'Что произошло на самом деле? «Так было всегда» перепишет историю актива новой суммой. «Деньги двигались» оставит прошлое как было и запишет изменение с нужной даты — тогда график капитала не даст ложный скачок.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Деньги двигались', onPress: () => askMoveDate(asset) },
+        { text: 'Так было всегда', onPress: () => { void commit(asset, undefined, undefined); } },
+      ],
+    );
+  };
+
+  const askMoveDate = (asset: Asset) => {
+    const today = todayIso();
+    openDatePicker({
+      title: 'Когда изменилась сумма',
+      value: today,
+      minDate: asset.openDate,
+      maxDate: today,
+      onPick: (iso) => {
+        // Тело на дату открытия возвращаем исходное, а новую сумму пишем
+        // корректировкой баланса — ровно так же, как это делает шит
+        // «Изменить баланс» (BalanceAdjustment.amount = НОВЫЙ баланс).
+        const adjustment: BalanceAdjustment = { id: uid('badj-'), date: iso, amount: asset.amount };
+        void commit(
+          {
+            ...asset,
+            amount: initial.amount ?? asset.amount,
+            balanceAdjustments: [...(asset.balanceAdjustments ?? []), adjustment],
+          },
+          undefined,
+          undefined,
+        );
+      },
+    });
+  };
+
   const onSave = async () => {
     if (!canSave || !platform || amount === undefined || rate === undefined || !openDate) return;
 
@@ -468,20 +539,18 @@ export default function AssetFormScreen() {
       return;
     }
 
-    if (editing && !organization && !instrument) await updateAsset(asset);
-    else await createAssetBundle({ organization, instrument, asset });
-    if (!editing && fundFromFree) {
-      await addFreeCapitalEntry({
-        id: uid('fce-'),
-        date: openDate,
-        amount: -amount,
-        currency,
-        comment: title.trim() || productName.trim() || undefined,
-        createdAt: new Date().toISOString(),
-      });
+    // Сумму у уже живущего актива нельзя менять молча — см. askAmountChangeKind.
+    // Актив, открытый сегодня, истории ещё не имеет: там переписывать нечего.
+    const rewritesHistory =
+      !!editing && !organization && !instrument &&
+      initial.amount !== undefined && amount !== initial.amount &&
+      asset.openDate < todayIso();
+    if (rewritesHistory) {
+      askAmountChangeKind(asset);
+      return;
     }
-    successBuzz();
-    router.back();
+
+    await commit(asset, organization, instrument);
   };
 
   return (

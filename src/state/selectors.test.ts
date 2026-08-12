@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries } from './selectors';
+import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries } from './selectors';
 import { diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -238,5 +238,53 @@ describe('isPastYearMatured / buildAssetViews — просроченный вк�
   test('срок ещё не наступил — не просрочен', () => {
     const future: Asset = { ...matured, endDate: '2099-01-01' };
     expect(isPastYearMatured(future, depositInstrument, new Date('2026-01-15'))).toBe(false);
+  });
+});
+
+/**
+ * Регрессия на реальный баг: часть денег переложили со старого счёта на новый
+ * (ставка работала только до 1.5 млн), в приложении СУММУ старого актива
+ * поправили в форме, а не снятием. `capitalHistorySeries` считает каждый день
+ * от `asset.amount`, поэтому правка суммы переписывает всё прошлое актива:
+ * старый «всегда» был меньше, новый добавляет свою сумму со своей даты — и на
+ * графике вылезает скачок капитала на ровном месте, хотя деньги просто
+ * переложили. Правильная запись того же события — BalanceAdjustment на дату
+ * перевода, тогда история остаётся ровной.
+ */
+describe('capitalHistorySeries: перекладывание денег между активами', () => {
+  const base = {
+    ...emptyAppData(),
+    instruments: [savingsInstrument],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+  // Ставка 0 — убираем начисления, чтобы в серии остался чистый эффект тела.
+  const old0: Asset = {
+    id: 'old', instrumentId: 'i1', amount: 2_500_000, currency: 'RUB',
+    rate: 0, openDate: '2026-06-01', status: 'active',
+  };
+  const fresh: Asset = {
+    id: 'new', instrumentId: 'i1', amount: 1_000_000, currency: 'RUB',
+    rate: 0, openDate: '2026-08-10', status: 'active',
+  };
+  const now = new Date('2026-08-12');
+
+  test('НЕВЕРНО: сумму старого актива переписали задним числом — график даёт ложный скачок', () => {
+    const wrong = { ...base, assets: [{ ...old0, amount: 1_500_000 }, fresh] };
+    const series = capitalHistorySeries(wrong, 'month', now);
+    expect(series[0]).toBeCloseTo(1_500_000, 2);
+    expect(series[series.length - 1]).toBeCloseTo(2_500_000, 2);
+  });
+
+  test('ВЕРНО: то же событие как BalanceAdjustment на дату перевода — капитал ровный', () => {
+    const right = {
+      ...base,
+      assets: [
+        { ...old0, balanceAdjustments: [{ id: 'b1', date: '2026-08-10', amount: 1_500_000 }] },
+        fresh,
+      ],
+    };
+    const series = capitalHistorySeries(right, 'month', now);
+    // 2.5 млн до перевода и 1.5 + 1.0 после — итог не меняется ни в один день.
+    for (const v of series) expect(v).toBeCloseTo(2_500_000, 2);
   });
 });
