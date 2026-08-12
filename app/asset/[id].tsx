@@ -55,6 +55,24 @@ const PAYOUT_LABEL: Record<string, string> = {
 
 const HERO_GRAPH_WIDTH = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
 
+/**
+ * Налог на карточке актива — ПЛОСКИЙ: ставка × доход, без необлагаемого лимита.
+ *
+ * Лимит (ст. 214.2) — величина портфельная и годовая, одна на все активы. Делить
+ * её между карточками нельзя: любой порядок дележа делает цифру артефактом
+ * сортировки, а не свойством актива (было по дате открытия, а при совпадении дат
+ * — по сравнению id, из-за чего два счёта, открытых одним днём, показывали 0% и
+ * 6,23% в зависимости от сгенерированного id). Лимит живёт в своём виджете на
+ * главной, где копится фактически и прогнозно.
+ *
+ * На карточке остаётся ровно одно осмысленное разграничение — КТО платит: банк
+ * удерживает сам или ждать уведомления ФНС и платить самому. Та же «грязная»
+ * методика, что и в налоговой карточке аналитики, — цифры между экранами сходятся.
+ */
+function flatTax(income: number, params: { taxRate: number }): number {
+  return Math.max(0, income) * (params.taxRate / 100);
+}
+
 export default function AssetScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -83,8 +101,8 @@ export default function AssetScreen() {
   // считает: активы с taxWithheldByBank не делят лимит с остальными (см. calcAssetTax
   // и buildAssetViews), поэтому тут просто вычитаем то, что уже реально уплачено.
   const projectedTaxRemaining = useMemo(
-    () => (view ? Math.max(0, view.derived.tax - taxPaidTotal) : 0),
-    [view, taxPaidTotal],
+    () => (view ? Math.max(0, flatTax(view.derived.accrued, data.params) - taxPaidTotal) : 0),
+    [view, taxPaidTotal, data.params],
   );
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
@@ -355,7 +373,11 @@ export default function AssetScreen() {
               <Text style={styles.taxLifetimeValue}>{formatMoney(taxPaidTotal, { currency: cur, kopecks: 'hide' })}</Text>
             </View>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Text style={styles.taxLifetimeLabel}>К доплате при снятии</Text>
+              {/* Разграничение, которое тут единственное осмысленное: банк
+                  удержит сам или ждать уведомления ФНС и платить самому. */}
+              <Text style={styles.taxLifetimeLabel}>
+                {asset.taxWithheldByBank ? 'Удержит банк' : 'Заплатить по ФНС'}
+              </Text>
               <Text style={[styles.taxLifetimeValue, styles.taxLifetimeValueWarn]}>{formatMoney(projectedTaxRemaining, { currency: cur, kopecks: 'hide' })}</Text>
             </View>
           </View>
@@ -402,8 +424,12 @@ export default function AssetScreen() {
               iconColor="#C11818"
               iconBg={hexToRgba(tokens.semantic.negative, 0.12)}
               label={t.asset.tax}
-              value={formatMoney(derived.monthlyTax, { currency: cur, kopecks: 'hide' })}
-              sub={derived.incomePerMonth > 0 ? `${formatPercent((derived.monthlyTax / derived.incomePerMonth) * 100)} от дохода` : 'нет дохода'}
+              value={formatMoney(flatTax(derived.incomePerMonth, data.params), { currency: cur, kopecks: 'hide' })}
+              sub={
+                derived.incomePerMonth > 0
+                  ? `${formatPercent(data.params.taxRate)} · ${asset.taxWithheldByBank ? 'удержит банк' : 'платить самому'}`
+                  : 'нет дохода'
+              }
             />
             <View style={styles.finSep} />
             <FinCol
@@ -411,7 +437,7 @@ export default function AssetScreen() {
               iconColor={tokens.semantic.positive}
               iconBg={hexToRgba(tokens.semantic.positive, 0.12)}
               label={t.asset.net}
-              value={formatMoney(derived.monthlyNet, { currency: cur, kopecks: 'hide' })}
+              value={formatMoney(derived.incomePerMonth - flatTax(derived.incomePerMonth, data.params), { currency: cur, kopecks: 'hide' })}
               valueColor={tokens.semantic.positive}
               sub="после налога"
             />
