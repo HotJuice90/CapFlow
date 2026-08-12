@@ -37,7 +37,16 @@ ETF, облигации-флоатеры, структурные продукт�
 - Сборка релиза: `gradlew :app:assembleRelease` в `android/`
 - Релизы: `gh release create vX.Y.Z app-release.apk --title "..." --notes "..."`
 - Версии бампать в `app.json` (`version`) + `android/app/build.gradle` (`versionCode` + `versionName`)
-- OTA-обновления через GitHub Releases (Настройки → О приложении → Проверить обновления)
+- OTA-обновления через GitHub Releases (Настройки → О приложении). Модуль `src/update/`:
+  `checkUpdate` (сравнение тега релиза с `app.json` version), `installUpdate`
+  (скачивание APK в кэш + передача системному установщику), `useUpdate`
+  (`useUpdateFlow` для экрана, `useUpdateBadge` — тихая проверка раз в 6 ч
+  → красная точка на строке «О приложении»). Важно: установщику нужен
+  `content://` через `FileSystem.getContentUriAsync` (`file://` = FileUriExposedException)
+  + `REQUEST_INSTALL_PACKAGES` в манифесте (прописано и в `app.json`
+  `android.permissions`, чтобы уцелело при prebuild). Требует `expo-intent-launcher`.
+  Релиз обязан содержать `.apk` ассет — иначе кнопка «Обновить» ругается и
+  остаётся только ссылка на страницу релиза.
 
 ## Разработка БЕЗ Metro (по умолчанию)
 
