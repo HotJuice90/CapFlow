@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Dimensions, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { openedSide } from '@/lib/swipe';
 import { appAlert } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,7 +68,12 @@ export default function AssetScreen() {
   // Мало и широко — скайлайн должен выглядеть слитными холмами, а не частоколом
   // тонких полосок (много точек на узкой ширине давало «тот же график, другой цвет»).
   const valueSeries = useMemo(() => assetValueSeries(data, id, 18), [data, id]);
-  const timeline = useMemo(() => (view ? assetTimeline(view.asset) : []), [view]);
+  // instrument+params обязательны: без них дельты в истории считаются наивно и
+  // впитывают набежавшие проценты (см. balanceMovement в selectors).
+  const timeline = useMemo(
+    () => (view ? assetTimeline(view.asset, view.instrument, data.params) : []),
+    [view, data.params],
+  );
   // Реально удержанный банком налог при снятиях — факт, не оценка (см. BalanceAdjustment.taxWithheld).
   const taxPaidTotal = useMemo(
     () => (view?.asset.balanceAdjustments ?? []).reduce((sum, a) => sum + (a.taxWithheld ?? 0), 0),
@@ -323,7 +329,11 @@ export default function AssetScreen() {
 
           {valueSeries.length >= 2 ? (
             <View style={styles.heroGraphWrap}>
-              <SkylineBars data={valueSeries} width={HERO_GRAPH_WIDTH} height={56} color={tokens.accent.base} gap={0} />
+              {/* minSpanRatio: чтобы заполнить график, нужно изменение хотя бы
+                  на 2% от баланса. Иначе счёт, выросший на 699 ₽ из миллиона,
+                  рисовался лестницей до неба — ровно как счёт, с которого сняли
+                  100 000, и рядом два актива читались наоборот. */}
+              <SkylineBars data={valueSeries} width={HERO_GRAPH_WIDTH} height={56} color={tokens.accent.base} gap={0} minSpanRatio={0.02} />
             </View>
           ) : null}
         </Card>
@@ -633,9 +643,10 @@ function TimelineRow({
       friction={1.7}
       leftThreshold={72}
       rightThreshold={72}
-      onSwipeableWillOpen={(direction) => {
+      onSwipeableWillOpen={(drag) => {
+        const side = openedSide(drag);
         swipeRef.current?.close();
-        if (direction === 'left') { tapBuzz(); onEdit(); }
+        if (side === 'left') { tapBuzz(); onEdit(); }
         else { warnBuzz(); onDelete(); }
       }}
       renderLeftActions={() => (

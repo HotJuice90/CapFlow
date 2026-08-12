@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { openedSide } from '@/lib/swipe';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -171,9 +172,10 @@ function EntryRow({ entry, onDelete }: { entry: FreeCapitalEntry; onDelete: (id:
       leftThreshold={72}
       rightThreshold={72}
       // Тот же паттерн, что и в catalog/instruments.tsx: влево — редактировать, вправо — удалить.
-      onSwipeableWillOpen={(direction) => {
+      onSwipeableWillOpen={(drag) => {
+        const side = openedSide(drag);
         swipeRef.current?.close();
-        if (direction === 'left') {
+        if (side === 'left') {
           tapBuzz();
           router.push({ pathname: '/settings/free-capital-entry', params: { id: entry.id } });
         } else {

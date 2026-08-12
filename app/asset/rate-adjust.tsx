@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { openedSide } from '@/lib/swipe';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { TextField, NumberField, DateField } from '@/components/form/fields';
@@ -241,8 +242,9 @@ function HistoryRow({
       friction={1.7}
       leftThreshold={72}
       rightThreshold={72}
-      onSwipeableWillOpen={(direction) => {
-        if (direction === 'left') { tapBuzz(); startEdit(); }
+      onSwipeableWillOpen={(drag) => {
+        const side = openedSide(drag);
+        if (side === 'left') { tapBuzz(); startEdit(); }
         else { warnBuzz(); swipeRef.current?.close(); onDelete(point.id as string); }
       }}
       renderLeftActions={() => (

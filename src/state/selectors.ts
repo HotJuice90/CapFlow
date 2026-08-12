@@ -1356,7 +1356,43 @@ export interface AssetTimelineEntry {
  * Дельта каждой записи считается относительно предыдущей точки СВОЕГО типа,
  * а не соседней по дате записи другого типа.
  */
-export function assetTimeline(asset: Asset): AssetTimelineEntry[] {
+/**
+ * Сколько денег РЕАЛЬНО пришло/ушло в этой корректировке.
+ *
+ * `BalanceAdjustment.amount` — абсолютный баланс ПОСЛЕ операции, а не дельта.
+ * Наивная разница с предыдущей записью («400 641 − 500 000») врёт, потому что
+ * между этими двумя датами набежали проценты: снял ровно 100 000, а история
+ * показывала −99 359, где 641 — это капитализация за 1–5 августа. На счёте с
+ * ежедневной капитализацией это заметно на каждой операции.
+ *
+ * Правильное движение = записанный баланс − тот баланс, который был бы на эту
+ * дату БЕЗ этой операции (модель прогоняем только по предыдущим точкам).
+ * Для исправлений (`isCorrection`) та же формула даёт ровно расхождение модели
+ * с фактом банка — тоже то, что нужно показать.
+ */
+function balanceMovement(
+  asset: Asset,
+  points: { date: string; amount: number }[],
+  index: number,
+  instrument?: FinancialInstrument,
+  params?: AppData['params'],
+): number {
+  const point = points[index];
+  if (!instrument || !params) return point.amount - points[index - 1].amount;
+  const prior = points.slice(1, index).map((q, k) => {
+    const src = q as { date: string; amount: number; id?: string; isCorrection?: boolean };
+    return { id: src.id ?? `prior-${k}`, date: src.date, amount: src.amount, isCorrection: src.isCorrection };
+  });
+  const expected = calculate({ ...asset, balanceAdjustments: prior }, instrument, params, point.date, 0).balanceNow;
+  return point.amount - expected;
+}
+
+export function assetTimeline(
+  asset: Asset,
+  /** нужны, чтобы считать ИСТИННОЕ движение денег — без них дельта наивная (см. balanceMovement) */
+  instrument?: FinancialInstrument,
+  params?: AppData['params'],
+): AssetTimelineEntry[] {
   const balancePoints = [
     { date: asset.openDate, amount: asset.amount },
     ...(asset.balanceAdjustments ?? []).map((a) => ({ id: a.id, date: a.date, amount: a.amount, comment: a.comment, isCorrection: a.isCorrection, taxWithheld: a.taxWithheld })),
@@ -1379,7 +1415,7 @@ export function assetTimeline(asset: Asset): AssetTimelineEntry[] {
       date: p.date,
       comment: p.comment,
       amount: p.amount,
-      amountDelta: p.amount - balancePoints[i - 1].amount,
+      amountDelta: balanceMovement(asset, balancePoints, i, instrument, params),
       isCorrection: p.isCorrection,
       taxWithheld: p.taxWithheld,
     });

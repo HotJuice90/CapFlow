@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { openedSide } from '@/lib/swipe';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -177,9 +178,10 @@ function OrgRow({
       leftThreshold={72}
       rightThreshold={72}
       // Довели свайп до конца — действие сразу: вправо — редактировать, влево — удалить.
-      onSwipeableWillOpen={(direction) => {
+      onSwipeableWillOpen={(drag) => {
+        const side = openedSide(drag);
         swipeRef.current?.close();
-        if (direction === 'left') { tapBuzz(); onEdit(); }
+        if (side === 'left') { tapBuzz(); onEdit(); }
         else { warnBuzz(); onDelete(); }
       }}
       renderLeftActions={() => (

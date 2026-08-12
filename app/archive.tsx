@@ -1,6 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { openedSide } from '@/lib/swipe';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -235,9 +236,10 @@ function ArchiveRow({
       leftThreshold={72}
       rightThreshold={72}
       // Довели свайп до конца — сразу показываем подтверждение, без отдельного тапа по кнопке.
-      onSwipeableWillOpen={(direction) => {
+      onSwipeableWillOpen={(drag) => {
+        const side = openedSide(drag);
         swipeRef.current?.close();
-        if (direction === 'left') { tapBuzz(); onRestore(asset.id, instrument.name); }
+        if (side === 'left') { tapBuzz(); onRestore(asset.id, instrument.name); }
         else { warnBuzz(); onDelete(asset.id, instrument.name); }
       }}
       renderLeftActions={() => <SwipeHint icon="restore" color={tokens.semantic.positive} />}

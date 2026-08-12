@@ -1,7 +1,7 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
 import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries } from './selectors';
-import { diffDays } from '@/calc';
+import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
   id: 'i0',
@@ -286,5 +286,53 @@ describe('capitalHistorySeries: перекладывание денег межд
     const series = capitalHistorySeries(right, 'month', now);
     // 2.5 млн до перевода и 1.5 + 1.0 после — итог не меняется ни в один день.
     for (const v of series) expect(v).toBeCloseTo(2_500_000, 2);
+  });
+});
+
+/**
+ * Регрессия: снял ровно 100 000, а история показывала −99 359. Причина —
+ * BalanceAdjustment.amount это абсолютный баланс, и наивная разница с
+ * предыдущей записью впитывает набежавшие за эти дни проценты (на счёте с
+ * ежедневной капитализацией — на каждой операции).
+ */
+describe('assetTimeline: дельта операции = движение денег, а не разница балансов', () => {
+  const dailySavings: FinancialInstrument = {
+    id: 'i9', organizationId: 'o1', name: 'Ежедневный доход', typeId: 'savings',
+    behavior: 'perpetual', capitalization: 'capitalize', payoutPeriod: 'daily',
+  };
+  const params = emptyAppData().params;
+  // 500к под 11.7% с ежедневной капитализацией: к 5 августа тело = 500 641.40,
+  // поэтому снятие 100 000 записывается абсолютным балансом 400 641.40.
+  const asset: Asset = {
+    id: 'a9', instrumentId: 'i9', amount: 500_000, currency: 'RUB', rate: 11.7,
+    openDate: '2026-08-01', status: 'active',
+    capitalization: 'capitalize', payoutPeriod: 'daily',
+    balanceAdjustments: [{ id: 'b1', date: '2026-08-05', amount: 400_641.40 }],
+  };
+
+  test('движение = 100 000, а не разница записанных балансов', () => {
+    const entry = assetTimeline(asset, dailySavings, params).find((e) => e.id === 'b1');
+    expect(entry?.amountDelta).toBeCloseTo(-100_000, 0);
+  });
+
+  test('без instrument/params остаётся наивная разница (обратная совместимость)', () => {
+    const entry = assetTimeline(asset).find((e) => e.id === 'b1');
+    expect(entry?.amountDelta).toBeCloseTo(-99_358.6, 1);
+  });
+
+  test('вторая операция считается от баланса с учётом первой, а не от её записи', () => {
+    // Баланс на 11 августа берём у самого движка, а не константой: он зависит
+    // от ставки и капитализации, и захардкоженное число тихо разъезжается.
+    const afterFirst: Asset = { ...asset };
+    const balanceOn11 = calculate(afterFirst, dailySavings, params, '2026-08-11', 0).balanceNow;
+    const twoOps: Asset = {
+      ...asset,
+      balanceAdjustments: [
+        { id: 'b1', date: '2026-08-05', amount: 400_641.40 },
+        { id: 'b2', date: '2026-08-11', amount: balanceOn11 + 100_000 },
+      ],
+    };
+    const entry = assetTimeline(twoOps, dailySavings, params).find((e) => e.id === 'b2');
+    expect(entry?.amountDelta).toBeCloseTo(100_000, 6);
   });
 });

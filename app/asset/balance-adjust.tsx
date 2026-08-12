@@ -1,12 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { openedSide } from '@/lib/swipe';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { TextField, NumberField, DateField, Segmented } from '@/components/form/fields';
 import { Toggle } from '@/components/Toggle';
 import { useData } from '@/state/DataContext';
-import { findAssetView } from '@/state/selectors';
+import { assetTimeline, findAssetView } from '@/state/selectors';
 import { appAlert } from '@/lib/dialog';
 import { calcAssetTax } from '@/calc';
 import type { BalanceAdjustment, CurrencyCode } from '@/domain/types';
@@ -28,6 +29,9 @@ interface TimelinePoint {
   id?: string;
   date: string;
   amount: number;
+  /** сколько денег реально пришло/ушло — считает assetTimeline, а НЕ разница
+   *  соседних балансов: между ними набегают проценты (см. balanceMovement) */
+  movement?: number;
   comment?: string;
   isCorrection?: boolean;
   taxWithheld?: number;
@@ -57,12 +61,22 @@ export default function BalanceAdjustSheet() {
 
   const timeline = useMemo<TimelinePoint[]>(() => {
     if (!view) return [];
+    // Движение берём из assetTimeline — один источник истины с историей на
+    // карточке актива, иначе два экрана показывали бы разные цифры за одну операцию.
+    const movements = new Map(
+      assetTimeline(view.asset, view.instrument, data.params)
+        .filter((e) => e.type === 'balance' && e.id)
+        .map((e) => [e.id as string, e.amountDelta ?? 0]),
+    );
     const points: TimelinePoint[] = [
       { date: view.asset.openDate, amount: view.asset.amount },
-      ...(view.asset.balanceAdjustments ?? []).map((a) => ({ id: a.id, date: a.date, amount: a.amount, comment: a.comment, isCorrection: a.isCorrection, taxWithheld: a.taxWithheld })),
+      ...(view.asset.balanceAdjustments ?? []).map((a) => ({
+        id: a.id, date: a.date, amount: a.amount, movement: movements.get(a.id),
+        comment: a.comment, isCorrection: a.isCorrection, taxWithheld: a.taxWithheld,
+      })),
     ];
     return points.sort((a, b) => a.date.localeCompare(b.date));
-  }, [view]);
+  }, [view, data.params]);
 
   if (!view) return null;
 
@@ -208,9 +222,24 @@ export default function BalanceAdjustSheet() {
               />
             ) : null}
             <View style={s.freeRow}>
-              <Text style={s.freeLabel}>
-                {direction === 'topup' ? 'Списать из свободных денег' : 'Зачислить в свободные деньги'}
-              </Text>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={s.freeLabel}>
+                  {direction === 'topup' ? 'Списать из свободных денег' : 'Зачислить в свободные деньги'}
+                </Text>
+                {/* Выключенный тумблер на снятии — не «ничего не произошло», а
+                    осмысленный выбор: деньги ушли из учёта. Это правильно, когда
+                    их уже считает другой актив (переложил) — иначе один и тот же
+                    лям посчитается дважды. Без подписи это не читается вообще. */}
+                <Text style={s.freeSub}>
+                  {direction === 'topup'
+                    ? fundFromFree
+                      ? 'Деньги придут из кошелька — общий капитал не изменится'
+                      : 'Деньги придут со стороны — общий капитал вырастет'
+                    : fundFromFree
+                      ? 'Снятые деньги лягут в кошелёк — общий капитал не изменится'
+                      : 'Снятые деньги уйдут из учёта — так и надо, если переложил в другой актив (он уже считается) или потратил'}
+                </Text>
+              </View>
               <Toggle value={fundFromFree} onChange={(v) => { tapBuzz(); setFundFromFree(v); }} />
             </View>
             {fundFromFree ? (
@@ -270,7 +299,9 @@ function HistoryRow({
   onDelete: (id: string) => void;
 }) {
   const isFirst = prevAmount === undefined;
-  const delta = prevAmount !== undefined ? point.amount - prevAmount : undefined;
+  // movement — истинное движение денег; на разницу балансов падаем только если
+  // его не посчитали (нет инструмента/параметров), иначе цифра врёт на проценты.
+  const delta = isFirst ? undefined : point.movement ?? point.amount - (prevAmount as number);
   const isUp = delta !== undefined && delta >= 0;
   const isWithdrawal = !isFirst && !point.isCorrection && !isUp;
 
@@ -371,8 +402,9 @@ function HistoryRow({
       friction={1.7}
       leftThreshold={72}
       rightThreshold={72}
-      onSwipeableWillOpen={(direction) => {
-        if (direction === 'left') { tapBuzz(); startEdit(); }
+      onSwipeableWillOpen={(drag) => {
+        const side = openedSide(drag);
+        if (side === 'left') { tapBuzz(); startEdit(); }
         else { warnBuzz(); swipeRef.current?.close(); onDelete(point.id as string); }
       }}
       renderLeftActions={() => (
@@ -432,6 +464,7 @@ const s = StyleSheet.create({
     paddingVertical: tokens.spacing.sm,
   },
   freeLabel: { fontSize: tokens.typography.body, color: tokens.text.primary },
+  freeSub: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2, lineHeight: 15 },
   freeHint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: -4, marginBottom: tokens.spacing.sm },
 
   section: {
