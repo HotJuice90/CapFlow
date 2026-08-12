@@ -17,7 +17,8 @@ import { tokens, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
-import { diffDays } from '@/calc';
+import { calculate, diffDays } from '@/calc';
+import { uid } from '@/utils/id';
 import { tapBuzz, warnBuzz } from '@/lib/haptics';
 import { openDatePicker } from '@/lib/datePicker';
 import { t } from '@/i18n';
@@ -57,7 +58,7 @@ export default function AssetScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { data, setAssetStatus, deleteAsset, updateAsset } = useData();
+  const { data, setAssetStatus, deleteAsset, updateAsset, addFreeCapitalEntry } = useData();
 
   const view = useMemo(
     () => findAssetView(data, id),
@@ -103,8 +104,46 @@ export default function AssetScreen() {
       value: matured ?? today,
       minDate: view.asset.openDate,
       maxDate: today,
-      onPick: async (iso) => { await setAssetStatus(id, status, iso); router.back(); },
+      onPick: async (iso) => { await askReturnToFree(iso, status); },
     });
+  };
+  /**
+   * Закрыли актив — деньги куда-то ушли. По умолчанию считаем, что вернулись
+   * «в кошелёк» (свободные деньги), иначе капитал молча просаживается на всю
+   * сумму и надо вручную догонять ленту в настройках. Сумму считаем НА ДАТУ
+   * закрытия (не «сейчас»), и если налог держит банк — сразу за вычетом него,
+   * потому что на руки пришло именно столько.
+   */
+  const askReturnToFree = async (closedIso: string, status: 'closed' | 'archived') => {
+    if (!id || !view) return;
+    const atClose = calculate(view.asset, view.instrument, data.params, closedIso, 0);
+    const payout = Math.max(
+      0,
+      view.asset.taxWithheldByBank ? atClose.currentValue - Math.max(0, atClose.tax - taxPaidTotal) : atClose.currentValue,
+    );
+    const finish = async (toFree: boolean) => {
+      await setAssetStatus(id, status, closedIso);
+      if (toFree && payout > 0) {
+        await addFreeCapitalEntry({
+          id: uid('fce-'),
+          date: closedIso,
+          amount: payout,
+          currency: view.asset.currency,
+          comment: `Закрытие: ${view.asset.title || view.instrument.name}`,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      router.back();
+    };
+    if (payout <= 0) { await finish(false); return; }
+    appAlert(
+      'Вернуть деньги в свободные?',
+      `${formatMoney(payout, { currency: view.asset.currency })} добавим в ленту свободных денег на ${formatDateShort(closedIso)}. Если вывел не себе, а сразу переложил — выбери «Не возвращать» и заведи новый актив.`,
+      [
+        { text: 'Не возвращать', onPress: () => { void finish(false); } },
+        { text: 'Вернуть', onPress: () => { void finish(true); } },
+      ],
+    );
   };
   const onClose = () => {
     if (!id) return;

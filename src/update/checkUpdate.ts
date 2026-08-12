@@ -6,8 +6,11 @@ export interface UpdateInfo {
   current: string;
   latest: string;
   apkUrl?: string;
+  /** размер .apk в байтах — показываем в UI, чтобы не качать 100 МБ вслепую */
+  apkSize?: number;
   pageUrl: string;
   notes?: string;
+  publishedAt?: string;
 }
 
 function parseVer(v: string): number[] {
@@ -24,17 +27,28 @@ export function isNewer(latest: string, current: string): boolean {
   return false;
 }
 
+export function currentVersion(): string {
+  return Constants.expoConfig?.version ?? '0.0.0';
+}
+
 interface GithubAsset {
   name: string;
   browser_download_url: string;
+  size?: number;
 }
 
 /** Проверяет последний релиз на GitHub и сравнивает с текущей версией приложения. */
 export async function checkForUpdate(): Promise<UpdateInfo> {
-  const current = Constants.expoConfig?.version ?? '0.0.0';
+  const current = currentVersion();
   const res = await fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } });
   if (!res.ok) throw new Error(`GitHub API: ${res.status}`);
-  const json = (await res.json()) as { tag_name?: string; html_url?: string; body?: string; assets?: GithubAsset[] };
+  const json = (await res.json()) as {
+    tag_name?: string;
+    html_url?: string;
+    body?: string;
+    published_at?: string;
+    assets?: GithubAsset[];
+  };
 
   const latest = String(json.tag_name ?? '0.0.0').replace(/^v/i, '');
   const apk = (json.assets ?? []).find((a) => a.name.toLowerCase().endsWith('.apk'));
@@ -44,7 +58,9 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
     current,
     latest,
     apkUrl: apk?.browser_download_url,
+    apkSize: apk?.size,
     pageUrl: json.html_url ?? RELEASES_API,
     notes: json.body || undefined,
+    publishedAt: json.published_at,
   };
 }

@@ -131,7 +131,7 @@ export default function AssetFormScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenW } = useWindowDimensions();
   const bankTileW = bankTileSize(screenW);
-  const { data, createAssetBundle, updateAsset } = useData();
+  const { data, createAssetBundle, updateAsset, addFreeCapitalEntry } = useData();
 
   const editing = data.assets.find((a) => a.id === id);
   // Дублирование: подставляем параметры источника как черновик НОВОГО актива —
@@ -185,6 +185,7 @@ export default function AssetFormScreen() {
   // --- Шаг 3: параметры ---
   const [title, setTitle] = useState(src?.title ?? '');
   const [amount, setAmount] = useState<number | undefined>(src?.amount);
+  const [fundFromFree, setFundFromFree] = useState(false);
   const [currency, setCurrency] = useState<CurrencyCode>(src?.currency ?? data.settings.defaultCurrency);
   const [rate, setRate] = useState<number | undefined>(src?.rate);
   const [openDate, setOpenDate] = useState<string | undefined>(editing?.openDate ?? todayIso());
@@ -383,6 +384,13 @@ export default function AssetFormScreen() {
     !!platform && productChosen && !!amount && amount > 0 && rate !== undefined && !!openDate &&
     (!needsPayout || !!payoutPeriod) && (!isTerm || !!endDate);
 
+  // Баланс свободных денег именно в валюте актива — без конвертации по курсу,
+  // чтобы списание было точным (лента считает сумму по каждой валюте отдельно).
+  const freeBalanceInCurrency = useMemo(
+    () => data.freeCapitalEntries.filter((e) => e.currency === currency).reduce((sum, e) => sum + e.amount, 0),
+    [data.freeCapitalEntries, currency],
+  );
+
   const onSave = async () => {
     if (!canSave || !platform || amount === undefined || rate === undefined || !openDate) return;
 
@@ -462,6 +470,16 @@ export default function AssetFormScreen() {
 
     if (editing && !organization && !instrument) await updateAsset(asset);
     else await createAssetBundle({ organization, instrument, asset });
+    if (!editing && fundFromFree) {
+      await addFreeCapitalEntry({
+        id: uid('fce-'),
+        date: openDate,
+        amount: -amount,
+        currency,
+        comment: title.trim() || productName.trim() || undefined,
+        createdAt: new Date().toISOString(),
+      });
+    }
     successBuzz();
     router.back();
   };
@@ -822,6 +840,22 @@ export default function AssetFormScreen() {
                   placeholder="0"
                   grouped
                 />
+                {!editing ? (
+                  <>
+                    <ToggleRow
+                      label="Списать из свободных денег"
+                      value={fundFromFree}
+                      onChange={setFundFromFree}
+                    />
+                    {fundFromFree ? (
+                      <Text style={styles.freeCapitalHint}>
+                        {freeBalanceInCurrency > 0
+                          ? `Доступно: ${formatMoney(freeBalanceInCurrency, { currency })}`
+                          : 'Нет свободных денег в этой валюте — баланс уйдёт в минус'}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
                 <Field label="Валюта">
                   <View style={styles.currencyBarClip}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -1159,6 +1193,13 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.spacing.sm,
   },
   toggleLabel: { fontSize: tokens.typography.body, color: tokens.text.primary },
+  freeCapitalHint: {
+    fontFamily: font.regular,
+    fontSize: tokens.typography.hint,
+    color: tokens.text.tertiary,
+    marginTop: -6,
+    marginBottom: tokens.spacing.sm,
+  },
 
   previewRow: {
     flexDirection: 'row',

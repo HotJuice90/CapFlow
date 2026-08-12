@@ -15,6 +15,7 @@ import { tokens } from '@/theme';
 import { CURRENCY_SYMBOL, formatMoney, formatPercent } from '@/format';
 import { exportData, importData } from '@/backup/backup';
 import { t } from '@/i18n';
+import { useUpdateBadge } from '@/update/useUpdate';
 import Constants from 'expo-constants';
 
 const CURRENCIES: CurrencyCode[] = ['RUB', 'USD', 'EUR', 'TRY', 'KZT', 'BYN', 'CNY', 'INR', 'AED', 'BRL'];
@@ -29,6 +30,9 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { data, updateSettings, replaceAll, hasDemo, deleteDemoData, reseedDemo } = useData();
   const version = Constants.expoConfig?.version ?? '—';
+  // Тихая проверка обновлений (не чаще раза в 6 ч) — точка на строке «О приложении»,
+  // чтобы про новую версию узнавать самому, а не заходить и жать кнопку наугад.
+  const update = useUpdateBadge();
 
   const openCurrency = () => {
     openCurrencyPicker((code) => { void updateSettings({ defaultCurrency: code }); }, data.settings.defaultCurrency);
@@ -129,7 +133,14 @@ export default function SettingsScreen() {
         </Group>
 
         <Group title="Справка">
-          <SettingsRow icon="info-outline" color={tokens.accent.base} label="О приложении" value={version} onPress={() => router.push('/settings/about')} />
+          <SettingsRow
+            icon="info-outline"
+            color={tokens.accent.base}
+            label="О приложении"
+            value={update ? `Есть ${update.latest}` : version}
+            badge={!!update}
+            onPress={() => router.push('/settings/about')}
+          />
         </Group>
       </ScrollView>
     </ScreenBackground>

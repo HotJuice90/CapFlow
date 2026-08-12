@@ -36,7 +36,7 @@ interface TimelinePoint {
 export default function BalanceAdjustSheet() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { data, updateAsset } = useData();
+  const { data, updateAsset, addFreeCapitalEntry } = useData();
 
   const view = useMemo(() => findAssetView(data, id), [data, id]);
 
@@ -47,6 +47,13 @@ export default function BalanceAdjustSheet() {
   const [correctedAmount, setCorrectedAmount] = useState<number | undefined>(undefined);
   const [date, setDate] = useState<string>(todayIso());
   const [comment, setComment] = useState('');
+  const [fundFromFree, setFundFromFree] = useState(false);
+
+  // Баланс свободных денег именно в валюте актива — см. asset/form.tsx.
+  const freeBalanceInCurrency = useMemo(
+    () => data.freeCapitalEntries.filter((e) => e.currency === view?.asset.currency).reduce((sum, e) => sum + e.amount, 0),
+    [data.freeCapitalEntries, view?.asset.currency],
+  );
 
   const timeline = useMemo<TimelinePoint[]>(() => {
     if (!view) return [];
@@ -101,6 +108,23 @@ export default function BalanceAdjustSheet() {
       ...asset,
       balanceAdjustments: [...(asset.balanceAdjustments ?? []), adjustment],
     });
+    // Связка с лентой свободных денег: пополнение списывает из кошелька, снятие
+    // возвращает в него (за вычетом налога, если банк удержал сам — на руки
+    // пришло именно столько). Исправления не трогают кошелёк: это не движение
+    // денег, а правка модели под факт банка.
+    if (!isCorrection && fundFromFree && delta) {
+      const free = direction === 'topup' ? -delta : Math.max(0, delta - (taxWithheld ?? 0));
+      if (free !== 0) {
+        await addFreeCapitalEntry({
+          id: uid('fce-'),
+          date,
+          amount: free,
+          currency: cur,
+          comment: comment.trim() || undefined,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
     successBuzz();
     router.back();
   };
@@ -182,6 +206,21 @@ export default function BalanceAdjustSheet() {
                 onChange={setTaxWithheld}
                 placeholder={suggestedTax !== undefined ? String(Math.round(suggestedTax)) : '0'}
               />
+            ) : null}
+            <View style={s.freeRow}>
+              <Text style={s.freeLabel}>
+                {direction === 'topup' ? 'Списать из свободных денег' : 'Зачислить в свободные деньги'}
+              </Text>
+              <Toggle value={fundFromFree} onChange={(v) => { tapBuzz(); setFundFromFree(v); }} />
+            </View>
+            {fundFromFree ? (
+              <Text style={s.freeHint}>
+                {direction === 'topup'
+                  ? freeBalanceInCurrency > 0
+                    ? `Доступно: ${formatMoney(freeBalanceInCurrency, { currency: cur })}`
+                    : 'Нет свободных денег в этой валюте — баланс уйдёт в минус'
+                  : `Зачислим ${formatMoney(Math.max(0, (delta ?? 0) - (taxWithheld ?? 0)), { currency: cur })}${taxWithheld ? ' — за вычетом налога' : ''}`}
+              </Text>
             ) : null}
           </>
         )}
@@ -385,6 +424,15 @@ const s = StyleSheet.create({
   },
   correctionLabel: { fontFamily: font.medium, fontSize: tokens.typography.caption, color: tokens.text.primary },
   correctionHint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },
+
+  freeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: tokens.spacing.sm,
+  },
+  freeLabel: { fontSize: tokens.typography.body, color: tokens.text.primary },
+  freeHint: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: -4, marginBottom: tokens.spacing.sm },
 
   section: {
     fontFamily: font.semibold,

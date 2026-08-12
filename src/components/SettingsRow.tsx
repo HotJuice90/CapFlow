@@ -14,6 +14,7 @@ export function SettingsRow({
   chevron = true,
   danger,
   toggle,
+  badge,
 }: {
   icon: keyof typeof MaterialIcons.glyphMap;
   color?: string;
@@ -24,6 +25,8 @@ export function SettingsRow({
   danger?: boolean;
   /** Строка-свитч вместо значения+шеврона — тап по всей строке тоже переключает. */
   toggle?: { value: boolean; onChange: (v: boolean) => void; offColor?: string };
+  /** Точка-нотификация справа от названия (например «доступно обновление»). */
+  badge?: boolean;
 }) {
   const tint = danger ? tokens.semantic.negative : color;
   const rowOnPress = toggle ? () => toggle.onChange(!toggle.value) : onPress;
@@ -32,7 +35,13 @@ export function SettingsRow({
       <View style={[styles.iconBox, { backgroundColor: `${tint}1A` }]}>
         <MaterialIcons name={icon} size={20} color={tint} />
       </View>
-      <Text style={[styles.label, danger && { color: tokens.semantic.negative }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.label, danger && { color: tokens.semantic.negative }, badge && styles.labelBadged]} numberOfLines={1}>{label}</Text>
+      {badge ? (
+        <>
+          <View style={styles.badge} />
+          <View style={styles.spacer} />
+        </>
+      ) : null}
       {toggle ? (
         <Toggle value={toggle.value} onChange={toggle.onChange} interactive={false} offColor={toggle.offColor} />
       ) : (
@@ -50,6 +59,11 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   iconBox: { width: 34, height: 34, borderRadius: tokens.radius.sm, alignItems: 'center', justifyContent: 'center' },
   label: { flex: 1, fontSize: tokens.typography.body, color: tokens.text.primary, fontWeight: '500' },
+  // С точкой название не должно РАСТЯГИВАТЬСЯ (иначе точка уезжает к шеврону),
+  // но сжиматься обязано — длинный label иначе выдавит значение за край.
+  labelBadged: { flexGrow: 0, flexShrink: 1, marginRight: -6 },
+  badge: { width: 8, height: 8, borderRadius: 4, backgroundColor: tokens.semantic.negative },
+  spacer: { flex: 1, marginLeft: -tokens.spacing.md },
   value: { fontSize: tokens.typography.label, color: tokens.text.secondary, fontWeight: '500', maxWidth: 140 },
   chev: { marginLeft: 2 },
 });
