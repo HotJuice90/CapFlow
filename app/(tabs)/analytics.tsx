@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Dimensions, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Pattern as SvgPattern, Rect } from 'react-native-svg';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -31,7 +32,10 @@ import {
   taxByOrganization,
   buildAssetViews,
   capitalizationBonus,
+  convert,
+  type DistGroup,
 } from '@/state/selectors';
+import type { CurrencyCode, Organization } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { t } from '@/i18n';
@@ -435,18 +439,23 @@ export default function AnalyticsScreen() {
                   return (
                     <View key={g.key} style={i > 0 ? styles.orgItemWithSep : undefined}>
                       {i > 0 ? <View style={styles.orgSep} /> : null}
-                      <View style={styles.orgRow}>
-                        <OrgLogo color={g.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
-                        <View style={styles.orgInfo}>
-                          <Text style={styles.orgAmount} numberOfLines={1}>
-                            {formatMoney(g.capital, { currency: cur })}
-                          </Text>
-                          <Text style={styles.orgName} numberOfLines={1}>{g.label}</Text>
-                        </View>
-                        <View style={styles.orgPctChip}>
-                          <Text style={styles.orgPctText}>{Math.round(orgShare(g.capital) * 100)}%</Text>
-                        </View>
-                      </View>
+                      <OrgAllocationRow
+                        group={g}
+                        org={org}
+                        cur={cur}
+                        sharePct={Math.round(orgShare(g.capital) * 100)}
+                        assets={allViews
+                          .filter((v) => v.organization.id === g.key)
+                          .map((v) => ({
+                            id: v.asset.id,
+                            name: v.asset.title || v.instrument.name,
+                            rate: v.derived.currentRate,
+                            // В базовую валюту — как и сумма шапки; иначе актив в
+                            // долларах показал бы своё сырое число с «₽».
+                            capital: convert(v.derived.currentValue, v.asset.currency, data),
+                          }))
+                          .sort((a, b) => b.capital - a.capital)}
+                      />
                     </View>
                   );
                 })}
@@ -732,6 +741,90 @@ function typeIcon(typeId: string): keyof typeof MaterialCommunityIcons.glyphMap 
   }
 }
 
+
+function pluralAssets(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'актив';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'актива';
+  return 'активов';
+}
+
+/**
+ * Строка «Размещения капитала» — аккордеон по площадке.
+ *
+ * Зачем раскрытие: строка тут — это ОРГАНИЗАЦИЯ (сумма всех её активов), а не
+ * актив. При одном активе на банк группировка невидима, и экран читается
+ * третьим списком активов с почему-то другими числами — на этом легко сравнить
+ * сумму банка с суммой актива и решить, что приложение врёт. Количество рядом
+ * с названием и раскрытие состава делают группировку явной.
+ *
+ * Внутри показываем currentValue каждого актива (а не «вложено», как на
+ * Главной) — тогда дети складываются РОВНО в сумму шапки. Разъехавшийся итог
+ * в раскрытом списке был бы хуже, чем отсутствие раскрытия вовсе.
+ */
+function OrgAllocationRow({
+  group,
+  org,
+  cur,
+  sharePct,
+  assets,
+}: {
+  group: DistGroup;
+  org: Organization | undefined;
+  cur: CurrencyCode;
+  sharePct: number;
+  assets: { id: string; name: string; rate: number; capital: number }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const spin = useSharedValue(0);
+  const chevron = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 90}deg` }] }));
+
+  const toggle = () => {
+    tapBuzz();
+    spin.value = withTiming(open ? 0 : 1, { duration: 180 });
+    setOpen((v) => !v);
+  };
+
+  return (
+    <View>
+      <Pressable style={({ pressed }) => [styles.orgRow, pressed && styles.orgRowPressed]} onPress={toggle}>
+        <OrgLogo color={group.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
+        <View style={styles.orgInfo}>
+          <Text style={styles.orgAmount} numberOfLines={1}>
+            {formatMoney(group.capital, { currency: cur })}
+          </Text>
+          <View style={styles.orgNameRow}>
+            <Text style={styles.orgName} numberOfLines={1}>{group.label}</Text>
+            <Text style={styles.orgCount}>{group.count} {pluralAssets(group.count)}</Text>
+            <Animated.View style={chevron}>
+              <MaterialIcons name="chevron-right" size={16} color={tokens.text.tertiary} />
+            </Animated.View>
+          </View>
+        </View>
+        <View style={styles.orgPctChip}>
+          <Text style={styles.orgPctText}>{sharePct}%</Text>
+        </View>
+      </Pressable>
+
+      {open ? (
+        <View style={styles.orgChildren}>
+          {assets.map((a) => (
+            <View key={a.id} style={styles.orgChildRow}>
+              <View style={styles.orgChildDot} />
+              <Text style={styles.orgChildName} numberOfLines={1}>{a.name}</Text>
+              <Text style={styles.orgChildRate}>{formatPercent(a.rate)}</Text>
+              <Text style={styles.orgChildAmount} numberOfLines={1}>
+                {formatMoney(a.capital, { currency: cur, kopecks: 'hide' })}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   insight: {
     flexDirection: 'row',
@@ -886,6 +979,15 @@ const styles = StyleSheet.create({
   orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary },
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
+  orgRowPressed: { opacity: 0.6 },
+  orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  orgCount: { fontSize: tokens.typography.micro, lineHeight: 14, color: tokens.text.tertiary },
+  orgChildren: { marginTop: 12, marginLeft: 44 + tokens.spacing.md, gap: 10 },
+  orgChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  orgChildDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: tokens.text.tertiary },
+  orgChildName: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
+  orgChildRate: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
+  orgChildAmount: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.text.primary },
   // marginTop 24 — то же расстояние, что Figma держит между всеми тремя
   // секциями карточки (gap-[24px] на контейнере): строки → полоса → плашка.
   allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.lg },
