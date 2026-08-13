@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { TYPE_LABEL, PAYOUT_LABEL } from '@/domain/labels';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +22,7 @@ import { diffDays, periodsPerYear } from '@/calc';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
-import { formatMoney, formatPercent } from '@/format';
+import { formatMoney } from '@/format';
 import { formatDateShort } from '@/format/date';
 import { t } from '@/i18n';
 
@@ -294,8 +293,6 @@ function InstrumentRow({
   onPress: () => void;
 }) {
   const org = view?.organization;
-  const rate = view?.derived.currentRate;
-  const payout = view?.asset.payoutPeriod ?? view?.instrument.payoutPeriod;
 
   // Реальная выплата сегодня (не ежедневная рутина): погашение вклада ИЛИ
   // периодическая выплата процентов (мес./кв./полугодие/год).
@@ -320,23 +317,14 @@ function InstrumentRow({
         <View style={{ flex: 1 }}>
           <View style={styles.rowTop}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowName} numberOfLines={1}>{c.instrumentName}</Text>
+              {/* Как на главной: своё название актива важнее названия продукта. */}
+              <Text style={styles.rowName} numberOfLines={1}>{view?.asset.title || c.instrumentName}</Text>
               <Text style={styles.rowSub} numberOfLines={1}>{org?.name ?? ''}</Text>
             </View>
             <Text style={styles.rowAmount} numberOfLines={1}>
               {c.incomePerDay >= 0 ? '+' : ''}{formatMoney(c.incomePerDay, { currency: c.currency })}
             </Text>
           </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
-            {rate !== undefined ? (
-              <View style={[styles.pill, styles.pillPct]}><Text style={styles.pillText}>{formatPercent(rate)}</Text></View>
-            ) : null}
-            <View style={styles.pill}><Text style={styles.pillText}>{TYPE_LABEL[c.typeId] ?? c.typeId}</Text></View>
-            {payout ? (
-              <View style={styles.pill}><Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text></View>
-            ) : null}
-          </ScrollView>
         </View>
       </View>
 
@@ -469,7 +457,9 @@ const styles = StyleSheet.create({
   dayList: { paddingHorizontal: 16, paddingTop: tokens.spacing.tight, paddingBottom: 8 },
 
   rowWrap: { paddingVertical: 16 },
-  row: { flexDirection: 'row', gap: 12 },
+  // center: без пилюль текстовый блок (две однострочные строки) ниже логотипа,
+  // и при дефолтном stretch он бы прижался к его верху.
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   iconFallback: { width: 44, height: 44, borderRadius: 16 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.sm },
@@ -498,10 +488,6 @@ const styles = StyleSheet.create({
   earnedStripeText: { fontSize: tokens.typography.hint, fontWeight: '500', color: tokens.text.secondary, letterSpacing: -0.12 },
   earnedStripeAmount: { fontSize: 13, fontWeight: '700', letterSpacing: -0.13, color: tokens.semantic.positive },
 
-  pillRow: { flexDirection: 'row', gap: 2, marginTop: 10 },
-  pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
-  pillPct: { paddingHorizontal: 8 },
-  pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
