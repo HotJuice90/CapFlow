@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { AssetView } from '@/domain/types';
 import { TYPE_LABEL, PAYOUT_LABEL } from '@/domain/labels';
-import { tokens, font, hexToRgba } from '@/theme';
+import { tokens, font, hexToRgba, rowText } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { pluralDays } from '@/format/date';
 import { OrgLogo } from '@/components/BankLogo';
@@ -129,20 +129,11 @@ const styles = StyleSheet.create({
   // сумма должна стоять на уровне названия, а не съезжать к середине блока.
   top: { flexDirection: 'row', alignItems: 'flex-start' },
   middle: { flex: 1, marginLeft: tokens.spacing.md, marginRight: tokens.spacing.sm },
-  // Название мельче суммы и обычным весом — иначе два «главных» элемента в
-  // строке спорят друг с другом и иерархии не возникает.
-  name: {
-    fontSize: tokens.typography.label,
-    lineHeight: tokens.typography.label + 3,
-    fontWeight: '500',
-    color: tokens.text.primary,
-  },
-  subtitle: {
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 2,
-    color: tokens.text.secondary,
-    marginTop: 2,
-  },
+  // Общая типографика строки актива (см. src/theme/rowText.ts) — те же значения
+  // в календаре. Название мельче суммы и обычным весом, иначе два «главных»
+  // элемента в строке спорят друг с другом и иерархии не возникает.
+  name: rowText.title,
+  subtitle: rowText.subtitle,
 
   right: { alignItems: 'flex-end' },
   // Единственный тяжёлый элемент строки — он и есть якорь для взгляда.

@@ -20,7 +20,7 @@ import {
 } from '@/state/selectors';
 import { diffDays, periodsPerYear } from '@/calc';
 import type { CurrencyCode } from '@/domain/types';
-import { tokens, hexToRgba } from '@/theme';
+import { tokens, font, hexToRgba, rowText } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney } from '@/format';
 import { formatDateShort } from '@/format/date';
@@ -463,9 +463,12 @@ const styles = StyleSheet.create({
   rowDivider: { borderBottomWidth: 1, borderBottomColor: tokens.surface.hairline },
   iconFallback: { width: 44, height: 44, borderRadius: 16 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.sm },
-  rowName: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
-  rowSub: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: tokens.spacing.chip, letterSpacing: -0.28 },
-  rowAmount: { fontSize: 17, fontWeight: '600', color: '#586692', letterSpacing: -0.17 },
+  // Общая типографика строки актива — те же значения на главной (см. src/theme/rowText.ts).
+  rowName: rowText.title,
+  rowSub: rowText.subtitle,
+  // fontFamily, а не fontWeight: на Android именованный шрифт игнорирует
+  // fontWeight, поэтому вес задаётся семейством (см. CLAUDE.md → Шрифт).
+  rowAmount: { fontFamily: font.semibold, fontSize: 17, lineHeight: 19, color: tokens.accent.base, letterSpacing: -0.17 },
 
   // Полоска-баннер под строкой — показывается только в дни реальной выплаты/погашения.
   // Цвет универсальный (зелёный «рост»), не завязан на бренд-цвет банка.
