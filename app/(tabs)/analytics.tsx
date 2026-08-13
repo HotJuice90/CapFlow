@@ -829,31 +829,51 @@ function OrgAllocationRow({
     setOpen((v) => !v);
   };
 
+  // При одном активе раскрывать нечего: состав повторил бы сумму шапки, добавив
+  // только название. Поэтому вместо шеврона и «1 актив» показываем само название
+  // сразу в строке — информация та же, лишнего взаимодействия нет.
+  const single = group.count === 1 ? assets[0] : undefined;
+
+  const head = (
+    <>
+      <OrgLogo color={group.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
+      <View style={styles.orgInfo}>
+        <Text style={styles.orgAmount} numberOfLines={1}>
+          {formatMoney(group.capital, { currency: cur })}
+        </Text>
+        <View style={styles.orgNameRow}>
+          <Text style={styles.orgName} numberOfLines={1}>
+            {group.label}
+            <Text style={styles.orgMetaSep}> · </Text>
+            <Text style={styles.orgCount}>
+              {single ? single.name : `${group.count} ${pluralAssets(group.count)}`}
+            </Text>
+          </Text>
+          {single ? null : (
+            <Animated.View style={chevron}>
+              <MaterialIcons name="keyboard-arrow-down" size={18} color={tokens.text.tertiary} />
+            </Animated.View>
+          )}
+        </View>
+      </View>
+      <View style={styles.orgPctChip}>
+        <Text style={styles.orgPctText}>{sharePct}%</Text>
+      </View>
+    </>
+  );
+
   return (
     <View>
       {/* Без подсветки нажатия: строка раскрывается тут же, и мерцание всей
           строки на каждый тап только раздражает — обратная связь и так есть
           (шеврон + появившийся состав), плюс тактильная. */}
-      <Pressable style={styles.orgRow} onPress={toggle}>
-        <OrgLogo color={group.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
-        <View style={styles.orgInfo}>
-          <Text style={styles.orgAmount} numberOfLines={1}>
-            {formatMoney(group.capital, { currency: cur })}
-          </Text>
-          <View style={styles.orgNameRow}>
-            <Text style={styles.orgName} numberOfLines={1}>{group.label}</Text>
-            <Text style={styles.orgCount}>{group.count} {pluralAssets(group.count)}</Text>
-            <Animated.View style={chevron}>
-              <MaterialIcons name="keyboard-arrow-down" size={18} color={tokens.text.tertiary} />
-            </Animated.View>
-          </View>
-        </View>
-        <View style={styles.orgPctChip}>
-          <Text style={styles.orgPctText}>{sharePct}%</Text>
-        </View>
-      </Pressable>
+      {single ? (
+        <View style={styles.orgRow}>{head}</View>
+      ) : (
+        <Pressable style={styles.orgRow} onPress={toggle}>{head}</Pressable>
+      )}
 
-      {open ? (
+      {open && !single ? (
         <View style={styles.orgChildren}>
           {/* Ставку тут не показываем: в блоке уже есть процент со смыслом «доля
               портфеля», и два разных процента рядом путали. У актива справа —
@@ -1025,11 +1045,14 @@ const styles = StyleSheet.create({
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: tokens.spacing.xs },
   orgAmount: { fontSize: 17, lineHeight: 19, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
-  orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary },
+  // flexShrink — чтобы длинное «Банк · Название актива» обрезалось, а не
+  // выдавливало шеврон за край строки.
+  orgName: { flexShrink: 1, fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary },
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  orgCount: { fontSize: tokens.typography.micro, lineHeight: 14, color: tokens.text.tertiary },
+  orgCount: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
+  orgMetaSep: { fontSize: tokens.typography.micro, color: hexToRgba(tokens.text.tertiary, 0.6) },
   orgChildren: { marginTop: 12, marginLeft: 44 + tokens.spacing.md, gap: 10 },
   orgChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   orgChildDot: { width: 6, height: 6, borderRadius: 3 },
