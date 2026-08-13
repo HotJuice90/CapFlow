@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries } from './selectors';
+import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -334,5 +334,73 @@ describe('assetTimeline: дельта операции = движение ден
     };
     const entry = assetTimeline(twoOps, dailySavings, params).find((e) => e.id === 'b2');
     expect(entry?.amountDelta).toBeCloseTo(100_000, 6);
+  });
+});
+
+describe('monthlyIncomeHistory — помесячный доход и налог', () => {
+  const savings: FinancialInstrument = {
+    id: 'im', organizationId: 'o1', name: 'НС', typeId: 'savings',
+    behavior: 'perpetual', capitalization: 'none',
+  };
+  // 1 200 000 под 10% простых = 120 000/год, ровно 10 000 в месяц при 30/365.
+  const asset: Asset = {
+    id: 'am', instrumentId: 'im', amount: 1_200_000, currency: 'RUB', rate: 10,
+    openDate: '2026-01-01', status: 'active',
+  };
+  const base = {
+    ...emptyAppData(),
+    instruments: [savings],
+    assets: [asset],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+  const now = new Date('2026-06-15');
+
+  test('месяцы идут только до текущего, последний обрезан сегодняшним днём', () => {
+    const r = monthlyIncomeHistory(base, 2026, now);
+    expect(r.months.map((m) => m.month)).toEqual([0, 1, 2, 3, 4, 5]);
+    // июнь — половина месяца, заметно меньше полного мая
+    expect(r.months[5].earned).toBeLessThan(r.months[4].earned);
+  });
+
+  test('сумма месяцев равна итогу за период', () => {
+    const r = monthlyIncomeHistory(base, 2026, now);
+    expect(r.months.reduce((s, m) => s + m.earned, 0)).toBeCloseTo(r.totalEarned, 6);
+  });
+
+  test('плоский налог — ставка × доход, без лимита', () => {
+    const r = monthlyIncomeHistory(base, 2026, now);
+    for (const m of r.months) {
+      expect(m.tax).toBeCloseTo(m.earned * (base.params.taxRate / 100), 6);
+    }
+  });
+
+  /**
+   * Лимит один на год, поэтому пока накопленный доход его не превысил, налога
+   * нет вовсе — и только потом он начинает набегать. Именно этим taxWithLimit
+   * отличается от плоского: помесячно они не совпадают, а по году сходятся.
+   */
+  test('налог с лимитом: ноль, пока лимит не выбран, дальше растёт', () => {
+    const withLimit = { ...base, params: { ...base.params, taxFreeLimit: 25_000 } };
+    const r = monthlyIncomeHistory(withLimit, 2026, now);
+    expect(r.months[0].taxWithLimit).toBeCloseTo(0, 6);
+    expect(r.months[1].taxWithLimit).toBeCloseTo(0, 6);
+    expect(r.months[r.months.length - 1].taxWithLimit).toBeGreaterThan(0);
+  });
+
+  test('налог с лимитом за год = налог на доход сверх лимита', () => {
+    const withLimit = { ...base, params: { ...base.params, taxFreeLimit: 25_000 } };
+    const r = monthlyIncomeHistory(withLimit, 2026, now);
+    const expected = Math.max(0, r.totalEarned - 25_000) * (withLimit.params.taxRate / 100);
+    expect(r.totalTaxWithLimit).toBeCloseTo(expected, 6);
+  });
+
+  test('актив с удержанием банком лимит не делит — у него налог плоский', () => {
+    const withLimit = {
+      ...base,
+      params: { ...base.params, taxFreeLimit: 25_000 },
+      assets: [{ ...asset, taxWithheldByBank: true }],
+    };
+    const r = monthlyIncomeHistory(withLimit, 2026, now);
+    expect(r.totalTaxWithLimit).toBeCloseTo(r.totalTax, 6);
   });
 });

@@ -14,6 +14,7 @@ import { OrgLogo } from '@/components/BankLogo';
 import { InfoTap } from '@/components/InfoTap';
 import { CompareDonut } from '@/components/CompareDonut';
 import { CapitalAxisChart } from '@/components/CapitalAxisChart';
+import { MonthlyIncomeChart } from '@/components/MonthlyIncomeChart';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { SlidingChipTabs } from '@/components/SlidingChipTabs';
 import { useData } from '@/state/DataContext';
@@ -33,6 +34,7 @@ import {
   buildAssetViews,
   capitalizationBonus,
   convert,
+  monthlyIncomeHistory,
   type DistGroup,
 } from '@/state/selectors';
 import type { CurrencyCode, Organization } from '@/domain/types';
@@ -93,6 +95,7 @@ export default function AnalyticsScreen() {
   const activeInsight = ins.length > 0 ? ins[Math.floor(insightSeed * ins.length)] : undefined;
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
+  const monthlyIncome = useMemo(() => monthlyIncomeHistory(data, new Date().getFullYear()), [data]);
   const heroDays = HERO_PERIODS.find((p) => p.key === heroPeriod)!.days;
   const capSeries = useMemo(() => capitalHistorySeries(data, heroDays), [data, heroDays]);
   const earnedPeriod = useMemo(() => earnedInPeriod(data, heroDays), [data, heroDays]);
@@ -513,6 +516,9 @@ export default function AnalyticsScreen() {
                 </Pressable>
               ) : null}
             </View>
+
+            <Text style={styles.section}>Доход по месяцам</Text>
+            <MonthlyIncomeChart data={monthlyIncome} currency={cur} />
 
             {/* Налоги (НДФЛ) — операционный расклад «на сегодня» (доплатить
                 самому, что удержит банк, с учётом лимита — честная

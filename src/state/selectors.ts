@@ -1573,6 +1573,106 @@ export function earnedInPeriod(data: AppData, days: HeroWindow, now: Date = new 
   return earned;
 }
 
+/**
+ * Помесячный доход за год: столбик вверх — заработано, вниз — налог.
+ *
+ * Заработанное считается тем же способом, что и `earnedInPeriod` — разницей
+ * НАКОПЛЕННОГО на границах окна, а не суммой дневных ставок: так корректно
+ * учитываются капитализация, изменения ставки и пополнения внутри месяца.
+ * Закрытые активы участвуют в тех месяцах, когда были живы (buildHistoryItems),
+ * иначе прошлое занижалось бы после каждого закрытия.
+ *
+ * Налог даётся в двух видах, и это НЕ противоречие:
+ *  - `tax` — плоский (ставка × доход месяца). Им рисуются столбики: та же
+ *    «грязная» методика, что в налоговой карточке аналитики и на карточке
+ *    актива, поэтому соседние экраны сходятся между собой.
+ *  - `taxWithLimit` — как платится на самом деле: необлагаемый лимит один на
+ *    год, поэтому раскладывается ХРОНОЛОГИЧЕСКИ по нарастающему доходу (первые
+ *    месяцы года выходят с нулём, пока лимит не выбран). Активы с
+ *    `taxWithheldByBank` лимит не делят — у них свой правовой режим, плоско
+ *    (см. calcAssetTax).
+ */
+export interface MonthIncomeRow {
+  /** 0..11 */
+  month: number;
+  earned: number;
+  /** плоский: ставка × доход месяца */
+  tax: number;
+  /** с учётом годового необлагаемого лимита, разложенного по месяцам */
+  taxWithLimit: number;
+  /** сколько активов было живо в этом месяце */
+  assets: number;
+}
+
+export interface MonthIncomeYear {
+  year: number;
+  /** только месяцы, которые уже начались (текущий — частичный, до сегодня) */
+  months: MonthIncomeRow[];
+  totalEarned: number;
+  totalTax: number;
+  totalTaxWithLimit: number;
+}
+
+export function monthlyIncomeHistory(data: AppData, year: number, now: Date = new Date()): MonthIncomeYear {
+  const { items } = buildHistoryItems(data, now);
+  const rate = data.params.taxRate / 100;
+  const limit = data.params.taxFreeLimit;
+
+  const lastMonth = year === now.getFullYear() ? now.getMonth() : 11;
+  const months: MonthIncomeRow[] = [];
+
+  // Нарастающие итоги для раскладки лимита по месяцам.
+  let cumSelf = 0;
+  let cumSelfTax = 0;
+
+  for (let m = 0; m <= lastMonth; m++) {
+    const start = new Date(year, m, 1);
+    const monthEnd = new Date(year, m + 1, 0);
+    // Текущий месяц обрезаем сегодняшним днём — столбик растёт по ходу месяца.
+    const end = monthEnd > now ? now : monthEnd;
+    if (start > now) break;
+
+    let earnedSelf = 0;
+    let earnedWithheld = 0;
+    let alive = 0;
+
+    for (const { asset, instrument, openDate, closedAt } of items) {
+      const assetEnd = closedAt && closedAt < end ? closedAt : end;
+      if (assetEnd < start || openDate > assetEnd) continue;
+      const from = openDate > start ? openDate : start;
+      alive += 1;
+      const a1 = calculate(asset, instrument, data.params, assetEnd, 0).accrued;
+      const a0 = calculate(asset, instrument, data.params, from, 0).accrued;
+      const delta = convert(a1 - a0, asset.currency, data);
+      if (asset.taxWithheldByBank) earnedWithheld += delta;
+      else earnedSelf += delta;
+    }
+
+    const earned = earnedSelf + earnedWithheld;
+
+    cumSelf += earnedSelf;
+    const cumSelfTaxNow = Math.max(0, cumSelf - limit) * rate;
+    const selfTaxThisMonth = cumSelfTaxNow - cumSelfTax;
+    cumSelfTax = cumSelfTaxNow;
+
+    months.push({
+      month: m,
+      earned,
+      tax: earned * rate,
+      taxWithLimit: selfTaxThisMonth + earnedWithheld * rate,
+      assets: alive,
+    });
+  }
+
+  return {
+    year,
+    months,
+    totalEarned: months.reduce((s, r) => s + r.earned, 0),
+    totalTax: months.reduce((s, r) => s + r.tax, 0),
+    totalTaxWithLimit: months.reduce((s, r) => s + r.taxWithLimit, 0),
+  };
+}
+
 function incomeRunRateOn(data: AppData, day: Date): number {
   const instrById = new Map(data.instruments.map((i) => [i.id, i]));
   let sum = 0;
