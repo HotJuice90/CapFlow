@@ -1036,13 +1036,13 @@ const styles = StyleSheet.create({
   },
   // Группа строк площадок — gap:10 между строкой/разделителем/строкой (было
   // marginVertical:16 на разделителе — вдвое больше, чем в Figma).
-  // 16, как paddingVertical строки в календаре: там между строками 16+1+16,
-  // тут было 12+1+12 — заметно теснее при одинаковом смысле списка.
-  orgGroup: { gap: tokens.spacing.lg },
+  // 15 + разделитель + 15 = 30 между содержимым строк — единый ритм со
+  // строками активов в календаре (там те же 15 как paddingVertical).
+  orgGroup: { gap: 15 },
   // Разделитель и строка под ним — в одной обёртке (нужен общий key), без
   // своего gap тут было бы 10px только НАД разделителем (от orgGroup) и 0
   // ПОД ним — нужно 10 с обеих сторон.
-  orgItemWithSep: { gap: tokens.spacing.lg },
+  orgItemWithSep: { gap: 15 },
   orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: tokens.spacing.xs },

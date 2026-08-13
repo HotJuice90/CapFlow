@@ -456,7 +456,9 @@ const styles = StyleSheet.create({
   dayEmpty: { fontSize: tokens.typography.label, color: tokens.text.tertiary, padding: tokens.spacing.lg, textAlign: 'center' },
   dayList: { paddingHorizontal: 16, paddingTop: tokens.spacing.tight, paddingBottom: 8 },
 
-  rowWrap: { paddingVertical: 16 },
+  // 15 сверху и снизу = 30 между содержимым соседних строк (плюс 1px
+  // разделителя). Тот же ритм в «Размещении капитала» аналитики.
+  rowWrap: { paddingVertical: 15 },
   // center: без пилюль текстовый блок (две однострочные строки) ниже логотипа,
   // и при дефолтном stretch он бы прижался к его верху.
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
