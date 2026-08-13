@@ -495,9 +495,10 @@ export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByIns
         typeId: r.instrument.typeId,
         organizationId: r.instrument.organizationId,
         tax: r.annual * rate,
-        // Факт «на сегодня» показываем там, где годовая сумма — прогноз:
-        // у зафиксированных дублировать нечего.
-        taxToDate: !fixed && r.fact > 0 ? r.fact * rate : undefined,
+        // Факт есть У ВСЕХ, включая зафиксированные. Раньше у них его не было,
+        // и UI подставлял вместо факта годовую сумму — колонка мешала факт с
+        // прогнозом и не сходилась ни с «набежало», ни с «прогнозом».
+        taxToDate: r.fact * rate,
         fixed,
       };
     })

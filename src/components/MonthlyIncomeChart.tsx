@@ -70,11 +70,19 @@ export function MonthlyIncomeChart({
           </Text>
           <Text style={styles.totalLabel}>Доход за год</Text>
         </View>
+        {/* Раньше тут был ОДИН «Налог» — сумма обоих видов, и она не билась ни
+            с чем в плашке ниже. Показываем те же две величины, что и там. */}
+        <View style={[styles.totalItem, styles.totalRight]}>
+          <Text style={[styles.totalValue, { color: tokens.accent.base }]} numberOfLines={1}>
+            {formatMoney(data.totalTaxWithheld, { currency, kopecks: 'hide' })}
+          </Text>
+          <Text style={styles.totalLabel}>Удержал банк</Text>
+        </View>
         <View style={[styles.totalItem, styles.totalRight]}>
           <Text style={[styles.totalValue, { color: tokens.semantic.warning }]} numberOfLines={1}>
-            −{formatMoney(data.totalTaxWithLimit, { currency, kopecks: 'hide' })}
+            {formatMoney(data.totalTaxSelf, { currency, kopecks: 'hide' })}
           </Text>
-          <Text style={styles.totalLabel}>Налог</Text>
+          <Text style={styles.totalLabel}>Отложить самому</Text>
         </View>
       </View>
 
@@ -204,10 +212,10 @@ const styles = StyleSheet.create({
 
   // Число сверху, подпись под ним — тот же порядок, что в сводке календаря,
   // строке площадки и строке актива.
-  totals: { flexDirection: 'row', marginBottom: tokens.spacing.lg },
+  totals: { flexDirection: 'row', gap: 6, marginBottom: tokens.spacing.lg },
   totalItem: { flex: 1 },
   totalRight: { alignItems: 'flex-end' },
-  totalValue: { fontFamily: font.semibold, fontSize: 17, lineHeight: 19, letterSpacing: -0.2 },
+  totalValue: { fontFamily: font.semibold, fontSize: 15, lineHeight: 17, letterSpacing: -0.2, color: tokens.text.primary },
   totalLabel: { fontSize: tokens.typography.micro, lineHeight: 13, color: tokens.text.tertiary, marginTop: 3 },
 
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, position: 'relative' },

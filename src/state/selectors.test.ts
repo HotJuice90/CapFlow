@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes } from './selectors';
+import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -573,5 +573,51 @@ describe('assetYearIncomes: бессрочный, открытый в конце
     const r = assetYearIncomes(data, now)[0];
     expect(r.fact).toBeCloseTo(1_000_000 * 0.12 * (10 / 365), 0);   // 10 → 20 дек
     expect(r.remaining).toBeCloseTo(1_000_000 * 0.12 * (12 / 365), 0); // 20 дек → 1 янв
+  });
+});
+
+/**
+ * Колонки списка «Налог по инструментам» должны быть однородными: факт к факту,
+ * прогноз к прогнозу. Раньше у зафиксированных активов факта не было, и UI
+ * подставлял вместо него годовую сумму — колонка мешала две величины и не
+ * сходилась ни с «набежало на сегодня», ни с «прогнозом».
+ */
+describe('taxByInstrument: факт и прогноз не смешиваются', () => {
+  const savings: FinancialInstrument = {
+    id: 'ip', organizationId: 'o1', name: 'НС', typeId: 'savings',
+    behavior: 'perpetual', capitalization: 'none',
+  };
+  const term: FinancialInstrument = {
+    id: 'ipt', organizationId: 'o1', name: 'Вклад', typeId: 'deposit',
+    behavior: 'term', capitalization: 'none',
+  };
+  const now = new Date('2026-08-13');
+  const data = {
+    ...emptyAppData(),
+    instruments: [savings, term],
+    assets: [
+      { id: 'p1', instrumentId: 'ip', amount: 2_000_000, currency: 'RUB' as const, rate: 12, openDate: '2026-01-10', status: 'active' as const },
+      { id: 'p2', instrumentId: 'ipt', amount: 800_000, currency: 'RUB' as const, rate: 14, openDate: '2026-03-01', endDate: '2026-11-01', status: 'active' as const },
+    ],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+
+  test('факт есть у всех строк, включая зафиксированные', () => {
+    const rows = taxByInstrument(data, now);
+    expect(rows.length).toBe(2);
+    expect(rows.some((r) => r.fixed)).toBe(true);
+    for (const r of rows) expect(r.taxToDate).toBeGreaterThan(0);
+  });
+
+  test('сумма фактов списка = набежавший налог сводки (грязный)', () => {
+    const rows = taxByInstrument(data, now);
+    const sumFact = rows.reduce((s, r) => s + (r.taxToDate ?? 0), 0);
+    expect(sumFact).toBeCloseTo(analyticsSummary(data, now).taxAccruedGross, 6);
+  });
+
+  test('сумма прогнозов списка = прогноз сводки', () => {
+    const rows = taxByInstrument(data, now);
+    const sumYear = rows.reduce((s, r) => s + r.tax, 0);
+    expect(sumYear).toBeCloseTo(analyticsSummary(data, now).taxYearGross, 6);
   });
 });
