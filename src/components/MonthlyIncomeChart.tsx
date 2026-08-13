@@ -13,9 +13,10 @@ const MONTH_FULL = [
 ];
 
 const POSITIVE_H = 96;
-/** Воздух между столбиком и осью — без него линия зажата между двумя
- *  прямоугольниками вплотную и физически неразличима. */
-const AXIS_GAP = 4;
+/** Разделителем служит сам зазор: все зелёные столбики кончаются на одной
+ *  высоте, все жёлтые с неё начинаются, и просвет фона между ними читается как
+ *  ось. Нарисованная линия поверх этого выглядела грубо. */
+const AXIS_GAP = 1;
 
 function pluralAssets(n: number): string {
   const mod10 = n % 10;
@@ -28,10 +29,9 @@ function pluralAssets(n: number): string {
 /**
  * Доход по месяцам: столбик вверх — заработано, вниз — налог.
  *
- * Ось нуля рисуется ОДНОЙ сплошной линией поверх всей ширины, а не кусочками
- * внутри колонок. Иначе она рвётся зазорами между столбиками и почти не видна,
- * а тогда жёлтое читается как нижняя часть того же столбика — то есть график
- * выглядит составным, и вся метафора «доход вверх, налог вниз» пропадает.
+ * Ось нуля НЕ рисуется линией: разделителем служит сам зазор между зелёным и
+ * жёлтым — все столбики кончаются и начинаются на одной высоте, поэтому просвет
+ * читается как ось сам по себе, а нарисованная поверх линия выглядела грубо.
  *
  * Обе половины меряются ОДНИМ масштабом: налог — это доля от дохода, и если
  * растянуть его на всю нижнюю зону, он визуально сравняется с доходом и соврёт
@@ -121,8 +121,6 @@ export function MonthlyIncomeChart({
             </Pressable>
           );
         })}
-        {/* Сплошная ось поверх колонок — см. комментарий у компонента. */}
-        <View style={[styles.axis, { top: POSITIVE_H }]} pointerEvents="none" />
       </View>
 
       {row ? (
@@ -196,13 +194,6 @@ const styles = StyleSheet.create({
   barUp: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
   plotDown: { width: '100%', justifyContent: 'flex-start', paddingTop: AXIS_GAP },
   barDown: { width: '100%', borderBottomLeftRadius: 4, borderBottomRightRadius: 4 },
-  axis: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: hexToRgba(tokens.text.primary, 0.45),
-  },
   monthLabel: {
     fontSize: tokens.typography.micro,
     lineHeight: 13,
