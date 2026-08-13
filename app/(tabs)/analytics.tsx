@@ -830,9 +830,9 @@ function OrgAllocationRow({
   };
 
   // При одном активе раскрывать нечего: состав повторил бы сумму шапки, добавив
-  // только название. Поэтому вместо шеврона и «1 актив» показываем само название
-  // сразу в строке — информация та же, лишнего взаимодействия нет.
-  const single = group.count === 1 ? assets[0] : undefined;
+  // только название. Прячем шеврон и само раскрытие — количество при этом
+  // остаётся, чтобы строки читались единообразно.
+  const single = group.count === 1;
 
   const head = (
     <>
@@ -842,12 +842,12 @@ function OrgAllocationRow({
           {formatMoney(group.capital, { currency: cur })}
         </Text>
         <View style={styles.orgNameRow}>
+          {/* Количество тем же шрифтом, что и банк — вложенный Text без своего
+              стиля наследует orgName; отличается только точка-разделитель. */}
           <Text style={styles.orgName} numberOfLines={1}>
             {group.label}
             <Text style={styles.orgMetaSep}> · </Text>
-            <Text style={styles.orgCount}>
-              {single ? single.name : `${group.count} ${pluralAssets(group.count)}`}
-            </Text>
+            {group.count} {pluralAssets(group.count)}
           </Text>
           {single ? null : (
             <Animated.View style={chevron}>
@@ -1051,7 +1051,6 @@ const styles = StyleSheet.create({
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  orgCount: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   orgMetaSep: { fontSize: tokens.typography.micro, color: hexToRgba(tokens.text.tertiary, 0.6) },
   orgChildren: { marginTop: 12, marginLeft: 44 + tokens.spacing.md, gap: 10 },
   orgChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
