@@ -577,12 +577,12 @@ describe('assetYearIncomes: бессрочный, открытый в конце
 });
 
 /**
- * Колонки списка «Налог по инструментам» должны быть однородными: факт к факту,
- * прогноз к прогнозу. Раньше у зафиксированных активов факта не было, и UI
- * подставлял вместо него годовую сумму — колонка мешала две величины и не
- * сходилась ни с «набежало на сегодня», ни с «прогнозом».
+ * Факт «на сегодня» показываем ТОЛЬКО у бессрочных. У срочного набежавшее не
+ * соответствует ничему реальному: забрать деньги посреди срока без потери
+ * процентов нельзя. У бессрочного наоборот — снял в любой день, банк начислил
+ * на эту сумму. Поэтому у срочного значима одна цифра, итоговая.
  */
-describe('taxByInstrument: факт и прогноз не смешиваются', () => {
+describe('taxByInstrument: факт только у бессрочных', () => {
   const savings: FinancialInstrument = {
     id: 'ip', organizationId: 'o1', name: 'НС', typeId: 'savings',
     behavior: 'perpetual', capitalization: 'none',
@@ -602,17 +602,20 @@ describe('taxByInstrument: факт и прогноз не смешиваютс�
     keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
   };
 
-  test('факт есть у всех строк, включая зафиксированные', () => {
+  test('у срочного факта нет, у бессрочного есть', () => {
     const rows = taxByInstrument(data, now);
-    expect(rows.length).toBe(2);
-    expect(rows.some((r) => r.fixed)).toBe(true);
-    for (const r of rows) expect(r.taxToDate).toBeGreaterThan(0);
+    const fixed = rows.find((r) => r.fixed)!;
+    const perpetual = rows.find((r) => !r.fixed)!;
+    expect(fixed.taxToDate).toBeUndefined();
+    expect(perpetual.taxToDate).toBeGreaterThan(0);
   });
 
-  test('сумма фактов списка = набежавший налог сводки (грязный)', () => {
-    const rows = taxByInstrument(data, now);
-    const sumFact = rows.reduce((s, r) => s + (r.taxToDate ?? 0), 0);
-    expect(sumFact).toBeCloseTo(analyticsSummary(data, now).taxAccruedGross, 6);
+  test('у срочного итоговая сумма — за весь срок, и она меньше годовой прикидки', () => {
+    const fixed = taxByInstrument(data, now).find((r) => r.fixed)!;
+    // срок 1 мар → 1 ноя, то есть 8 месяцев из 12
+    const fullYear = 800_000 * 0.14 * 0.13;
+    expect(fixed.tax).toBeLessThan(fullYear);
+    expect(fixed.tax).toBeGreaterThan(0);
   });
 
   test('сумма прогнозов списка = прогноз сводки', () => {
@@ -620,4 +623,4 @@ describe('taxByInstrument: факт и прогноз не смешиваютс�
     const sumYear = rows.reduce((s, r) => s + r.tax, 0);
     expect(sumYear).toBeCloseTo(analyticsSummary(data, now).taxYearGross, 6);
   });
-});
+});;

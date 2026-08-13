@@ -672,14 +672,10 @@ export default function AnalyticsScreen() {
                               ) : null}
                               <Text style={styles.taxByInstrumentValue}>{formatMoney(primary, { currency: cur, kopecks: 'hide' })}</Text>
                             </View>
-                            {/* У срочного «год ~» врёт дважды: тильда обещает
-                                прикидку, а слово «год» — годовой горизонт, тогда
-                                как это ТОЧНАЯ сумма за весь срок, который может
-                                быть и месяц. Для таких пишем «всего», без тильды. */}
+                            {/* Вторая строка только у бессрочных: у срочного
+                                значима одна цифра — итоговая. */}
                             {secondary !== undefined ? (
-                              <Text style={styles.taxByInstrumentSubValue}>
-                                {r.fixed ? 'всего ' : 'год ~ '}{formatMoney(secondary, { currency: cur, kopecks: 'hide' })}
-                              </Text>
+                              <Text style={styles.taxByInstrumentSubValue}>год ~ {formatMoney(secondary, { currency: cur, kopecks: 'hide' })}</Text>
                             ) : null}
                           </View>
                         </Pressable>
