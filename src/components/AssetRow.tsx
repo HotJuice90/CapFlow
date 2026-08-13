@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { AssetView } from '@/domain/types';
+import { TYPE_LABEL, PAYOUT_LABEL } from '@/domain/labels';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { pluralDays } from '@/format/date';
@@ -15,18 +16,24 @@ const ICON_BY_TYPE = {
 } as const;
 
 /**
- * Строка списка активов: шапка (лого + название + банк + бейдж срока), под ней
- * ряд подписанных метрик во всю ширину.
+ * Строка списка активов: слева название и банк, справа сумма и доход в день,
+ * под ними пилюли с деталями (ставка, тип, период выплат, остаток срока).
  *
- * Почему метрики отдельной строкой, а не справа от названия: суммы бывают
- * восьмизначными, и в правой колонке они отбирали ширину у названия — длинное
- * («Накопительный счёт Лояльный») обрезалось. Тут сумма ни с чем не конкурирует,
- * плюс каждое число подписано, так что «3 052 594» не спутать с доходом.
- * Раньше суммы в строке не было вообще — при том что это самая базовая цифра.
+ * Композиция выстрадана итерациями, поэтому кратко о том, что НЕ работает:
  *
- * Второй фикс: подзаголовок был `title` ЛИБО «банк · ставка», поэтому своё
- * название актива съедало и банк, и ставку. Теперь `title` идёт как название,
- * банк всегда под ним, а ставка живёт в метриках.
+ * 1. Суммы в строке не было вообще — при том что это самая базовая цифра.
+ * 2. Ряд подписанных метрик («На счёте / Ставка / В день») под шапкой: на одной
+ *    карточке смотрится хорошо (образец — Финуслуги), но в списке из пяти строк
+ *    это 15 повторяющихся ярлыков, и ни одно число не главное. Читается кашей.
+ * 3. Название в одну строку с обрезкой: на левую колонку остаётся ~160px, а
+ *    «Накопительный ежедневный плюс» просит ~218px. Поэтому numberOfLines={2} —
+ *    высотой платят только длинные названия, короткие остаются компактными.
+ *
+ * Пилюли — та же идиома, что в календаре (`app/(tabs)/calendar.tsx` → pillRow):
+ * детали, которые полезно видеть, но которые не должны спорить за внимание с
+ * суммой. Обёрнуты во flexWrap, а НЕ в горизонтальный ScrollView как в
+ * календаре: вложенный горизонтальный скролл внутри вертикального списка
+ * отбирает жест и мешает скроллить экран.
  */
 export function AssetRow({ view }: { view: AssetView }) {
   const router = useRouter();
@@ -36,13 +43,14 @@ export function AssetRow({ view }: { view: AssetView }) {
   // (продлить/архив/закрыть), см. app/asset/[id].tsx.
   const isMatured = instrument.behavior === 'term' && (derived.termProgress ?? 0) >= 1;
   const cur = asset.currency;
+  const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
 
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       onPress={() => router.push(`/asset/${asset.id}`)}
     >
-      <View style={styles.head}>
+      <View style={styles.top}>
         <OrgLogo
           color={organization.color}
           logo={organization.logo}
@@ -51,59 +59,49 @@ export function AssetRow({ view }: { view: AssetView }) {
           radius={tokens.radius.sm}
           fallbackIcon={iconName}
         />
-        <View style={styles.headText}>
-          <Text style={styles.name} numberOfLines={1}>
+        <View style={styles.middle}>
+          <Text style={styles.name} numberOfLines={2}>
             {asset.title || instrument.name}
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
             {organization.name}
           </Text>
         </View>
+        <View style={styles.right}>
+          <Text style={styles.amount} numberOfLines={1}>
+            {formatMoney(derived.currentValue, { currency: cur, kopecks: 'hide' })}
+          </Text>
+          <Text style={styles.income} numberOfLines={1}>
+            +{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.pillRow}>
+        <View style={[styles.pill, styles.pillRate]}>
+          <Text style={[styles.pillText, styles.pillRateText]}>{formatPercent(derived.currentRate)}</Text>
+        </View>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>{TYPE_LABEL[instrument.typeId] ?? instrument.typeId}</Text>
+        </View>
+        {payout ? (
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text>
+          </View>
+        ) : null}
         {isMatured ? (
-          <View style={styles.maturedBadge}>
-            <Text style={styles.maturedBadgeText}>Истёк срок</Text>
+          <View style={[styles.pill, styles.pillWarn]}>
+            <Text style={[styles.pillText, styles.pillWarnText]}>Истёк срок</Text>
           </View>
         ) : derived.daysRemaining !== undefined ? (
-          <View style={styles.termBadge}>
-            <Text style={styles.termBadgeText}>
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>
               {derived.daysRemaining} {pluralDays(derived.daysRemaining)}
             </Text>
           </View>
         ) : null}
       </View>
-
-      <View style={styles.metrics}>
-        <Metric label="На счёте" value={formatMoney(derived.currentValue, { currency: cur, kopecks: 'hide' })} />
-        <Metric label="Ставка" value={formatPercent(derived.currentRate)} />
-        <Metric
-          label="В день"
-          value={`+${formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })}`}
-          valueColor={tokens.semantic.positive}
-          align="right"
-        />
-      </View>
     </Pressable>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  valueColor,
-  align = 'left',
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  align?: 'left' | 'right';
-}) {
-  return (
-    <View style={[styles.metric, align === 'right' && styles.metricRight]}>
-      <Text style={styles.metricLabel} numberOfLines={1}>{label}</Text>
-      <Text style={[styles.metricValue, !!valueColor && { color: valueColor }]} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
   );
 }
 
@@ -111,11 +109,13 @@ const styles = StyleSheet.create({
   row: { paddingVertical: tokens.spacing.md },
   pressed: { opacity: 0.6 },
 
-  head: { flexDirection: 'row', alignItems: 'center' },
-  headText: { flex: 1, marginLeft: tokens.spacing.md },
+  // flex-start, а не center: у длинного названия слева три текстовые строки, и
+  // сумма должна стоять на уровне названия, а не съезжать к середине блока.
+  top: { flexDirection: 'row', alignItems: 'flex-start' },
+  middle: { flex: 1, marginLeft: tokens.spacing.md, marginRight: tokens.spacing.sm },
   name: {
     fontSize: tokens.typography.body,
-    lineHeight: tokens.typography.body + 2,
+    lineHeight: tokens.typography.body + 3,
     fontWeight: '500',
     color: tokens.text.primary,
   },
@@ -126,43 +126,30 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Метрики выровнены по левому краю карточки, а не по тексту шапки: три числа
-  // в ряд и так читаются группой, а отступ под лого сузил бы их зря.
-  metrics: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 12 },
-  metric: { flex: 1 },
-  metricRight: { alignItems: 'flex-end' },
-  metricLabel: {
-    fontSize: tokens.typography.micro,
-    lineHeight: tokens.typography.micro + 2,
-    color: tokens.text.tertiary,
-  },
-  metricValue: {
+  right: { alignItems: 'flex-end' },
+  amount: {
     fontFamily: font.semibold,
-    fontSize: tokens.typography.label,
-    lineHeight: tokens.typography.label + 2,
+    fontSize: tokens.typography.body,
+    lineHeight: tokens.typography.body + 3,
     color: tokens.text.primary,
-    marginTop: 3,
+  },
+  income: {
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 2,
+    color: tokens.semantic.positive,
+    marginTop: 2,
   },
 
-  maturedBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 10 },
+  pill: {
+    backgroundColor: '#F9FAFF',
     borderRadius: tokens.radius.pill,
-    backgroundColor: hexToRgba(tokens.semantic.warning, 0.14),
+    paddingHorizontal: tokens.spacing.tight,
+    paddingVertical: 5,
   },
-  maturedBadgeText: {
-    fontSize: tokens.typography.micro,
-    fontWeight: '700',
-    color: tokens.semantic.warning,
-  },
-  termBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: tokens.radius.pill,
-    backgroundColor: tokens.surface.neutral,
-  },
-  termBadgeText: {
-    fontSize: tokens.typography.micro,
-    color: tokens.text.secondary,
-  },
+  pillText: { fontSize: 11, lineHeight: 13, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
+  pillRate: { backgroundColor: hexToRgba(tokens.accent.base, 0.1), paddingHorizontal: 8 },
+  pillRateText: { color: tokens.accent.base },
+  pillWarn: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14) },
+  pillWarnText: { color: tokens.semantic.warning },
 });

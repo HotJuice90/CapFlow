@@ -33,14 +33,9 @@ export const TYPE_ICON: Record<InstrumentTypeId, keyof typeof MaterialCommunityI
   dfa: 'chart-line',
 };
 
-export const PAYOUT_LABEL: Record<string, string> = {
-  daily: 'Ежедневно',
-  monthly: 'Ежемесячно',
-  quarterly: 'Ежеквартально',
-  semiannual: 'Раз в полгода',
-  annual: 'Ежегодно',
-  end: 'В конце срока',
-};
+// Реэкспорт сохраняем: на этот путь уже импортируются другие экраны.
+import { PAYOUT_LABEL } from '@/domain/labels';
+export { PAYOUT_LABEL };
 
 /** Комментарий пользователя — в приоритете. Иначе автоописание: у облигации/ЦФА
  *  «Простой %» показывать незачем — там это всегда так, не выбор, не информация. */

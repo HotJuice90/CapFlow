@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Dimensions, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { TYPE_LABEL, PAYOUT_LABEL } from '@/domain/labels';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { openedSide } from '@/lib/swipe';
 import { appAlert } from '@/lib/dialog';
@@ -29,28 +30,12 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  deposit: 'Вклад',
-  savings: 'Накопительный счёт',
-  bond: 'Облигации',
-  dfa: 'ЦФА',
-};
-
 // Иконка по типу инструмента — та же пара, что и в AssetRow/TypeCardsRow.
 const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
   deposit: 'bank-outline',
   savings: 'piggy-bank-outline',
   bond: 'certificate-outline',
   dfa: 'chart-line',
-};
-
-const PAYOUT_LABEL: Record<string, string> = {
-  daily: 'Ежедневно',
-  monthly: 'Ежемесячно',
-  quarterly: 'Ежеквартально',
-  semiannual: 'Раз в полгода',
-  annual: 'Ежегодно',
-  end: 'В конце срока',
 };
 
 const HERO_GRAPH_WIDTH = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;

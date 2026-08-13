@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { TYPE_LABEL } from '@/domain/labels';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { OrgLogo } from '@/components/BankLogo';
@@ -7,13 +8,6 @@ import { useData } from '@/state/DataContext';
 import { PAYOUT_LABEL } from './instruments';
 import { formatDateFull } from '@/format/date';
 import { tokens, font } from '@/theme';
-
-const TYPE_LABEL: Record<string, string> = {
-  deposit: 'Вклад',
-  savings: 'Накопительный счёт',
-  bond: 'Облигации',
-  dfa: 'ЦФА',
-};
 
 // Иконка по типу инструмента — та же пара, что и в AssetRow/TypeCardsRow.
 const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
