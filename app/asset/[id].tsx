@@ -397,7 +397,7 @@ export default function AssetScreen() {
           <View style={styles.finRow}>
             <FinCol
               icon="trending-up"
-              iconColor="#586692"
+              iconColor={tokens.accent.base}
               iconBg={tokens.accent.soft}
               label={t.asset.accrued}
               value={formatMoney(derived.incomePerMonth, { currency: cur, kopecks: 'hide' })}
@@ -691,7 +691,7 @@ function ActionItem({
   onPress: () => void;
   danger?: boolean;
 }) {
-  const color = danger ? tokens.semantic.negative : '#586692';
+  const color = danger ? tokens.semantic.negative : tokens.accent.base;
   return (
     <Pressable style={({ pressed }) => [styles.actionItem, pressed && { opacity: 0.6 }]} onPress={onPress}>
       <View style={[styles.actionIcon, danger && styles.actionIconDanger]}>
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   heroAmount: { fontSize: 32, lineHeight: 34, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.64, marginTop: 8 },
   rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
-  rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: '#586692' },
+  rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: tokens.accent.base },
   ratePremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
   ratePremium: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4) },
 
@@ -745,7 +745,7 @@ const styles = StyleSheet.create({
   progressFill: { height: 8, borderRadius: 4 },
   progressMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   progressMetaText: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
-  progressMetaPct: { fontSize: tokens.typography.hint, fontWeight: '600', color: '#586692' },
+  progressMetaPct: { fontSize: tokens.typography.hint, fontWeight: '600', color: tokens.accent.base },
 
   heroIncomeRow: {
     flexDirection: 'row',

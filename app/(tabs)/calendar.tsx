@@ -202,7 +202,7 @@ export default function CalendarScreen() {
                 <View style={styles.statSep} />
                 <Stat label="Налог за месяц" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
                 <View style={styles.statSep} />
-                <Stat label="Освободится" value={formatMoney(monthReleaseSum, { currency: cur, kopecks: 'hide' })} color="#586692" />
+                <Stat label="Освободится" value={formatMoney(monthReleaseSum, { currency: cur, kopecks: 'hide' })} color={tokens.accent.base} />
                 <View style={styles.statSep} />
                 <Stat label={isCurrentMonth ? 'До конца месяца' : 'Дней в месяце'} value={`${daysLeft}`} />
               </View>

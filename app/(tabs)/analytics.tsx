@@ -994,7 +994,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end', gap: 6, backgroundColor: hexToRgba(tokens.accent.light, 0.1),
     borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10,
   },
-  heroRateValue: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: font.semibold, color: '#586692', letterSpacing: -0.2 },
+  heroRateValue: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: font.semibold, color: tokens.accent.base, letterSpacing: -0.2 },
   heroRateDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   heroRateArrow: { fontSize: 10 },
   heroRateDeltaText: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.medium, color: tokens.text.tertiary },

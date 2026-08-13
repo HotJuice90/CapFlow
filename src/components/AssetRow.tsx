@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 10 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 14 },
   pill: {
     backgroundColor: '#F9FAFF',
     borderRadius: tokens.radius.pill,
