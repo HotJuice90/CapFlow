@@ -36,7 +36,7 @@ import {
   type DistGroup,
 } from '@/state/selectors';
 import type { CurrencyCode, Organization } from '@/domain/types';
-import { tokens, font, hexToRgba } from '@/theme';
+import { tokens, font, hexToRgba, rowText } from '@/theme';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { t } from '@/i18n';
 
@@ -1036,18 +1036,23 @@ const styles = StyleSheet.create({
   },
   // Группа строк площадок — gap:10 между строкой/разделителем/строкой (было
   // marginVertical:16 на разделителе — вдвое больше, чем в Figma).
-  orgGroup: { gap: 12 },
+  // 16, как paddingVertical строки в календаре: там между строками 16+1+16,
+  // тут было 12+1+12 — заметно теснее при одинаковом смысле списка.
+  orgGroup: { gap: tokens.spacing.lg },
   // Разделитель и строка под ним — в одной обёртке (нужен общий key), без
   // своего gap тут было бы 10px только НАД разделителем (от orgGroup) и 0
   // ПОД ним — нужно 10 с обеих сторон.
-  orgItemWithSep: { gap: 12 },
+  orgItemWithSep: { gap: tokens.spacing.lg },
   orgRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   orgSep: { height: 1, backgroundColor: tokens.surface.hairline },
   orgInfo: { flex: 1, minWidth: 0, gap: tokens.spacing.xs },
   orgAmount: { fontSize: 17, lineHeight: 19, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.2 },
   // flexShrink — чтобы длинное «Банк · Название актива» обрезалось, а не
   // выдавливало шеврон за край строки.
-  orgName: { flexShrink: 1, fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary },
+  // Тот же подзаголовок, что у строки актива на главной и в календаре
+  // (src/theme/rowText.ts). marginTop гасим: вертикальный зазор тут уже даёт
+  // gap у orgInfo, иначе отступ сложился бы дважды.
+  orgName: { ...rowText.subtitle, marginTop: 0, flexShrink: 1 },
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
