@@ -404,3 +404,58 @@ describe('monthlyIncomeHistory — помесячный доход и налог
     expect(r.totalTaxWithLimit).toBeCloseTo(r.totalTax, 6);
   });
 });
+
+describe('monthlyIncomeHistory — разделение налога по типу', () => {
+  const savings: FinancialInstrument = {
+    id: 'is', organizationId: 'o1', name: 'НС', typeId: 'savings',
+    behavior: 'perpetual', capitalization: 'none',
+  };
+  const selfPaid: Asset = {
+    id: 'aself', instrumentId: 'is', amount: 1_200_000, currency: 'RUB', rate: 10,
+    openDate: '2026-01-01', status: 'active',
+  };
+  const byBank: Asset = { ...selfPaid, id: 'abank', taxWithheldByBank: true };
+  const now = new Date('2026-06-15');
+
+  test('удержанный банком и самостоятельный в сумме дают общий налог', () => {
+    const d = {
+      ...emptyAppData(),
+      instruments: [savings],
+      assets: [selfPaid, byBank],
+      params: { ...emptyAppData().params, taxFreeLimit: 25_000 },
+      keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+    };
+    const r = monthlyIncomeHistory(d, 2026, now);
+    for (const m of r.months) {
+      expect(m.taxWithheld + m.taxSelf).toBeCloseTo(m.taxWithLimit, 6);
+    }
+    expect(r.totalTaxWithheld + r.totalTaxSelf).toBeCloseTo(r.totalTaxWithLimit, 6);
+  });
+
+  /** Лимит — льгота только для того, что платишь сам; удержанное банком его не трогает. */
+  test('удержанный банком налог лимитом не уменьшается', () => {
+    const d = {
+      ...emptyAppData(),
+      instruments: [savings],
+      assets: [byBank],
+      params: { ...emptyAppData().params, taxFreeLimit: 1_000_000 },
+      keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+    };
+    const r = monthlyIncomeHistory(d, 2026, now);
+    expect(r.totalTaxSelf).toBeCloseTo(0, 6);
+    expect(r.totalTaxWithheld).toBeCloseTo(r.totalEarned * 0.13, 6);
+  });
+
+  test('пока лимит не выбран: taxSelf = 0, а taxSelfFlat показывает «было бы»', () => {
+    const d = {
+      ...emptyAppData(),
+      instruments: [savings],
+      assets: [selfPaid],
+      params: { ...emptyAppData().params, taxFreeLimit: 1_000_000 },
+      keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+    };
+    const r = monthlyIncomeHistory(d, 2026, now);
+    expect(r.totalTaxSelf).toBeCloseTo(0, 6);
+    expect(r.months[0].taxSelfFlat).toBeGreaterThan(0);
+  });
+});

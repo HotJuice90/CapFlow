@@ -55,7 +55,7 @@ export function MonthlyIncomeChart({
   const row = data.months[idx];
 
   const maxEarned = Math.max(...data.months.map((m) => m.earned), 1);
-  const maxTax = Math.max(...data.months.map((m) => m.taxWithLimit), 0);
+  const maxTax = Math.max(...data.months.map((m) => m.taxSelf), 0);
   // Нижняя зона в том же масштабе, что и верхняя, но не меньше 14px: налог
   // обычно на порядок меньше дохода, и без нижнего предела зона схлопывается
   // в пару пикселей — ось тогда некуда «отложить вниз».
@@ -88,25 +88,43 @@ export function MonthlyIncomeChart({
               onPress={() => { tapBuzz(); setSelected(i); }}
             >
               <View style={[styles.plotUp, { height: POSITIVE_H }]}>
+                {/* Удержанное банком — сегмент ВНУТРИ дохода: эти деньги были
+                    частью дохода и уже вычтены, до счёта они не дошли. */}
                 <View
                   style={[
                     styles.barUp,
-                    {
-                      height: Math.max(2, (m.earned / maxEarned) * (POSITIVE_H - AXIS_GAP)),
-                      backgroundColor: active
-                        ? tokens.semantic.positive
-                        : hexToRgba(tokens.semantic.positive, 0.4),
-                    },
+                    { height: Math.max(2, (m.earned / maxEarned) * (POSITIVE_H - AXIS_GAP)) },
                   ]}
-                />
+                >
+                  <View
+                    style={[
+                      styles.barNet,
+                      {
+                        backgroundColor: active
+                          ? tokens.semantic.positive
+                          : hexToRgba(tokens.semantic.positive, 0.4),
+                      },
+                    ]}
+                  />
+                  {m.taxWithheld > 0 ? (
+                    <View
+                      style={{
+                        height: `${Math.min(100, (m.taxWithheld / (m.earned || 1)) * 100)}%`,
+                        backgroundColor: active
+                          ? tokens.accent.base
+                          : hexToRgba(tokens.accent.base, 0.4),
+                      }}
+                    />
+                  ) : null}
+                </View>
               </View>
               <View style={[styles.plotDown, { height: negativeH }]}>
-                {m.taxWithLimit > 0 ? (
+                {m.taxSelf > 0 ? (
                   <View
                     style={[
                       styles.barDown,
                       {
-                        height: Math.max(2, (m.taxWithLimit / (maxTax || 1)) * (negativeH - AXIS_GAP)),
+                        height: Math.max(2, (m.taxSelf / (maxTax || 1)) * (negativeH - AXIS_GAP)),
                         backgroundColor: active
                           ? tokens.semantic.warning
                           : hexToRgba(tokens.semantic.warning, 0.4),
@@ -143,28 +161,32 @@ export function MonthlyIncomeChart({
               </Text>
               <Text style={styles.detailLabel}>Доход</Text>
             </View>
+            <View style={styles.detailCell}>
+              <Text style={[styles.detailValue, { color: tokens.accent.base }]} numberOfLines={1}>
+                {formatMoney(row.taxWithheld, { currency, kopecks: 'hide' })}
+              </Text>
+              <Text style={styles.detailLabel}>Удержал банк</Text>
+            </View>
             <View style={[styles.detailCell, { alignItems: 'flex-end' }]}>
               <View style={styles.taxRow}>
-                {/* Зачёркнутое — сколько было бы без необлагаемого лимита, тем же
-                    жёлтым, что и столбик: это «старая цена». Фактический налог
-                    рядом — и когда он нулевой, он чёрный, потому что ноль это не
-                    предупреждение, а результат льготы. */}
-                {row.taxWithLimit < row.tax - 0.5 ? (
+                {/* Зачёркнутое — сколько пришлось бы отложить без льготы.
+                    Ноль чёрным: это не предупреждение, а результат лимита. */}
+                {row.taxSelf < row.taxSelfFlat - 0.5 ? (
                   <Text style={styles.taxStruck} numberOfLines={1}>
-                    {formatMoney(row.tax, { currency, kopecks: 'hide' })}
+                    {formatMoney(row.taxSelfFlat, { currency, kopecks: 'hide' })}
                   </Text>
                 ) : null}
                 <Text
                   style={[
                     styles.detailValue,
-                    { color: row.taxWithLimit > 0.5 ? tokens.semantic.warning : tokens.text.primary },
+                    { color: row.taxSelf > 0.5 ? tokens.semantic.warning : tokens.text.primary },
                   ]}
                   numberOfLines={1}
                 >
-                  {row.taxWithLimit > 0.5 ? '−' : ''}{formatMoney(row.taxWithLimit, { currency, kopecks: 'hide' })}
+                  {formatMoney(row.taxSelf, { currency, kopecks: 'hide' })}
                 </Text>
               </View>
-              <Text style={styles.detailLabel}>Налог</Text>
+              <Text style={styles.detailLabel}>Отложить самому</Text>
             </View>
           </View>
         </View>
@@ -191,7 +213,8 @@ const styles = StyleSheet.create({
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, position: 'relative' },
   col: { flex: 1, alignItems: 'center' },
   plotUp: { width: '100%', justifyContent: 'flex-end', paddingBottom: AXIS_GAP },
-  barUp: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+  barUp: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4, overflow: 'hidden' },
+  barNet: { flex: 1 },
   plotDown: { width: '100%', justifyContent: 'flex-start', paddingTop: AXIS_GAP },
   barDown: { width: '100%', borderBottomLeftRadius: 4, borderBottomRightRadius: 4 },
   monthLabel: {
@@ -222,13 +245,13 @@ const styles = StyleSheet.create({
   },
   netLabel: { fontSize: tokens.typography.micro, lineHeight: 13, color: tokens.text.tertiary, marginTop: 3 },
 
-  detailRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.md },
+  detailRow: { flexDirection: 'row', gap: 6, marginTop: tokens.spacing.md },
   detailCell: { flex: 1 },
-  detailValue: { fontFamily: font.semibold, fontSize: 15, lineHeight: 17, letterSpacing: -0.2 },
+  detailValue: { fontFamily: font.semibold, fontSize: 14, lineHeight: 16, letterSpacing: -0.2, color: tokens.text.primary },
   detailLabel: { fontSize: tokens.typography.micro, lineHeight: 13, color: tokens.text.tertiary, marginTop: 3 },
-  taxRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  taxRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   taxStruck: {
-    fontSize: tokens.typography.caption,
+    fontSize: tokens.typography.micro,
     lineHeight: 15,
     color: hexToRgba(tokens.semantic.warning, 0.75),
     textDecorationLine: 'line-through',

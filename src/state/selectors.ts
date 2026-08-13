@@ -1600,6 +1600,19 @@ export interface MonthIncomeRow {
   tax: number;
   /** с учётом годового необлагаемого лимита, разложенного по месяцам */
   taxWithLimit: number;
+  /**
+   * Налог, УЖЕ удержанный площадкой. Этих денег на счёте никогда не было, и
+   * лимит к ним отношения не имеет — заплачено и забыто.
+   */
+  taxWithheld: number;
+  /**
+   * Налог, который предстоит заплатить САМОМУ. Деньги пока лежат у тебя, но
+   * они не твои — именно эту сумму имеет смысл откладывать отдельно.
+   * Считается с лимитом, поэтому в начале года обычно нулевой.
+   */
+  taxSelf: number;
+  /** Сколько составил бы taxSelf без льготы — «старая цена» для зачёркивания. */
+  taxSelfFlat: number;
   /** сколько активов было живо в этом месяце */
   assets: number;
 }
@@ -1611,6 +1624,8 @@ export interface MonthIncomeYear {
   totalEarned: number;
   totalTax: number;
   totalTaxWithLimit: number;
+  totalTaxWithheld: number;
+  totalTaxSelf: number;
 }
 
 export function monthlyIncomeHistory(data: AppData, year: number, now: Date = new Date()): MonthIncomeYear {
@@ -1655,11 +1670,15 @@ export function monthlyIncomeHistory(data: AppData, year: number, now: Date = ne
     const selfTaxThisMonth = cumSelfTaxNow - cumSelfTax;
     cumSelfTax = cumSelfTaxNow;
 
+    const taxWithheld = earnedWithheld * rate;
     months.push({
       month: m,
       earned,
       tax: earned * rate,
-      taxWithLimit: selfTaxThisMonth + earnedWithheld * rate,
+      taxWithLimit: selfTaxThisMonth + taxWithheld,
+      taxWithheld,
+      taxSelf: selfTaxThisMonth,
+      taxSelfFlat: earnedSelf * rate,
       assets: alive,
     });
   }
@@ -1670,6 +1689,8 @@ export function monthlyIncomeHistory(data: AppData, year: number, now: Date = ne
     totalEarned: months.reduce((s, r) => s + r.earned, 0),
     totalTax: months.reduce((s, r) => s + r.tax, 0),
     totalTaxWithLimit: months.reduce((s, r) => s + r.taxWithLimit, 0),
+    totalTaxWithheld: months.reduce((s, r) => s + r.taxWithheld, 0),
+    totalTaxSelf: months.reduce((s, r) => s + r.taxSelf, 0),
   };
 }
 
