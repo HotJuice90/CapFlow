@@ -12,7 +12,7 @@ export const ru = {
     incomeToday: 'Доход в день',
     workingCapital: 'Работающий капитал',
     incomeMonth: 'Доход за месяц',
-    yourAssets: 'Ваши активы',
+    assets: 'Активы',
     emptyTitle: 'Пока нет активов',
     emptyHint: 'Добавьте первый вклад или накопительный счёт, и CapFlow начнёт считать доход.',
     addAsset: 'Добавить актив',

@@ -100,13 +100,16 @@ export function AssetRow({ view }: { view: AssetView }) {
             <Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text>
           </View>
         ) : null}
+        {/* Срок — не такая же характеристика, как тип или период выплат: он
+            тикает и требует решения, когда кончится. Поэтому свой цвет и правый
+            край, чтобы не терялся в ряду однотипных серых пилюль. */}
         {isMatured ? (
-          <View style={[styles.pill, styles.pillWarn]}>
+          <View style={[styles.pill, styles.pillWarn, styles.pillEnd]}>
             <Text style={[styles.pillText, styles.pillWarnText]}>Истёк срок</Text>
           </View>
         ) : derived.daysRemaining !== undefined ? (
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>
+          <View style={[styles.pill, styles.pillTerm, styles.pillEnd]}>
+            <Text style={[styles.pillText, styles.pillTermText]}>
               {derived.daysRemaining} {pluralDays(derived.daysRemaining)}
             </Text>
           </View>
@@ -169,6 +172,11 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 11, lineHeight: 13, fontWeight: '500', color: tokens.text.tertiary },
   pillRate: { backgroundColor: hexToRgba(tokens.accent.base, 0.1), paddingHorizontal: 8 },
   pillRateText: { color: tokens.accent.base },
+  // marginLeft:auto прижимает к правому краю ряда; при переносе строки уедет
+  // вправо на своей строке — тоже корректно.
+  pillEnd: { marginLeft: 'auto' },
+  pillTerm: { backgroundColor: hexToRgba(tokens.text.secondary, 0.09) },
+  pillTermText: { color: tokens.text.secondary },
   pillWarn: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14) },
   pillWarnText: { color: tokens.semantic.warning },
 });

@@ -50,21 +50,37 @@ import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
 import { t } from '@/i18n';
 
-type SortKey = 'income' | 'amount' | 'rate' | 'end' | 'added';
+/**
+ * Сортировки списка активов.
+ *
+ * Правило: сортируем ТОЛЬКО по тому, что видно в строке. Иначе порядок выглядит
+ * сломанным — так и вышло, когда строка стала показывать заработанное с
+ * открытия, а сортировка осталась по доходу за день: «+699» стоял выше
+ * «+1 718», хотя по невидимому ключу (349 против 158 в день) всё верно.
+ * Доход за день теперь живёт в календаре, поэтому и сортировки по нему тут нет.
+ */
+type SortKey = 'earned' | 'amount' | 'rate' | 'end' | 'added';
 const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'added', label: 'по добавлению' },
-  { key: 'income', label: 'по доходу/день' },
+  { key: 'earned', label: 'по заработанному' },
   { key: 'amount', label: 'по сумме' },
   { key: 'rate', label: 'по ставке' },
   { key: 'end', label: 'по сроку' },
+  { key: 'added', label: 'по добавлению' },
 ];
+
+/** Базовая сумма — ровно та, что показана в строке (см. AssetRow → invested). */
+function investedOf(v: AssetView): number {
+  return v.derived.currentValue - v.derived.earnedSoFar;
+}
 
 function sortViews(views: AssetView[], key: SortKey): AssetView[] {
   const v = [...views];
   switch (key) {
-    case 'income': return v.sort((a, b) => b.derived.incomePerDay - a.derived.incomePerDay);
-    case 'amount': return v.sort((a, b) => b.asset.amount - a.asset.amount);
-    case 'rate': return v.sort((a, b) => b.asset.rate - a.asset.rate);
+    case 'earned': return v.sort((a, b) => b.derived.earnedSoFar - a.derived.earnedSoFar);
+    // По базовой сумме, а не по asset.amount: с пополнениями/снятиями это
+    // разные числа, а сортировать надо по показанному.
+    case 'amount': return v.sort((a, b) => investedOf(b) - investedOf(a));
+    case 'rate': return v.sort((a, b) => b.derived.currentRate - a.derived.currentRate);
     case 'end': return v.sort((a, b) => (a.derived.daysRemaining ?? Infinity) - (b.derived.daysRemaining ?? Infinity));
     default: return v;
   }
@@ -577,7 +593,14 @@ export default function HomeScreen() {
             ) : null}
 
             <View style={styles.sectionRow} ref={assetsSectionRef}>
-              <Text style={styles.sectionTitleInline}>{t.home.yourAssets}</Text>
+              <View style={styles.sectionTitleWrap}>
+                <Text style={styles.sectionTitleInline}>{t.home.assets}</Text>
+                {/* Счётчик только от двух: при одном активе цифра «1» ничего не
+                    сообщает, её и так видно. */}
+                {sortedViews.length > 1 ? (
+                  <Text style={styles.sectionCount}>{sortedViews.length}</Text>
+                ) : null}
+              </View>
               <Pressable
                 style={styles.sortBtn}
                 onPress={() => setSortIdx((i) => (i + 1) % SORTS.length)}
@@ -652,6 +675,10 @@ const styles = StyleSheet.create({
   // (см. CLAUDE.md → «Канон экранов»): 40 сверху, 14 снизу, 8 слева.
   sectionTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: 40, marginBottom: 14, paddingLeft: 8 },
   sectionTitleInline: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, paddingLeft: 8 },
+  sectionTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // Счётчик — приглушённая цифра рядом с заголовком, без рамок и подписи:
+  // это справочная деталь, а не второй заголовок.
+  sectionCount: { fontSize: tokens.typography.title, fontWeight: '500', color: tokens.text.tertiary },
   link: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
