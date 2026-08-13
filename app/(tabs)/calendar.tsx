@@ -24,6 +24,7 @@ import { tokens, font, hexToRgba, rowText } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney } from '@/format';
 import { formatDateShort } from '@/format/date';
+import { tapBuzz } from '@/lib/haptics';
 import { t } from '@/i18n';
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
@@ -31,6 +32,14 @@ const MONTH_PROGRESS_HEIGHT = 3;
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
+}
+
+function pluralDates(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'дата';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'даты';
+  return 'дат';
 }
 
 function pluralInstruments(n: number): string {
@@ -81,10 +90,26 @@ export default function CalendarScreen() {
   const forecast = useMemo(() => monthlyIncomeForecast(data, view.year, view.month), [data, view.year, view.month]);
 
   const monthForecastSum = forecast.reduce((s, f) => s + f.total, 0);
-  const monthReleaseSum = forecast.reduce(
-    (s, f) => s + f.changes.filter((c) => c.kind === 'end').reduce((s2, c) => s2 + c.amountBase, 0),
-    0,
-  );
+  /**
+   * Погашения месяца: сколько всего освободится и в скольких датах.
+   *
+   * Раньше это была четвёртая колонка сводки, которая в месяцы без погашений
+   * держала бесполезный «0 ₽» и отбирала ширину у соседей — из-за неё подписи
+   * не влезали (на колонку оставалось ~83px при нужных ~94px). Теперь это
+   * отдельная полоса, и её просто нет, когда нечего показывать.
+   *
+   * Даты в полосу не выносим: сетка ниже уже помечает дни погашения точкой
+   * цветом банка (см. markers). Полоса отвечает на «сколько», календарь — на
+   * «когда», а тап по полосе выбирает ближайшую такую дату.
+   */
+  const release = useMemo(() => {
+    const days = forecast.filter((f) => f.changes.some((c) => c.kind === 'end'));
+    const total = days.reduce(
+      (sum, f) => sum + f.changes.filter((c) => c.kind === 'end').reduce((s2, c) => s2 + c.amountBase, 0),
+      0,
+    );
+    return { total, days: days.map((f) => f.date) };
+  }, [forecast]);
   const monthTaxSum = useMemo(() => monthlyTaxForecast(data, view.year, view.month), [data, view.year, view.month]);
 
   const isCurrentMonth = view.year === now.getFullYear() && view.month === now.getMonth();
@@ -202,11 +227,23 @@ export default function CalendarScreen() {
                 <View style={styles.statSep} />
                 <Stat label="Налог за месяц" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
                 <View style={styles.statSep} />
-                <Stat label="Освободится" value={formatMoney(monthReleaseSum, { currency: cur, kopecks: 'hide' })} color={tokens.accent.base} />
-                <View style={styles.statSep} />
                 <Stat label={isCurrentMonth ? 'До конца месяца' : 'Дней в месяце'} value={`${daysLeft}`} />
               </View>
             </Card>
+
+            {release.days.length > 0 ? (
+              <Pressable style={styles.releaseBar} onPress={() => { tapBuzz(); setSelected(release.days[0]); }}>
+                <MaterialCommunityIcons name="lock-open-variant-outline" size={16} color={tokens.accent.base} />
+                <Text style={styles.releaseLabel} numberOfLines={1}>
+                  {release.days.length === 1
+                    ? `Освободится ${formatDateShort(release.days[0])}`
+                    : `Освободится · ${release.days.length} ${pluralDates(release.days.length)}`}
+                </Text>
+                <Text style={styles.releaseValue} numberOfLines={1}>
+                  {formatMoney(release.total, { currency: cur, kopecks: 'hide' })}
+                </Text>
+              </Pressable>
+            ) : null}
 
             {/* Сетка — прогресс месяца border-top'ом: полоска НЕ внутри паддинга,
                 чтобы её углы срезались той же маской contentLayer (overflow:hidden),
@@ -435,6 +472,22 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
   statLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), marginTop: tokens.spacing.chip, letterSpacing: -0.24, textAlign: 'center' },
   statSep: { width: 1, height: 30, backgroundColor: tokens.surface.hairline },
+
+  // Тонкая полоса вместо колонки: ~36px против ~68px, и только в те месяцы,
+  // когда есть погашения — календарь почти не уезжает вниз.
+  releaseBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.sm,
+    backgroundColor: hexToRgba(tokens.accent.base, 0.08),
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: 9,
+    marginTop: -tokens.spacing.sm,
+    marginBottom: tokens.spacing.lg,
+  },
+  releaseLabel: { flex: 1, fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, color: tokens.accent.base },
+  releaseValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, color: tokens.accent.base },
 
   dayCard: { marginTop: tokens.spacing.lg, ...boxShadow(tokens.shadow.subtle) },
   dayHeader: {

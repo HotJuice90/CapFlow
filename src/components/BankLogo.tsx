@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { tokens } from '@/theme';
+import { tokens, isLightColor } from '@/theme';
 
 // Цветные
 import Alfa from '../../assets/banks/alfa.svg';
@@ -102,9 +102,14 @@ export function OrgLogo({
   }
   if (hasBankLogo(logo)) {
     if (variant === 'solid') {
+      // На светлом фирменном фоне белый логотип не читается. Берём цветной:
+      // у таких брендов фигура совпадает с фоном и сливается с ним, а тёмный
+      // знак остаётся контрастным — это и есть их штатный вид (Т-Банк: жёлтый
+      // щит + тёмная «Т»). Сейчас порог переходит только он, см. isLightColor.
+      const glyph = isLightColor(color) ? 'color' : 'white';
       return (
         <View style={[styles.orgBox, { width: size, height: size, borderRadius: br, backgroundColor: color }]}>
-          <BankLogo bankId={logo} size={Math.round(size * scale)} variant="white" />
+          <BankLogo bankId={logo} size={Math.round(size * scale)} variant={glyph} />
         </View>
       );
     }

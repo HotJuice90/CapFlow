@@ -9,7 +9,7 @@
 export const BANKS: { id: string; name: string; color: string; url: string; type?: string }[] = [
   { id: 'alfa',        name: 'Альфа-Банк',  color: '#EF3124', url: 'https://alfabank.ru' },
   { id: 'sber',        name: 'Сбербанк',    color: '#21A038', url: 'https://www.sberbank.ru' },
-  { id: 'tbank',       name: 'Т-Банк',      color: '#1D1D1B', url: 'https://www.tbank.ru' },
+  { id: 'tbank',       name: 'Т-Банк',      color: '#FFDD2D', url: 'https://www.tbank.ru' }, // жёлтый из фирменной иконки, не чёрный
   { id: 'vtb',         name: 'ВТБ',         color: '#0A2896', url: 'https://www.vtb.ru' },
   { id: 'gazprombank', name: 'Газпромбанк', color: '#0F60A8', url: 'https://www.gazprombank.ru' },
   { id: 'ozon',        name: 'OZON Банк',   color: '#005BFF', url: 'https://finance.ozon.ru' },
