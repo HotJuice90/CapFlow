@@ -675,10 +675,12 @@ const styles = StyleSheet.create({
   // (см. CLAUDE.md → «Канон экранов»): 40 сверху, 14 снизу, 8 слева.
   sectionTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: 40, marginBottom: 14, paddingLeft: 8 },
   sectionTitleInline: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, paddingLeft: 8 },
-  sectionTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // baseline, а не center: мелкая цифра рядом с 20-пунктовым заголовком должна
+  // стоять на его строке, иначе висит в воздухе по центру высоты.
+  sectionTitleWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   // Счётчик — приглушённая цифра рядом с заголовком, без рамок и подписи:
   // это справочная деталь, а не второй заголовок.
-  sectionCount: { fontSize: tokens.typography.title, fontWeight: '500', color: tokens.text.tertiary },
+  sectionCount: { fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.tertiary },
   link: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },

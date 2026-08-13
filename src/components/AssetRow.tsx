@@ -175,8 +175,10 @@ const styles = StyleSheet.create({
   // marginLeft:auto прижимает к правому краю ряда; при переносе строки уедет
   // вправо на своей строке — тоже корректно.
   pillEnd: { marginLeft: 'auto' },
-  pillTerm: { backgroundColor: hexToRgba(tokens.text.secondary, 0.09) },
-  pillTermText: { color: tokens.text.secondary },
+  // Фиолетовый tokens.category.dfa — он уже живёт в приложении (аналитика,
+  // «исправление» в шите баланса), так что палитра не расширяется.
+  pillTerm: { backgroundColor: hexToRgba(tokens.category.dfa, 0.12) },
+  pillTermText: { color: tokens.category.dfa },
   pillWarn: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14) },
   pillWarnText: { color: tokens.semantic.warning },
 });
