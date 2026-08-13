@@ -656,7 +656,10 @@ const styles = StyleSheet.create({
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
   listInner: { paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.xs },
-  assetCards: { gap: tokens.spacing.md },
+  // gap 4, как у списка инструментов внутри группы (`app/catalog/instruments.tsx`
+  // → styles.list): карточки отдельные, но раздел читается цельным, а не
+  // рассыпается на пять независимых блоков.
+  assetCards: { gap: 4 },
   divider: { height: 1, backgroundColor: tokens.surface.hairline },
   archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing.chip, paddingVertical: tokens.spacing.md },
   archiveLinkText: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, fontWeight: '500' },

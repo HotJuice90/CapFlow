@@ -29,6 +29,10 @@ const ICON_BY_TYPE = {
  *    «Накопительный ежедневный плюс» просит ~218px. Поэтому numberOfLines={2} —
  *    высотой платят только длинные названия, короткие остаются компактными.
  *
+ * Числа разведены по экранам, чтобы одно и то же не показывалось трижды:
+ * тут — вложено + заработано с открытия, в календаре — доход за день,
+ * в аналитике — сумма вместе с процентами (она же = вложено + заработано).
+ *
  * Пилюли — та же идиома, что в календаре (`app/(tabs)/calendar.tsx` → pillRow):
  * детали, которые полезно видеть, но которые не должны спорить за внимание с
  * суммой. Обёрнуты во flexWrap, а НЕ в горизонтальный ScrollView как в
@@ -44,6 +48,12 @@ export function AssetRow({ view }: { view: AssetView }) {
   const isMatured = instrument.behavior === 'term' && (derived.termProgress ?? 0) >= 1;
   const cur = asset.currency;
   const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
+  // Базовая сумма — свои деньги, без набежавших процентов. Работает одинаково
+  // для обоих режимов: при капитализации balanceNow уже включает начисленное,
+  // при простом проценте currentValue = balanceNow + earnedSoFar. Разложение
+  // точное: базовая + заработано = currentValue, то есть ровно та сумма,
+  // которую показывает аналитика.
+  const invested = derived.currentValue - derived.earnedSoFar;
 
   return (
     <Pressable
@@ -70,10 +80,10 @@ export function AssetRow({ view }: { view: AssetView }) {
         </View>
         <View style={styles.right}>
           <Text style={styles.amount} numberOfLines={1}>
-            {formatMoney(derived.currentValue, { currency: cur, kopecks: 'hide' })}
+            {formatMoney(invested, { currency: cur, kopecks: 'hide' })}
           </Text>
           <Text style={styles.income} numberOfLines={1}>
-            +{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })}
+            +{formatMoney(derived.earnedSoFar, { currency: cur, kopecks: 'hide' })}
           </Text>
         </View>
       </View>
