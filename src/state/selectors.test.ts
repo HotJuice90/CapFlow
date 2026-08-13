@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory } from './selectors';
+import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -457,5 +457,33 @@ describe('monthlyIncomeHistory — разделение налога по тип
     const r = monthlyIncomeHistory(d, 2026, now);
     expect(r.totalTaxSelf).toBeCloseTo(0, 6);
     expect(r.months[0].taxSelfFlat).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Инвариант: помесячный ряд — это разбиение одного и того же отрезка, поэтому
+ * сумма месяцев обязана совпадать с earnedInPeriod за тот же период. Ловит
+ * несостыковку окон: раньше месяц считался по последнее число, а следующий
+ * начинался с первого, и сутки на каждой границе терялись.
+ */
+describe('monthlyIncomeHistory: сумма месяцев = доход за период', () => {
+  const savings: FinancialInstrument = {
+    id: 'ii', organizationId: 'o1', name: 'НС', typeId: 'savings',
+    behavior: 'perpetual', capitalization: 'capitalize', payoutPeriod: 'daily',
+  };
+  const now = new Date('2026-08-13');
+  const data = {
+    ...emptyAppData(),
+    instruments: [savings],
+    assets: [
+      { id: 'x1', instrumentId: 'ii', amount: 3_000_000, currency: 'RUB' as const, rate: 15, openDate: '2026-01-16', status: 'active' as const, capitalization: 'capitalize' as const, payoutPeriod: 'daily' as const },
+      { id: 'x2', instrumentId: 'ii', amount: 500_000, currency: 'RUB' as const, rate: 11.5, openDate: '2026-05-04', status: 'active' as const },
+    ],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+
+  test('месяцы стыкуются без потерь на границах', () => {
+    const byMonth = monthlyIncomeHistory(data, 2026, now).totalEarned;
+    expect(byMonth).toBeCloseTo(earnedInPeriod(data, 'year', now), 6);
   });
 });

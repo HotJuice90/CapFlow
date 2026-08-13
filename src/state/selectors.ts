@@ -1642,9 +1642,14 @@ export function monthlyIncomeHistory(data: AppData, year: number, now: Date = ne
 
   for (let m = 0; m <= lastMonth; m++) {
     const start = new Date(year, m, 1);
-    const monthEnd = new Date(year, m + 1, 0);
+    // Граница месяца — ПЕРВОЕ ЧИСЛО СЛЕДУЮЩЕГО, а не последнее текущего. Иначе
+    // окна не стыкуются: январь считался по 31-е, февраль начинался с 1-го, и
+    // сутки на каждой границе не попадали никуда — за 7 границ терялась неделя
+    // дохода, и итог года расходился с «Доходом за период» в шапке аналитики.
+    // Со стыковкой сумма месяцев тождественно равна accrued(now) − accrued(1 янв).
+    const nextStart = new Date(year, m + 1, 1);
     // Текущий месяц обрезаем сегодняшним днём — столбик растёт по ходу месяца.
-    const end = monthEnd > now ? now : monthEnd;
+    const end = nextStart > now ? now : nextStart;
     if (start > now) break;
 
     let earnedSelf = 0;
