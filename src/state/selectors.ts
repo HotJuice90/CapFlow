@@ -386,6 +386,8 @@ export interface AssetYearIncome {
   annual: number;
   /** Налог платишь сам (актив делит необлагаемый лимит). */
   self: boolean;
+  /** Актив уже закрыт/архивирован — в этом году он больше ничего не заработает. */
+  closed: boolean;
 }
 
 /**
@@ -442,7 +444,11 @@ export function assetYearIncomes(data: AppData, now: Date = new Date()): AssetYe
     }
 
     if (fact <= 0 && remaining <= 0) continue;
-    out.push({ asset, instrument, fact, remaining, annual: fact + remaining, self: !asset.taxWithheldByBank });
+    out.push({
+      asset, instrument, fact, remaining, annual: fact + remaining,
+      self: !asset.taxWithheldByBank,
+      closed: !!closedAt,
+    });
   }
   return out;
 }
@@ -460,6 +466,9 @@ export interface TaxByInstrumentRow {
    *  закрытых своего «на сегодня» нет: их `tax` и так точная финальная сумма,
    *  дублировать нечего. */
   taxToDate?: number;
+  /** Актив закрыт/архивирован: в списке такие уходят под отдельную свёрнутую
+   *  строку, чтобы не разрастаться полотном среди действующих. */
+  closed: boolean;
   /** Срочный (известна дата окончания) или уже закрытый актив — сумма налога
    *  за год ФИКСИРОВАНА (весь срок известен наперёд), в отличие от бессрочных,
    *  где `tax` — экстраполяция «если ставка продержится весь год». UI рисует
@@ -503,6 +512,7 @@ export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByIns
         // она известна заранее и не меняется (замочек в UI).
         taxToDate: !fixed && r.fact > 0 ? r.fact * rate : undefined,
         fixed,
+        closed: r.closed,
       };
     })
     .sort((a, b) => b.tax - a.tax);

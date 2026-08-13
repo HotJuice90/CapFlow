@@ -36,6 +36,7 @@ import {
   convert,
   monthlyIncomeHistory,
   type DistGroup,
+  type TaxByInstrumentRow,
 } from '@/state/selectors';
 import type { CurrencyCode, Organization } from '@/domain/types';
 import { tokens, font, hexToRgba, rowText } from '@/theme';
@@ -103,7 +104,12 @@ export default function AnalyticsScreen() {
   const spread = useMemo(() => rateSpread(data), [data]);
   const taxAssetRows = useMemo(() => taxByInstrument(data), [data]);
   const taxOrgRows = useMemo(() => taxByOrganization(data), [data]);
-  const taxRows = taxTab === 'assets' ? taxAssetRows : taxOrgRows;
+  // Закрытые активы выносим из основного списка: они не действуют, а место
+  // занимают наравне с работающими — и без пометки читались как обычные.
+  const isAssetsTab = taxTab === 'assets';
+  const taxRows = isAssetsTab ? taxAssetRows.filter((r) => !r.closed) : taxOrgRows;
+  const closedTaxRows = isAssetsTab ? taxAssetRows.filter((r) => r.closed) : [];
+  const closedTaxTotal = closedTaxRows.reduce((sum, r) => sum + r.tax, 0);
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
@@ -682,6 +688,9 @@ export default function AnalyticsScreen() {
                       </View>
                     );
                   })}
+                  {closedTaxRows.length > 0 ? (
+                    <ClosedTaxGroup rows={closedTaxRows} total={closedTaxTotal} currency={cur} />
+                  ) : null}
                 </>
               ) : null}
             </View>
@@ -767,6 +776,77 @@ function roundSharesTo(values: number[], target: number): number[] {
     remainder -= 1;
   }
   return out;
+}
+
+
+function pluralClosed(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'закрытый актив';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'закрытых актива';
+  return 'закрытых активов';
+}
+
+/**
+ * Закрытые активы одной свёрнутой строкой с общей суммой.
+ *
+ * Раньше они шли вперемешку с действующими и ничем не помечались: список рос
+ * полотном, а закрытый счёт визуально не отличался от работающего. Налог по
+ * ним никуда не девается (обязательство осталось), поэтому убрать совсем
+ * нельзя — но и место наравне с действующими им ни к чему.
+ */
+function ClosedTaxGroup({
+  rows,
+  total,
+  currency,
+}: {
+  rows: TaxByInstrumentRow[];
+  total: number;
+  currency: CurrencyCode;
+}) {
+  const [open, setOpen] = useState(false);
+  const spin = useSharedValue(0);
+  const chevron = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 180}deg` }] }));
+
+  const toggle = () => {
+    tapBuzz();
+    spin.value = withTiming(open ? 0 : 1, { duration: 180 });
+    setOpen((v) => !v);
+  };
+
+  return (
+    <View>
+      <View style={styles.taxByInstrumentSep} />
+      <Pressable style={styles.taxByInstrumentRow} onPress={toggle}>
+        <View style={[styles.taxRowIconBox, { backgroundColor: hexToRgba(tokens.text.tertiary, 0.1) }]}>
+          <MaterialCommunityIcons name="archive-outline" size={19} color={tokens.text.tertiary} />
+        </View>
+        <Text style={styles.taxByInstrumentName} numberOfLines={1}>
+          {rows.length} {pluralClosed(rows.length)}
+        </Text>
+        <View style={styles.taxClosedRight}>
+          <Text style={styles.taxByInstrumentValue}>{formatMoney(total, { currency, kopecks: 'hide' })}</Text>
+          <Animated.View style={chevron}>
+            <MaterialIcons name="keyboard-arrow-down" size={18} color={tokens.text.tertiary} />
+          </Animated.View>
+        </View>
+      </Pressable>
+
+      {open ? (
+        <View style={styles.taxClosedList}>
+          {rows.map((r) => (
+            <View key={r.key} style={styles.taxClosedRow}>
+              <View style={[styles.taxClosedDot, { backgroundColor: tokens.category[r.typeId] ?? tokens.accent.base }]} />
+              <Text style={styles.taxClosedName} numberOfLines={1}>{r.name}</Text>
+              <Text style={styles.taxClosedValue} numberOfLines={1}>
+                {formatMoney(r.tax, { currency, kopecks: 'hide' })}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 function pluralAssets(n: number): string {
@@ -1064,6 +1144,12 @@ const styles = StyleSheet.create({
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  taxClosedRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  taxClosedList: { marginLeft: 34 + tokens.spacing.md, gap: 10, paddingBottom: tokens.spacing.md },
+  taxClosedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  taxClosedDot: { width: 6, height: 6, borderRadius: 3 },
+  taxClosedName: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
+  taxClosedValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.text.primary },
   orgMetaSep: { fontSize: tokens.typography.micro, color: hexToRgba(tokens.text.tertiary, 0.6) },
   orgChildren: { marginTop: 12, marginLeft: 44 + tokens.spacing.md, gap: 10 },
   orgChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
