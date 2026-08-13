@@ -225,9 +225,11 @@ export default function CalendarScreen() {
               <View style={styles.statsRow}>
                 <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.positive} />
                 <View style={styles.statSep} />
-                <Stat label="Налог за месяц" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
+                <Stat label="Ожидаемый налог" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
                 <View style={styles.statSep} />
-                <Stat label={isCurrentMonth ? 'До конца месяца' : 'Дней в месяце'} value={`${daysLeft}`} />
+                {/* «Дней осталось» — только про текущий месяц; в прошлом/будущем счётчик
+                    показывает длину месяца, и такая подпись врала бы. */}
+                <Stat label={isCurrentMonth ? 'Дней осталось' : 'Дней в месяце'} value={`${daysLeft}`} />
               </View>
             </Card>
 

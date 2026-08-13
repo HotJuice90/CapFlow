@@ -25,6 +25,24 @@ function migrate(data: AppData): AppData {
   if (!next.taxYearRecords) next.taxYearRecords = [];
   if (!next.goals) next.goals = [];
   if (!next.freeCapitalEntries) next.freeCapitalEntries = [];
+
+  // Смена фирменного цвета банка в реестре (src/domain/banks.ts) НЕ доходит до
+  // уже заведённых площадок: цвет копируется в организацию в момент создания
+  // (`color: bank.color`) и дальше живёт в данных. Поэтому переносим точечно —
+  // только ровно то старое значение, которое заменили в реестре.
+  //
+  // Сплошным «выровнять все по реестру» делать нельзя: цвет площадки
+  // редактируется вручную (ColorField в app/catalog/organization.tsx), и такая
+  // миграция затёрла бы осознанный выбор пользователя.
+  const REBRANDED: { logo: string; from: string; to: string }[] = [
+    { logo: 'tbank', from: '#1D1D1B', to: '#FFDD2D' },
+  ];
+  if (next.organizations?.length) {
+    next.organizations = next.organizations.map((o) => {
+      const hit = REBRANDED.find((r) => r.logo === o.logo && o.color?.toUpperCase() === r.from);
+      return hit ? { ...o, color: hit.to } : o;
+    });
+  }
   if (next.settings.abbreviateMillions === undefined) {
     next.settings = { ...next.settings, abbreviateMillions: true };
   }
