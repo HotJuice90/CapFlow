@@ -225,7 +225,7 @@ export default function CalendarScreen() {
               <View style={styles.statsRow}>
                 <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.positive} />
                 <View style={styles.statSep} />
-                <Stat label="Ожидаемый налог" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
+                <Stat label="Налог" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
                 <View style={styles.statSep} />
                 {/* «Дней осталось» — только про текущий месяц; в прошлом/будущем счётчик
                     показывает длину месяца, и такая подпись врала бы. */}
