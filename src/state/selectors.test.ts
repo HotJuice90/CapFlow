@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod } from './selectors';
+import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -490,5 +490,53 @@ describe('monthlyIncomeHistory: сумма месяцев = доход за пе
   test('месяцы стыкуются без потерь на границах', () => {
     const byMonth = monthlyIncomeHistory(data, 2026, now).totalEarned;
     expect(byMonth).toBeCloseTo(earnedInPeriod(data, 'year', now), 6);
+  });
+});
+
+/**
+ * Главный инвариант после сведения к одному источнику: факт из помесячного ряда
+ * и факт из подушного ряда — одна и та же величина, посчитанная двумя способами
+ * (по месяцам и по активам). Раньше факт и прогноз ходили разными путями и
+ * расходились; тест не даёт им разъехаться снова незаметно.
+ */
+describe('assetYearIncomes и monthlyIncomeHistory считают один и тот же год', () => {
+  const savings: FinancialInstrument = {
+    id: 'iy', organizationId: 'o1', name: 'НС', typeId: 'savings',
+    behavior: 'perpetual', capitalization: 'none',
+  };
+  const term: FinancialInstrument = {
+    id: 'it', organizationId: 'o1', name: 'Вклад', typeId: 'deposit',
+    behavior: 'term', capitalization: 'none',
+  };
+  const now = new Date('2026-08-13');
+  const data = {
+    ...emptyAppData(),
+    instruments: [savings, term],
+    assets: [
+      { id: 'y1', instrumentId: 'iy', amount: 2_000_000, currency: 'RUB' as const, rate: 12, openDate: '2026-01-10', status: 'active' as const },
+      { id: 'y2', instrumentId: 'it', amount: 800_000, currency: 'RUB' as const, rate: 14, openDate: '2026-03-01', endDate: '2026-11-01', status: 'active' as const },
+      // закрытый в этом году — раньше его находили через снимки, теперь через closedDate
+      { id: 'y3', instrumentId: 'iy', amount: 500_000, currency: 'RUB' as const, rate: 10, openDate: '2026-02-01', status: 'closed' as const, closedDate: '2026-06-15' },
+    ],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+
+  test('сумма фактов по активам = totalEarned помесячного ряда', () => {
+    const byAsset = assetYearIncomes(data, now).reduce((s, r) => s + r.fact, 0);
+    expect(byAsset).toBeCloseTo(monthlyIncomeHistory(data, 2026, now).totalEarned, 6);
+  });
+
+  test('закрытый актив попадает в факт, но не в остаток', () => {
+    const closed = assetYearIncomes(data, now).find((r) => r.asset.id === 'y3');
+    expect(closed).toBeDefined();
+    expect(closed!.fact).toBeGreaterThan(0);
+    expect(closed!.remaining).toBeCloseTo(0, 6);
+  });
+
+  test('прогноз бессрочного — только оставшаяся часть года, а не полная годовая сумма', () => {
+    const perp = assetYearIncomes(data, now).find((r) => r.asset.id === 'y1')!;
+    const fullYear = 2_000_000 * 0.12;
+    expect(perp.remaining).toBeLessThan(fullYear * 0.5);
+    expect(perp.annual).toBeLessThan(fullYear);
   });
 });
