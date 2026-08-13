@@ -540,3 +540,38 @@ describe('assetYearIncomes и monthlyIncomeHistory считают один и т
     expect(perp.annual).toBeLessThan(fullYear);
   });
 });
+
+/**
+ * Накопительный, открытый в декабре, за этот год заработает меньше месяца —
+ * а не полную годовую сумму, как считалось до 0.8.75.
+ */
+describe('assetYearIncomes: бессрочный, открытый в конце года', () => {
+  const savings: FinancialInstrument = {
+    id: 'id1', organizationId: 'o1', name: 'НС', typeId: 'savings',
+    behavior: 'perpetual', capitalization: 'none',
+  };
+  const now = new Date('2026-12-20');
+  const data = {
+    ...emptyAppData(),
+    instruments: [savings],
+    assets: [{
+      id: 'dec', instrumentId: 'id1', amount: 1_000_000, currency: 'RUB' as const,
+      rate: 12, openDate: '2026-12-10', status: 'active' as const,
+    }],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+
+  test('годовой доход = от открытия до конца года, а не за 12 месяцев', () => {
+    const r = assetYearIncomes(data, now)[0];
+    // 10 дек → 1 янв = 22 дня
+    const expected = 1_000_000 * 0.12 * (22 / 365);
+    expect(r.annual).toBeCloseTo(expected, 0);
+    expect(r.annual).toBeLessThan(1_000_000 * 0.12 * 0.1);
+  });
+
+  test('факт — только прожитая часть, остаток — только будущая', () => {
+    const r = assetYearIncomes(data, now)[0];
+    expect(r.fact).toBeCloseTo(1_000_000 * 0.12 * (10 / 365), 0);   // 10 → 20 дек
+    expect(r.remaining).toBeCloseTo(1_000_000 * 0.12 * (12 / 365), 0); // 20 дек → 1 янв
+  });
+});
