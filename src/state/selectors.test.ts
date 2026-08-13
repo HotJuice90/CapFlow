@@ -173,11 +173,16 @@ describe('analyticsSummary — разбивка налога года на «у�
     expect(s.taxYearSelf).toBeCloseTo(s.taxYear, 6);
   });
 
-  test('selfAccrued — только доход активов БЕЗ флага (лимит их не касается)', () => {
+  /**
+   * Факт считается за КАЛЕНДАРНЫЙ год, а не за всю жизнь актива: правило
+   * приложения — всё в рамках года, если рядом нет переключателя «Всё время».
+   * Активы тут открыты в 2020, но в accrued/selfAccrued попадает только 2025-й.
+   */
+  test('accrued/selfAccrued — доход за календарный год, а не за всю жизнь актива', () => {
     const now = new Date('2025-07-01');
     const s = analyticsSummary(data, now);
-    const daysSinceOpen = diffDays('2020-01-01', now);
-    const expectedEach = 5_000_000 * 0.12 * (daysSinceOpen / 365);
+    const daysThisYear = diffDays('2025-01-01', now);
+    const expectedEach = 5_000_000 * 0.12 * (daysThisYear / 365);
     // accrued — сумма ОБОИХ активов, selfAccrued — только «доплатить самому».
     expect(s.accrued).toBeCloseTo(expectedEach * 2, 0);
     expect(s.selfAccrued).toBeCloseTo(expectedEach, 0);

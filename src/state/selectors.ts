@@ -598,9 +598,7 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   // собой только активы «доплатить самому»; «удержит банк» считается отдельно,
   // плоско, без лимита вообще — не пропорциональная прикидка, а честный расчёт.
   const selfAnnualPerAsset: number[] = [];
-  const selfAccruedPerAsset: number[] = [];
   let withheldAnnual = 0;
-  let withheldAccrued = 0;
 
   let topInstrument: AnalyticsSummary['topInstrument'];
   const orgIncome = new Map<string, { name: string; income: number }>();
@@ -612,10 +610,6 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     totalCapital += cap;
     incomePerDay += incDay;
     incomePerMonth += convert(v.derived.incomePerMonth, c, data);
-    const acc = convert(v.derived.accrued, c, data);
-    accrued += acc;
-    if (v.asset.taxWithheldByBank) withheldAccrued += acc;
-    else selfAccruedPerAsset.push(acc);
     weightedRate += v.derived.currentRate * cap;
     // Для срочных с известным сроком — точная сумма до конца срока/года (см.
     // thisYearTaxableIncome), для бессрочных — по-прежнему экстраполяция «если
@@ -642,17 +636,28 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   // актива уже нет, дневной ставки у него тоже нет).
   for (const cl of closedThisYearContributions(data, now)) {
     incomePerYear += cl.realized;
-    if (cl.asset.taxWithheldByBank) {
-      withheldAnnual += cl.realized;
-      withheldAccrued += cl.realized;
-    } else {
-      selfAnnualPerAsset.push(cl.realized);
-      selfAccruedPerAsset.push(cl.realized);
-    }
+    if (cl.asset.taxWithheldByBank) withheldAnnual += cl.realized;
+    else selfAnnualPerAsset.push(cl.realized);
   }
 
   const avgRate = totalCapital > 0 ? weightedRate / totalCapital : 0;
-  const selfAccrued = selfAccruedPerAsset.reduce((sum, v) => sum + v, 0);
+
+  /**
+   * ФАКТ (что уже набежало) берём из monthlyIncomeHistory — того же селектора,
+   * что рисует график «Доход по месяцам». Раньше тут была своя арифметика на
+   * derived.accrued, то есть за ВСЮ ЖИЗНЬ актива, и числа между экранами
+   * сходились только случайно. Правило приложения: всё показываем в рамках
+   * КАЛЕНДАРНОГО года, если рядом нет переключателя «Всё время».
+   *
+   * Прогноз на год (taxYear*, incomePerYear) остаётся на прежней логике —
+   * экстраполяции активных активов: это принципиально другая величина, и
+   * сводить её с фактом нельзя.
+   */
+  const year = monthlyIncomeHistory(data, now.getFullYear(), now);
+  const selfAccrued = year.months.reduce((sum, m) => sum + m.earnedSelf, 0);
+  // accrued тоже за год: держать в одном объекте две разные оконности («за всю
+  // жизнь» и «за год») — верный способ снова получить несходящиеся экраны.
+  accrued = year.totalEarned;
   // Факт уплаченного — по ВСЕМ активам (даже закрытым/архивным), не только текущим
   // видам: деньги реально ушли независимо от того, жив ли актив сейчас.
   const taxPaidTotal = data.assets.reduce((sum, a) => {
@@ -663,15 +668,14 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   const taxYearSelf = calcPortfolioTax(selfAnnualPerAsset, data.params);
   const taxYearWithheld = calcAssetTax(withheldAnnual, data.params, 0, true);
   const taxYear = taxYearSelf + taxYearWithheld;
-  const taxAccruedSelf = calcPortfolioTax(selfAccruedPerAsset, data.params);
-  const taxAccruedWithheld = calcAssetTax(withheldAccrued, data.params, 0, true);
-  const taxAccrued = taxAccruedSelf + taxAccruedWithheld;
+  const taxAccruedSelf = year.totalTaxSelf;
+  const taxAccruedWithheld = year.totalTaxWithheld;
+  const taxAccrued = year.totalTaxWithLimit;
   // «Грязный» вариант (без лимита) — та же плоская ставка×доход методика,
   // что и в taxByInstrument, чтобы сумма списка сходилась с заголовком.
   const taxYearSelfGross = selfAnnualPerAsset.reduce((sum, v) => sum + v, 0) * rate;
   const taxYearGross = taxYearSelfGross + taxYearWithheld;
-  const taxAccruedSelfGross = selfAccruedPerAsset.reduce((sum, v) => sum + v, 0) * rate;
-  const taxAccruedGross = taxAccruedSelfGross + taxAccruedWithheld;
+  const taxAccruedGross = year.totalTax;
   let topOrganization: AnalyticsSummary['topOrganization'];
   for (const oi of orgIncome.values()) {
     if (!topOrganization || oi.income > topOrganization.incomePerDay) {
@@ -1613,6 +1617,8 @@ export interface MonthIncomeRow {
   taxSelf: number;
   /** Сколько составил бы taxSelf без льготы — «старая цена» для зачёркивания. */
   taxSelfFlat: number;
+  /** Доход месяца по активам, налог с которых платишь САМ (они делят лимит). */
+  earnedSelf: number;
   /** сколько активов было живо в этом месяце */
   assets: number;
 }
@@ -1684,6 +1690,7 @@ export function monthlyIncomeHistory(data: AppData, year: number, now: Date = ne
       taxWithheld,
       taxSelf: selfTaxThisMonth,
       taxSelfFlat: earnedSelf * rate,
+      earnedSelf,
       assets: alive,
     });
   }
