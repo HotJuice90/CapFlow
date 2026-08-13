@@ -13,6 +13,9 @@ const MONTH_FULL = [
 ];
 
 const POSITIVE_H = 96;
+/** Воздух между столбиком и осью — без него линия зажата между двумя
+ *  прямоугольниками вплотную и физически неразличима. */
+const AXIS_GAP = 4;
 
 function pluralAssets(n: number): string {
   const mod10 = n % 10;
@@ -53,7 +56,10 @@ export function MonthlyIncomeChart({
 
   const maxEarned = Math.max(...data.months.map((m) => m.earned), 1);
   const maxTax = Math.max(...data.months.map((m) => m.taxWithLimit), 0);
-  const negativeH = maxTax > 0 ? Math.max(6, Math.round(POSITIVE_H * (maxTax / maxEarned))) : 6;
+  // Нижняя зона в том же масштабе, что и верхняя, но не меньше 14px: налог
+  // обычно на порядок меньше дохода, и без нижнего предела зона схлопывается
+  // в пару пикселей — ось тогда некуда «отложить вниз».
+  const negativeH = Math.max(14, Math.round(POSITIVE_H * (maxTax / maxEarned)));
 
   return (
     <View style={styles.card}>
@@ -86,7 +92,7 @@ export function MonthlyIncomeChart({
                   style={[
                     styles.barUp,
                     {
-                      height: Math.max(2, (m.earned / maxEarned) * POSITIVE_H),
+                      height: Math.max(2, (m.earned / maxEarned) * (POSITIVE_H - AXIS_GAP)),
                       backgroundColor: active
                         ? tokens.semantic.positive
                         : hexToRgba(tokens.semantic.positive, 0.4),
@@ -100,7 +106,7 @@ export function MonthlyIncomeChart({
                     style={[
                       styles.barDown,
                       {
-                        height: Math.max(2, (m.taxWithLimit / (maxTax || 1)) * negativeH),
+                        height: Math.max(2, (m.taxWithLimit / (maxTax || 1)) * (negativeH - AXIS_GAP)),
                         backgroundColor: active
                           ? tokens.semantic.warning
                           : hexToRgba(tokens.semantic.warning, 0.4),
@@ -186,16 +192,16 @@ const styles = StyleSheet.create({
 
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, position: 'relative' },
   col: { flex: 1, alignItems: 'center' },
-  plotUp: { width: '100%', justifyContent: 'flex-end' },
+  plotUp: { width: '100%', justifyContent: 'flex-end', paddingBottom: AXIS_GAP },
   barUp: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
-  plotDown: { width: '100%', justifyContent: 'flex-start' },
+  plotDown: { width: '100%', justifyContent: 'flex-start', paddingTop: AXIS_GAP },
   barDown: { width: '100%', borderBottomLeftRadius: 4, borderBottomRightRadius: 4 },
   axis: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: hexToRgba(tokens.text.primary, 0.28),
+    backgroundColor: hexToRgba(tokens.text.primary, 0.45),
   },
   monthLabel: {
     fontSize: tokens.typography.micro,
