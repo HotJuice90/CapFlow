@@ -444,17 +444,12 @@ export default function AnalyticsScreen() {
                         org={org}
                         cur={cur}
                         sharePct={Math.round(orgShare(g.capital) * 100)}
-                        assets={allViews
-                          .filter((v) => v.organization.id === g.key)
-                          .map((v) => ({
-                            id: v.asset.id,
-                            name: v.asset.title || v.instrument.name,
-                            rate: v.derived.currentRate,
-                            // В базовую валюту — как и сумма шапки; иначе актив в
-                            // долларах показал бы своё сырое число с «₽».
-                            capital: convert(v.derived.currentValue, v.asset.currency, data),
-                          }))
-                          .sort((a, b) => b.capital - a.capital)}
+                        assets={buildOrgChildren(
+                          allViews.filter((v) => v.organization.id === g.key),
+                          data,
+                          orgShare,
+                          Math.round(orgShare(g.capital) * 100),
+                        )}
                       />
                     </View>
                   );
@@ -742,12 +737,58 @@ function typeIcon(typeId: string): keyof typeof MaterialCommunityIcons.glyphMap 
 }
 
 
+
+/**
+ * Округляет доли до целых так, чтобы их сумма В ТОЧНОСТИ равнялась `target`
+ * (методом наибольшего остатка). Нужно, потому что процент площадки — это по
+ * смыслу сумма процентов её активов, и если округлять каждый независимо, при
+ * раскрытии 25 + 16 давало бы 41 против 40 в шапке. Отдельно округлённые числа,
+ * не сходящиеся с итогом, — ровно тот повод не доверять цифрам, от которого мы
+ * тут и избавляемся.
+ */
+function roundSharesTo(values: number[], target: number): number[] {
+  const floors = values.map(Math.floor);
+  let remainder = target - floors.reduce((a, b) => a + b, 0);
+  const order = values
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+  const out = [...floors];
+  for (const { i } of order) {
+    if (remainder <= 0) break;
+    out[i] += 1;
+    remainder -= 1;
+  }
+  return out;
+}
+
 function pluralAssets(n: number): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
   if (mod10 === 1 && mod100 !== 11) return 'актив';
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'актива';
   return 'активов';
+}
+
+
+/** Дети строки площадки: суммы в базовой валюте + доли, сходящиеся с шапкой. */
+function buildOrgChildren(
+  views: ReturnType<typeof buildAssetViews>,
+  data: Parameters<typeof convert>[2],
+  orgShare: (capital: number) => number,
+  orgPct: number,
+): { id: string; name: string; color: string; capital: number; pct: number }[] {
+  const rows = views
+    // В базовую валюту — как и сумма шапки; иначе актив в долларах показал бы
+    // своё сырое число с «₽».
+    .map((v) => ({
+      id: v.asset.id,
+      name: v.asset.title || v.instrument.name,
+      color: v.organization.color,
+      capital: convert(v.derived.currentValue, v.asset.currency, data),
+    }))
+    .sort((a, b) => b.capital - a.capital);
+  const pcts = roundSharesTo(rows.map((r) => orgShare(r.capital) * 100), orgPct);
+  return rows.map((r, i) => ({ ...r, pct: pcts[i] }));
 }
 
 /**
@@ -774,11 +815,13 @@ function OrgAllocationRow({
   org: Organization | undefined;
   cur: CurrencyCode;
   sharePct: number;
-  assets: { id: string; name: string; rate: number; capital: number }[];
+  assets: { id: string; name: string; color: string; capital: number; pct: number }[];
 }) {
   const [open, setOpen] = useState(false);
+  // Шеврон смотрит ВНИЗ в закрытом виде и ВВЕРХ в открытом: «вправо» читается
+  // как переход на другой экран, а не как раскрытие на месте.
   const spin = useSharedValue(0);
-  const chevron = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 90}deg` }] }));
+  const chevron = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 180}deg` }] }));
 
   const toggle = () => {
     tapBuzz();
@@ -788,7 +831,10 @@ function OrgAllocationRow({
 
   return (
     <View>
-      <Pressable style={({ pressed }) => [styles.orgRow, pressed && styles.orgRowPressed]} onPress={toggle}>
+      {/* Без подсветки нажатия: строка раскрывается тут же, и мерцание всей
+          строки на каждый тап только раздражает — обратная связь и так есть
+          (шеврон + появившийся состав), плюс тактильная. */}
+      <Pressable style={styles.orgRow} onPress={toggle}>
         <OrgLogo color={group.color} logo={org?.logo} imageUri={org?.customImageUri} size={44} radius={16} variant="solid" />
         <View style={styles.orgInfo}>
           <Text style={styles.orgAmount} numberOfLines={1}>
@@ -798,7 +844,7 @@ function OrgAllocationRow({
             <Text style={styles.orgName} numberOfLines={1}>{group.label}</Text>
             <Text style={styles.orgCount}>{group.count} {pluralAssets(group.count)}</Text>
             <Animated.View style={chevron}>
-              <MaterialIcons name="chevron-right" size={16} color={tokens.text.tertiary} />
+              <MaterialIcons name="keyboard-arrow-down" size={18} color={tokens.text.tertiary} />
             </Animated.View>
           </View>
         </View>
@@ -809,14 +855,17 @@ function OrgAllocationRow({
 
       {open ? (
         <View style={styles.orgChildren}>
+          {/* Ставку тут не показываем: в блоке уже есть процент со смыслом «доля
+              портфеля», и два разных процента рядом путали. У актива справа —
+              его собственная доля, и суммы долей дают процент площадки. */}
           {assets.map((a) => (
             <View key={a.id} style={styles.orgChildRow}>
-              <View style={styles.orgChildDot} />
+              <View style={[styles.orgChildDot, { backgroundColor: a.color }]} />
               <Text style={styles.orgChildName} numberOfLines={1}>{a.name}</Text>
-              <Text style={styles.orgChildRate}>{formatPercent(a.rate)}</Text>
               <Text style={styles.orgChildAmount} numberOfLines={1}>
                 {formatMoney(a.capital, { currency: cur, kopecks: 'hide' })}
               </Text>
+              <Text style={styles.orgChildPct}>{a.pct}%</Text>
             </View>
           ))}
         </View>
@@ -979,15 +1028,15 @@ const styles = StyleSheet.create({
   orgName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary },
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
-  orgRowPressed: { opacity: 0.6 },
   orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   orgCount: { fontSize: tokens.typography.micro, lineHeight: 14, color: tokens.text.tertiary },
   orgChildren: { marginTop: 12, marginLeft: 44 + tokens.spacing.md, gap: 10 },
   orgChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  orgChildDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: tokens.text.tertiary },
+  orgChildDot: { width: 6, height: 6, borderRadius: 3 },
   orgChildName: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  orgChildRate: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   orgChildAmount: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.text.primary },
+  // Ширина фиксирована, чтобы проценты детей стояли колонкой под чипом площадки.
+  orgChildPct: { width: 34, textAlign: 'right', fontSize: tokens.typography.micro, color: tokens.text.tertiary },
   // marginTop 24 — то же расстояние, что Figma держит между всеми тремя
   // секциями карточки (gap-[24px] на контейнере): строки → полоса → плашка.
   allocationBar: { flexDirection: 'row', gap: 2, height: 20, marginTop: tokens.spacing.lg },
