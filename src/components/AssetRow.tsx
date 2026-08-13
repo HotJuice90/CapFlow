@@ -56,7 +56,8 @@ export function AssetRow({ view }: { view: AssetView }) {
           logo={organization.logo}
           imageUri={organization.customImageUri}
           size={44}
-          radius={tokens.radius.sm}
+          radius={16}
+          variant="solid"
           fallbackIcon={iconName}
         />
         <View style={styles.middle}>
@@ -106,16 +107,20 @@ export function AssetRow({ view }: { view: AssetView }) {
 }
 
 const styles = StyleSheet.create({
-  row: { paddingVertical: tokens.spacing.md },
+  // Карточки независимые (каждый актив — своя Card в index.tsx), поэтому свой
+  // вертикальный паддинг строке не нужен: его даёт карточка.
+  row: {},
   pressed: { opacity: 0.6 },
 
   // flex-start, а не center: у длинного названия слева три текстовые строки, и
   // сумма должна стоять на уровне названия, а не съезжать к середине блока.
   top: { flexDirection: 'row', alignItems: 'flex-start' },
   middle: { flex: 1, marginLeft: tokens.spacing.md, marginRight: tokens.spacing.sm },
+  // Название мельче суммы и обычным весом — иначе два «главных» элемента в
+  // строке спорят друг с другом и иерархии не возникает.
   name: {
-    fontSize: tokens.typography.body,
-    lineHeight: tokens.typography.body + 3,
+    fontSize: tokens.typography.label,
+    lineHeight: tokens.typography.label + 3,
     fontWeight: '500',
     color: tokens.text.primary,
   },
@@ -127,10 +132,12 @@ const styles = StyleSheet.create({
   },
 
   right: { alignItems: 'flex-end' },
+  // Единственный тяжёлый элемент строки — он и есть якорь для взгляда.
   amount: {
     fontFamily: font.semibold,
-    fontSize: tokens.typography.body,
-    lineHeight: tokens.typography.body + 3,
+    fontSize: 19,
+    lineHeight: 21,
+    letterSpacing: -0.3,
     color: tokens.text.primary,
   },
   income: {
@@ -147,7 +154,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.tight,
     paddingVertical: 5,
   },
-  pillText: { fontSize: 11, lineHeight: 13, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
+  // Светло-серый, а не почти-чёрный: пилюли — это детали, они не должны
+  // конкурировать по контрасту ни с названием, ни с суммой.
+  pillText: { fontSize: 11, lineHeight: 13, fontWeight: '500', color: tokens.text.tertiary },
   pillRate: { backgroundColor: hexToRgba(tokens.accent.base, 0.1), paddingHorizontal: 8 },
   pillRateText: { color: tokens.accent.base },
   pillWarn: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14) },

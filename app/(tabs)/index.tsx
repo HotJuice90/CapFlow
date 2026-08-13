@@ -587,25 +587,22 @@ export default function HomeScreen() {
                 <Text style={styles.sortText}>{sort.label}</Text>
               </Pressable>
             </View>
-            <Card padded={false}>
-              <View style={styles.listInner}>
-                {sortedViews.map((v, i) => (
-                  <View key={v.asset.id}>
-                    {i > 0 && <View style={styles.divider} />}
-                    <AssetRow view={v} />
-                  </View>
-                ))}
-                {hasArchived ? (
-                  <>
-                    <View style={styles.divider} />
-                    <Pressable style={styles.archiveLink} onPress={() => router.push('/archive')} hitSlop={8}>
-                      <MaterialCommunityIcons name="archive-outline" size={15} color={tokens.text.tertiary} />
-                      <Text style={styles.archiveLinkText}>Архив</Text>
-                    </Pressable>
-                  </>
-                ) : null}
-              </View>
-            </Card>
+            {/* Каждый актив — независимая карточка, а не строка в общей: так у
+                него есть свои границы и воздух вокруг, и список перестаёт
+                читаться однородной плитой. */}
+            <View style={styles.assetCards}>
+              {sortedViews.map((v) => (
+                <Card key={v.asset.id}>
+                  <AssetRow view={v} />
+                </Card>
+              ))}
+            </View>
+            {hasArchived ? (
+              <Pressable style={styles.archiveLink} onPress={() => router.push('/archive')} hitSlop={8}>
+                <MaterialCommunityIcons name="archive-outline" size={15} color={tokens.text.tertiary} />
+                <Text style={styles.archiveLinkText}>Архив</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : (
           <EmptyAssets />
@@ -659,6 +656,7 @@ const styles = StyleSheet.create({
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
   listInner: { paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.xs },
+  assetCards: { gap: tokens.spacing.md },
   divider: { height: 1, backgroundColor: tokens.surface.hairline },
   archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing.chip, paddingVertical: tokens.spacing.md },
   archiveLinkText: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, fontWeight: '500' },
