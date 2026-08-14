@@ -231,7 +231,6 @@ export default function AnalyticsScreen() {
   // Инсайт вместо геометрического сравнения бара с меткой: на сколько п.п.
   // налог набегает быстрее/медленнее равномерного темпа календаря (>0 — уже
   // пробили необлагаемый лимит и дальше облагается весь доход).
-  const taxPaceDeltaPct = taxAccruedPct - yearProgressPct;
 
   return (
     <ScreenBackground>
@@ -571,28 +570,11 @@ export default function AnalyticsScreen() {
                   />
                 </View>
                 <View style={styles.taxMeta}>
-                  <View style={styles.taxMetaInlineRow}>
-                    <Text style={styles.taxMetaBigValue}>{taxAccruedPct}%</Text>
-                    {Math.abs(taxPaceDeltaPct) >= 1 ? (
-                      <InfoTap
-                        title="Темп начисления налога"
-                        message="Показывает, насколько текущий налог отстаёт от ожидаемого или опережает его. Если значение ниже — налог пока накапливается медленнее прогноза. Если выше — быстрее. На это влияют сроки выплат, доходность активов и необлагаемый лимит."
-                      >
-                        <View style={styles.taxPaceRow}>
-                          <MaterialIcons
-                            name={taxPaceDeltaPct > 0 ? 'trending-up' : 'trending-down'}
-                            size={12}
-                            color={tokens.text.tertiary}
-                          />
-                          <Text style={styles.taxPaceText}>{Math.abs(Math.round(taxPaceDeltaPct))}%</Text>
-                        </View>
-                      </InfoTap>
-                    ) : null}
-                  </View>
-                  <View style={styles.taxMetaInlineRow}>
-                    <Text style={styles.taxMetaSmallLabel}>Прогноз:</Text>
-                    <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
-                  </View>
+                  {/* Проценты убраны: «45%» (доля прогноза) и мелкий «17%»
+                      (отставание от темпа) — две разные величины подряд, обе
+                      без единиц измерения. Полосы прогресса достаточно. */}
+                  <Text style={styles.taxMetaSmallLabel}>Прогноз к концу года</Text>
+                  <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
                 </View>
               </View>
 
@@ -609,10 +591,6 @@ export default function AnalyticsScreen() {
                     <Text style={styles.taxTileLabel}>Самостоятельно</Text>
                     <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
                   </View>
-                </View>
-                <View style={styles.taxTilePaid}>
-                  <Text style={styles.taxTileLabel}>Уплачено</Text>
-                  <Text style={[styles.taxTileValue, { color: tokens.semantic.positive }]}>{formatMoney(summary.taxPaidTotal, { currency: cur, kopecks: 'hide' })}</Text>
                 </View>
               </View>
 
@@ -816,35 +794,39 @@ function ClosedTaxGroup({
 
   return (
     <View>
-      <View style={styles.taxByInstrumentSep} />
-      <Pressable style={styles.taxByInstrumentRow} onPress={toggle}>
-        <View style={[styles.taxRowIconBox, { backgroundColor: hexToRgba(tokens.text.tertiary, 0.1) }]}>
-          <MaterialCommunityIcons name="archive-outline" size={19} color={tokens.text.tertiary} />
-        </View>
-        <Text style={styles.taxByInstrumentName} numberOfLines={1}>
-          {rows.length} {pluralClosed(rows.length)}
-        </Text>
-        <View style={styles.taxClosedRight}>
-          <Text style={styles.taxByInstrumentValue}>{formatMoney(total, { currency, kopecks: 'hide' })}</Text>
-          <Animated.View style={chevron}>
-            <MaterialIcons name="keyboard-arrow-down" size={18} color={tokens.text.tertiary} />
-          </Animated.View>
-        </View>
+      {/* Заголовок группы, а не строка-актив: без иконки слева, чтобы не
+          притворяться таким же элементом списка, как действующие активы. */}
+      <Pressable style={styles.taxClosedHead} onPress={toggle}>
+        <Text style={styles.taxClosedTitle}>Закрытые</Text>
+        <Animated.View style={chevron}>
+          <MaterialIcons name="keyboard-arrow-down" size={18} color={tokens.text.tertiary} />
+        </Animated.View>
+        <Text style={styles.taxClosedTotal}>{formatMoney(total, { currency, kopecks: 'hide' })}</Text>
       </Pressable>
 
-      {open ? (
-        <View style={styles.taxClosedList}>
-          {rows.map((r) => (
-            <View key={r.key} style={styles.taxClosedRow}>
-              <View style={[styles.taxClosedDot, { backgroundColor: tokens.category[r.typeId] ?? tokens.accent.base }]} />
-              <Text style={styles.taxClosedName} numberOfLines={1}>{r.name}</Text>
-              <Text style={styles.taxClosedValue} numberOfLines={1}>
-                {formatMoney(r.tax, { currency, kopecks: 'hide' })}
-              </Text>
+      {open
+        ? rows.map((r, i) => (
+            <View key={r.key}>
+              {i > 0 ? <View style={styles.taxByInstrumentSep} /> : null}
+              <View style={styles.taxByInstrumentRow}>
+                <View style={[styles.taxRowIconBox, { backgroundColor: hexToRgba(tokens.category[r.typeId] ?? tokens.accent.base, 0.1) }]}>
+                  <MaterialCommunityIcons
+                    name={TAX_TYPE_ICON[r.typeId] ?? 'bank-outline'}
+                    size={19}
+                    color={tokens.category[r.typeId] ?? tokens.accent.base}
+                  />
+                </View>
+                <View style={styles.taxClosedNameWrap}>
+                  <Text style={[styles.taxByInstrumentName, { flex: 0, flexShrink: 1 }]} numberOfLines={1}>{r.name}</Text>
+                  <Text style={styles.taxClosedBadge}>закрыт</Text>
+                </View>
+                <Text style={styles.taxByInstrumentValue}>
+                  {formatMoney(r.tax, { currency, kopecks: 'hide' })}
+                </Text>
+              </View>
             </View>
-          ))}
-        </View>
-      ) : null}
+          ))
+        : null}
     </View>
   );
 }
@@ -1144,12 +1126,19 @@ const styles = StyleSheet.create({
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  taxClosedRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  taxClosedList: { marginLeft: 34 + tokens.spacing.md, gap: 10, paddingBottom: tokens.spacing.md },
-  taxClosedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  taxClosedDot: { width: 6, height: 6, borderRadius: 3 },
-  taxClosedName: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  taxClosedValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, color: tokens.text.primary },
+  taxClosedHead: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
+  taxClosedTitle: { fontFamily: font.semibold, fontSize: tokens.typography.label, lineHeight: 16, color: tokens.text.secondary },
+  taxClosedTotal: { flex: 1, textAlign: 'right', fontFamily: font.semibold, fontSize: tokens.typography.label, lineHeight: 16, color: tokens.text.secondary },
+  taxClosedNameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  taxClosedBadge: {
+    fontSize: tokens.typography.micro,
+    color: tokens.text.tertiary,
+    backgroundColor: hexToRgba(tokens.text.tertiary, 0.12),
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
   orgMetaSep: { fontSize: tokens.typography.micro, color: hexToRgba(tokens.text.tertiary, 0.6) },
   orgChildren: { marginTop: 12, marginLeft: 44 + tokens.spacing.md, gap: 10 },
   orgChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1198,19 +1187,15 @@ const styles = StyleSheet.create({
   taxBarWrap: { marginTop: tokens.spacing.lg },
   taxTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   taxFill: { height: '100%', borderRadius: tokens.radius.pill },
-  taxMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
-  taxMetaInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  taxMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 16 },
   taxMetaBigValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
   taxMetaSmallLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
-  taxPaceRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  taxPaceText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
   taxSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
   // Именно разделитель перед табами Активы/Площадки — на 2px меньше зазора,
   // чем обычный taxSep.
   taxSepToTabs: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 18 },
   taxTileRow: { flexDirection: 'row', gap: 4 },
   taxTileWide: { flex: 1, flexDirection: 'row', backgroundColor: hexToRgba('#909497', 0.08), borderRadius: tokens.radius.sm, padding: 10 },
-  taxTilePaid: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.08), borderRadius: tokens.radius.sm, paddingHorizontal: 12, paddingVertical: 10 },
   taxTileCol: { flex: 1 },
   taxTileDivider: { width: 1, backgroundColor: hexToRgba('#909497', 0.2), marginHorizontal: 10 },
   taxTileLabel: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.11 },
