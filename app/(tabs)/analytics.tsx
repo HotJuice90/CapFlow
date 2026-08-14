@@ -223,9 +223,10 @@ export default function AnalyticsScreen() {
   // «сколько прошло года»: если она левее заливки, налог набегает медленнее
   // года (обычно значит — ещё не пробили лимит), если правее — уже пробили
   // и теперь копится быстрее календаря.
-  // Доля прогноза, которую факт уже набрал. Обе величины — с учётом лимита
-  // (net), как и всё в шапке карточки.
-  const taxAccruedPct = summary.taxYear > 0 ? Math.round((summary.taxAccrued / summary.taxYear) * 100) : 0;
+  // Доля прогноза, которую факт уже набрал. Вся карточка считает БЕЗ лимита
+  // («грязно»): лимит портфельный, по активам его не разложить, поэтому иначе
+  // шапка и список внизу мерили бы разное.
+  const taxAccruedPct = summary.taxYearGross > 0 ? Math.round((summary.taxAccruedGross / summary.taxYearGross) * 100) : 0;
   const nowDate = new Date();
   const yearStart = new Date(nowDate.getFullYear(), 0, 1).getTime();
   const yearEnd = new Date(nowDate.getFullYear() + 1, 0, 1).getTime();
@@ -542,6 +543,11 @@ export default function AnalyticsScreen() {
                 по стране/года), тап ведёт к источнику. */}
             <Text style={styles.section}>Налоги (НДФЛ)</Text>
             <View style={styles.taxCard}>
+              {/* Вся карточка считает БЕЗ необлагаемого лимита: он портфельный и
+                  по активам не раскладывается, поэтому иначе шапка и список
+                  мерили бы разное. Подпись одна на весь блок. */}
+              <Text style={styles.taxListHint}>Без учёта необлагаемого лимита</Text>
+
               {/* ФАКТ. Разбивка «банк / сам» стоит рядом с фактом, а не только
                   с прогнозом: раньше эти два числа висели под полосой и
                   выглядели фактом, хотя были прогнозными. Обе величины —
@@ -550,7 +556,7 @@ export default function AnalyticsScreen() {
               <View style={styles.taxHeaderRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.taxLabel}>Уже набежало</Text>
-                  <Text style={styles.taxValue}>{formatMoney(summary.taxAccrued, { currency: cur })}</Text>
+                  <Text style={styles.taxValue}>{formatMoney(summary.taxAccruedGross, { currency: cur })}</Text>
                 </View>
                 <Pressable style={styles.taxRatePill} onPress={() => { tapBuzz(); router.push('/settings/tax'); }}>
                   <Text style={styles.taxRatePillText}>{formatPercent(data.params.taxRate)}</Text>
@@ -567,7 +573,7 @@ export default function AnalyticsScreen() {
                   <View style={styles.taxTileDivider} />
                   <View style={styles.taxTileCol}>
                     <Text style={styles.taxTileLabel}>Отложить самому</Text>
-                    <Text style={styles.taxTileValue}>{formatMoney(summary.taxAccruedSelf, { currency: cur, kopecks: 'hide' })}</Text>
+                    <Text style={styles.taxTileValue}>{formatMoney(Math.max(0, summary.taxAccruedGross - summary.taxAccruedWithheld), { currency: cur, kopecks: 'hide' })}</Text>
                   </View>
                 </View>
               </View>
@@ -579,7 +585,7 @@ export default function AnalyticsScreen() {
               <View style={styles.taxHeaderRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.taxLabel}>К концу года</Text>
-                  <Text style={[styles.taxValue, { color: tokens.text.secondary }]}>~ {formatMoney(summary.taxYear, { currency: cur, kopecks: 'hide' })}</Text>
+                  <Text style={[styles.taxValue, { color: tokens.text.secondary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
                 </View>
               </View>
 
@@ -612,7 +618,7 @@ export default function AnalyticsScreen() {
                   <View style={styles.taxTileDivider} />
                   <View style={styles.taxTileCol}>
                     <Text style={styles.taxTileLabel}>Самостоятельно</Text>
-                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearSelf, { currency: cur, kopecks: 'hide' })}</Text>
+                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
                   </View>
                 </View>
               </View>
@@ -634,11 +640,6 @@ export default function AnalyticsScreen() {
                       <Text style={[styles.taxTabSegmentText, active && styles.taxTabSegmentTextActive]}>{seg.label}</Text>
                     )}
                   />
-                  {/* Лимит портфельный: честно разложить его по активам нельзя
-                      (см. flatTax в app/asset/[id].tsx), поэтому в списке ставка
-                      плоская. Из-за этого сумма списка выше цифр в шапке —
-                      подписываем, чтобы разница читалась как замысел. */}
-                  <Text style={styles.taxListHint}>Без учёта необлагаемого лимита</Text>
                   {taxRows.map((r, i) => {
                     const primary = r.taxToDate ?? r.tax;
                     const secondary = r.taxToDate !== undefined ? r.tax : undefined;
@@ -1158,8 +1159,7 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.micro,
     lineHeight: 14,
     color: tokens.text.tertiary,
-    marginTop: tokens.spacing.sm,
-    marginBottom: tokens.spacing.xs,
+    marginBottom: tokens.spacing.sm,
   },
   taxClosedHead: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   taxClosedTitle: { fontFamily: font.semibold, fontSize: tokens.typography.label, lineHeight: 16, color: tokens.text.secondary },
@@ -1230,7 +1230,8 @@ const styles = StyleSheet.create({
   // чем обычный taxSep.
   taxSepToTabs: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 18 },
   taxTileRow: { flexDirection: 'row', gap: 4 },
-  taxTileWide: { flex: 1, flexDirection: 'row', backgroundColor: hexToRgba('#909497', 0.08), borderRadius: tokens.radius.sm, padding: 10 },
+  // Без заливки: две серые плиты подряд (факт и прогноз) перегружали карточку.
+  taxTileWide: { flex: 1, flexDirection: 'row', paddingTop: 10 },
   taxTileCol: { flex: 1 },
   taxTileDivider: { width: 1, backgroundColor: hexToRgba('#909497', 0.2), marginHorizontal: 10 },
   taxTileLabel: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.11 },
