@@ -223,7 +223,9 @@ export default function AnalyticsScreen() {
   // «сколько прошло года»: если она левее заливки, налог набегает медленнее
   // года (обычно значит — ещё не пробили лимит), если правее — уже пробили
   // и теперь копится быстрее календаря.
-  const taxAccruedPct = summary.taxYearGross > 0 ? Math.round((summary.taxAccruedGross / summary.taxYearGross) * 100) : 0;
+  // Доля прогноза, которую факт уже набрал. Обе величины — с учётом лимита
+  // (net), как и всё в шапке карточки.
+  const taxAccruedPct = summary.taxYear > 0 ? Math.round((summary.taxAccrued / summary.taxYear) * 100) : 0;
   const nowDate = new Date();
   const yearStart = new Date(nowDate.getFullYear(), 0, 1).getTime();
   const yearEnd = new Date(nowDate.getFullYear() + 1, 0, 1).getTime();
@@ -540,15 +542,45 @@ export default function AnalyticsScreen() {
                 по стране/года), тап ведёт к источнику. */}
             <Text style={styles.section}>Налоги (НДФЛ)</Text>
             <View style={styles.taxCard}>
+              {/* ФАКТ. Разбивка «банк / сам» стоит рядом с фактом, а не только
+                  с прогнозом: раньше эти два числа висели под полосой и
+                  выглядели фактом, хотя были прогнозными. Обе величины —
+                  с учётом лимита, поэтому разбивка в точности складывается в
+                  заголовок, и цифры совпадают с графиком «Доход по месяцам». */}
               <View style={styles.taxHeaderRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>Набежало на сегодня</Text>
-                  <Text style={styles.taxValue}>{formatMoney(summary.taxAccruedGross, { currency: cur })}</Text>
+                  <Text style={styles.taxLabel}>Уже набежало</Text>
+                  <Text style={styles.taxValue}>{formatMoney(summary.taxAccrued, { currency: cur })}</Text>
                 </View>
                 <Pressable style={styles.taxRatePill} onPress={() => { tapBuzz(); router.push('/settings/tax'); }}>
                   <Text style={styles.taxRatePillText}>{formatPercent(data.params.taxRate)}</Text>
                   <MaterialIcons name="chevron-right" size={14} color={tokens.category.dfa} />
                 </Pressable>
+              </View>
+
+              <View style={styles.taxTileRow}>
+                <View style={styles.taxTileWide}>
+                  <View style={styles.taxTileCol}>
+                    <Text style={styles.taxTileLabel}>Удержал банк</Text>
+                    <Text style={styles.taxTileValue}>{formatMoney(summary.taxAccruedWithheld, { currency: cur, kopecks: 'hide' })}</Text>
+                  </View>
+                  <View style={styles.taxTileDivider} />
+                  <View style={styles.taxTileCol}>
+                    <Text style={styles.taxTileLabel}>Отложить самому</Text>
+                    <Text style={styles.taxTileValue}>{formatMoney(summary.taxAccruedSelf, { currency: cur, kopecks: 'hide' })}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.taxSep} />
+
+              {/* ПРОГНОЗ. Полоса живёт здесь: она про то, какую долю прогноза
+                  уже набрал факт, то есть принадлежит прогнозу, а не факту. */}
+              <View style={styles.taxHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.taxLabel}>К концу года</Text>
+                  <Text style={[styles.taxValue, { color: tokens.text.secondary }]}>~ {formatMoney(summary.taxYear, { currency: cur, kopecks: 'hide' })}</Text>
+                </View>
               </View>
 
               <View style={styles.taxBarWrap}>
@@ -569,16 +601,7 @@ export default function AnalyticsScreen() {
                     style={[styles.taxFill, { width: `${Math.min(Math.max(taxAccruedPct, 0), 100)}%` }]}
                   />
                 </View>
-                <View style={styles.taxMeta}>
-                  {/* Проценты убраны: «45%» (доля прогноза) и мелкий «17%»
-                      (отставание от темпа) — две разные величины подряд, обе
-                      без единиц измерения. Полосы прогресса достаточно. */}
-                  <Text style={styles.taxMetaSmallLabel}>Прогноз к концу года</Text>
-                  <Text style={[styles.taxMetaBigValue, { color: tokens.text.tertiary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
-                </View>
               </View>
-
-              <View style={styles.taxSep} />
 
               <View style={styles.taxTileRow}>
                 <View style={styles.taxTileWide}>
@@ -589,7 +612,7 @@ export default function AnalyticsScreen() {
                   <View style={styles.taxTileDivider} />
                   <View style={styles.taxTileCol}>
                     <Text style={styles.taxTileLabel}>Самостоятельно</Text>
-                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
+                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearSelf, { currency: cur, kopecks: 'hide' })}</Text>
                   </View>
                 </View>
               </View>
@@ -611,6 +634,11 @@ export default function AnalyticsScreen() {
                       <Text style={[styles.taxTabSegmentText, active && styles.taxTabSegmentTextActive]}>{seg.label}</Text>
                     )}
                   />
+                  {/* Лимит портфельный: честно разложить его по активам нельзя
+                      (см. flatTax в app/asset/[id].tsx), поэтому в списке ставка
+                      плоская. Из-за этого сумма списка выше цифр в шапке —
+                      подписываем, чтобы разница читалась как замысел. */}
+                  <Text style={styles.taxListHint}>Без учёта необлагаемого лимита</Text>
                   {taxRows.map((r, i) => {
                     const primary = r.taxToDate ?? r.tax;
                     const secondary = r.taxToDate !== undefined ? r.tax : undefined;
@@ -1126,6 +1154,13 @@ const styles = StyleSheet.create({
   orgPctChip: { width: 44, height: 44, borderRadius: tokens.radius.md, backgroundColor: hexToRgba(tokens.surface.white, 0.92), alignItems: 'center', justifyContent: 'center' },
   orgPctText: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.semibold, color: tokens.accent.base },
   orgNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  taxListHint: {
+    fontSize: tokens.typography.micro,
+    lineHeight: 14,
+    color: tokens.text.tertiary,
+    marginTop: tokens.spacing.sm,
+    marginBottom: tokens.spacing.xs,
+  },
   taxClosedHead: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   taxClosedTitle: { fontFamily: font.semibold, fontSize: tokens.typography.label, lineHeight: 16, color: tokens.text.secondary },
   taxClosedTotal: { flex: 1, textAlign: 'right', fontFamily: font.semibold, fontSize: tokens.typography.label, lineHeight: 16, color: tokens.text.secondary },
