@@ -578,17 +578,9 @@ export default function AnalyticsScreen() {
                 </View>
               </View>
 
-              <View style={styles.taxSep} />
-
-              {/* ПРОГНОЗ. Полоса живёт здесь: она про то, какую долю прогноза
-                  уже набрал факт, то есть принадлежит прогнозу, а не факту. */}
-              <View style={styles.taxHeaderRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>К концу года</Text>
-                  <Text style={[styles.taxValue, { color: tokens.text.secondary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
-                </View>
-              </View>
-
+              {/* Полоса стоит МЕЖДУ фактом и прогнозом и работает разделителем:
+                  она показывает, какую долю прогноза уже набрал факт, то есть
+                  принадлежит не одному из блоков, а переходу между ними. */}
               <View style={styles.taxBarWrap}>
                 <View style={styles.taxTrack}>
                   <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
@@ -606,6 +598,16 @@ export default function AnalyticsScreen() {
                     end={{ x: 1, y: 0 }}
                     style={[styles.taxFill, { width: `${Math.min(Math.max(taxAccruedPct, 0), 100)}%` }]}
                   />
+                </View>
+              </View>
+
+
+              {/* ПРОГНОЗ. Полоса живёт здесь: она про то, какую долю прогноза
+                  уже набрал факт, то есть принадлежит прогнозу, а не факту. */}
+              <View style={styles.taxHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.taxLabel}>К концу года</Text>
+                  <Text style={[styles.taxValue, { color: tokens.text.secondary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
                 </View>
               </View>
 
@@ -1219,13 +1221,13 @@ const styles = StyleSheet.create({
   // с обеих сторон казалось, что справа лишний пробел, поджал.
   taxRatePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: hexToRgba(tokens.category.dfa, 0.12), borderRadius: tokens.radius.pill, paddingLeft: tokens.spacing.tight, paddingRight: tokens.spacing.chip, paddingVertical: 6 },
   taxRatePillText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.semibold, color: tokens.category.dfa, letterSpacing: -0.13 },
-  taxBarWrap: { marginTop: tokens.spacing.lg },
+  // Отступы бывшего разделителя: полоса теперь и есть граница блоков.
+  taxBarWrap: { marginVertical: tokens.spacing.sheet },
   taxTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   taxFill: { height: '100%', borderRadius: tokens.radius.pill },
   taxMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 16 },
   taxMetaBigValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
   taxMetaSmallLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
-  taxSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
   // Именно разделитель перед табами Активы/Площадки — на 2px меньше зазора,
   // чем обычный taxSep.
   taxSepToTabs: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 18 },
