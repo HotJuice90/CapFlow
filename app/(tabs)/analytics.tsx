@@ -548,11 +548,17 @@ export default function AnalyticsScreen() {
                   мерили бы разное. Подпись одна на весь блок. */}
               <Text style={styles.taxListHint}>Без учёта необлагаемого лимита</Text>
 
-              {/* ФАКТ. Разбивка «банк / сам» стоит рядом с фактом, а не только
-                  с прогнозом: раньше эти два числа висели под полосой и
-                  выглядели фактом, хотя были прогнозными. Обе величины —
-                  с учётом лимита, поэтому разбивка в точности складывается в
-                  заголовок, и цифры совпадают с графиком «Доход по месяцам». */}
+              {/* Одно доминирующее число — факт: это единственная величина,
+                  по которой пользователь действует (сколько уже реально
+                  набежало). Прогноз не получает своего симметричного блока с
+                  такой же разбивкой — раньше именно эта симметрия и делала
+                  кашу: два одинаковых по весу блока, и непонятно, где деньги,
+                  а где оценка. Теперь прогноз живёт подписью у полосы
+                  (сколько процентов прогноза уже набрано), а прогнозная
+                  разбивка «банк / сам» — мелкой второй строкой под
+                  фактической, в тех же двух колонках. Информация вся на
+                  месте, но иерархия однозначная: крупное = факт,
+                  серое с «~» = прогноз. */}
               <View style={styles.taxHeaderRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.taxLabel}>Уже набежало</Text>
@@ -564,23 +570,6 @@ export default function AnalyticsScreen() {
                 </Pressable>
               </View>
 
-              <View style={styles.taxTileRow}>
-                <View style={styles.taxTileWide}>
-                  <View style={styles.taxTileCol}>
-                    <Text style={styles.taxTileLabel}>Удержал банк</Text>
-                    <Text style={styles.taxTileValue}>{formatMoney(summary.taxAccruedWithheld, { currency: cur, kopecks: 'hide' })}</Text>
-                  </View>
-                  <View style={styles.taxTileDivider} />
-                  <View style={styles.taxTileCol}>
-                    <Text style={styles.taxTileLabel}>Отложить самому</Text>
-                    <Text style={styles.taxTileValue}>{formatMoney(Math.max(0, summary.taxAccruedGross - summary.taxAccruedWithheld), { currency: cur, kopecks: 'hide' })}</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Полоса стоит МЕЖДУ фактом и прогнозом и работает разделителем:
-                  она показывает, какую долю прогноза уже набрал факт, то есть
-                  принадлежит не одному из блоков, а переходу между ними. */}
               <View style={styles.taxBarWrap}>
                 <View style={styles.taxTrack}>
                   <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
@@ -599,28 +588,29 @@ export default function AnalyticsScreen() {
                     style={[styles.taxFill, { width: `${Math.min(Math.max(taxAccruedPct, 0), 100)}%` }]}
                   />
                 </View>
+                <Text style={styles.taxBarCaption}>
+                  {taxAccruedPct}% от прогноза{' '}
+                  <Text style={styles.taxBarCaptionValue}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
+                  {' '}к концу года
+                </Text>
               </View>
 
-
-              {/* ПРОГНОЗ. Полоса живёт здесь: она про то, какую долю прогноза
-                  уже набрал факт, то есть принадлежит прогнозу, а не факту. */}
-              <View style={styles.taxHeaderRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.taxLabel}>К концу года</Text>
-                  <Text style={[styles.taxValue, { color: tokens.text.secondary }]}>~ {formatMoney(summary.taxYearGross, { currency: cur, kopecks: 'hide' })}</Text>
-                </View>
-              </View>
-
+              {/* Разбивка по механизму уплаты. В каждой колонке сверху факт
+                  (крупно, чёрным), снизу — та же величина в прогнозе на конец
+                  года (мелко, серым, с «~»). Так «банк / сам» читается один
+                  раз, а не дважды в двух разных блоках. */}
               <View style={styles.taxTileRow}>
                 <View style={styles.taxTileWide}>
                   <View style={styles.taxTileCol}>
-                    <Text style={styles.taxTileLabel}>Удержит банк</Text>
-                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearWithheld, { currency: cur, kopecks: 'hide' })}</Text>
+                    <Text style={styles.taxTileLabel}>Удержал банк</Text>
+                    <Text style={styles.taxTileValue}>{formatMoney(summary.taxAccruedWithheld, { currency: cur, kopecks: 'hide' })}</Text>
+                    <Text style={styles.taxTileForecast}>к концу года ~ {formatMoney(summary.taxYearWithheld, { currency: cur, kopecks: 'hide' })}</Text>
                   </View>
                   <View style={styles.taxTileDivider} />
                   <View style={styles.taxTileCol}>
-                    <Text style={styles.taxTileLabel}>Самостоятельно</Text>
-                    <Text style={styles.taxTileValue}>~ {formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
+                    <Text style={styles.taxTileLabel}>Отложить самому</Text>
+                    <Text style={styles.taxTileValue}>{formatMoney(Math.max(0, summary.taxAccruedGross - summary.taxAccruedWithheld), { currency: cur, kopecks: 'hide' })}</Text>
+                    <Text style={styles.taxTileForecast}>к концу года ~ {formatMoney(summary.taxYearSelfGross, { currency: cur, kopecks: 'hide' })}</Text>
                   </View>
                 </View>
               </View>
@@ -1221,10 +1211,13 @@ const styles = StyleSheet.create({
   // с обеих сторон казалось, что справа лишний пробел, поджал.
   taxRatePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: hexToRgba(tokens.category.dfa, 0.12), borderRadius: tokens.radius.pill, paddingLeft: tokens.spacing.tight, paddingRight: tokens.spacing.chip, paddingVertical: 6 },
   taxRatePillText: { fontSize: tokens.typography.caption, lineHeight: 15, fontFamily: font.semibold, color: tokens.category.dfa, letterSpacing: -0.13 },
-  // Отступы бывшего разделителя: полоса теперь и есть граница блоков.
-  taxBarWrap: { marginVertical: tokens.spacing.sheet },
+  // Полоса привязана к главному числу (факту) и несёт прогноз собственной
+  // подписью — отдельного блока под прогноз больше нет.
+  taxBarWrap: { marginTop: 14 },
   taxTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   taxFill: { height: '100%', borderRadius: tokens.radius.pill },
+  taxBarCaption: { fontSize: tokens.typography.hint, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 8 },
+  taxBarCaptionValue: { fontFamily: font.semibold, color: tokens.text.secondary },
   taxMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 16 },
   taxMetaBigValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
   taxMetaSmallLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
@@ -1233,11 +1226,12 @@ const styles = StyleSheet.create({
   taxSepToTabs: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 18 },
   taxTileRow: { flexDirection: 'row', gap: 4 },
   // Без заливки: две серые плиты подряд (факт и прогноз) перегружали карточку.
-  taxTileWide: { flex: 1, flexDirection: 'row', paddingTop: 10 },
+  taxTileWide: { flex: 1, flexDirection: 'row', paddingTop: 16 },
   taxTileCol: { flex: 1 },
   taxTileDivider: { width: 1, backgroundColor: hexToRgba('#909497', 0.2), marginHorizontal: 10 },
   taxTileLabel: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.11 },
   taxTileValue: { fontSize: tokens.typography.label, lineHeight: 17, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 4, letterSpacing: -0.14 },
+  taxTileForecast: { fontSize: tokens.typography.micro, lineHeight: 13, fontFamily: font.regular, color: '#909497', letterSpacing: -0.11, marginTop: 4 },
   taxTabPillWrap: {
     flexDirection: 'row',
     padding: 1,
