@@ -16,21 +16,26 @@ const MONTH_FULL = [
 const POSITIVE_H = 96;
 
 /**
- * Столбики залиты градиентом того же построения, что и сектор роста в бублике
- * «Темп дохода» (CompareDonut): светлый верх → базовый токен внизу. Прозрачность
- * для неактивных месяцев не используется вовсе — полупрозрачные столбики
- * подмешивали фон карточки и читались выцветшими, а не «другими».
+ * Градиент — признак ВЫБРАННОГО месяца, а не общая заливка столбиков. Сам
+ * градиент того же построения, что и сектор роста в бублике «Темп дохода»
+ * (CompareDonut): светлый верх → базовый токен внизу. Направление вертикальное,
+ * а не горизонтальное как в бублике: столбик узкий, поперёк градиент просто не
+ * успевает развернуться.
  *
- * Направление вертикальное, а не горизонтальное как в бублике: столбик узкий,
- * поперёк градиент просто не успевает развернуться.
+ * Остальные месяцы — сплошной цвет с лёгкой прозрачностью: они должны отступить
+ * на шаг, а не выцвести.
+ *
+ * Синий сегмент (удержал банк) сплошной ВСЕГДА, в том числе у выбранного: он
+ * лежит ВНУТРИ зелёного столбика, и градиент внутри градиента читается грязью.
  */
 const BAR_GRADIENT = {
   earned: ['#2CE296', tokens.semantic.positive],
-  withheld: [tokens.accent.light, tokens.accent.base],
   tax: ['#FFC94A', tokens.semantic.warning],
 } as const;
 const GRADIENT_TOP = { x: 0, y: 0 };
 const GRADIENT_BOTTOM = { x: 0, y: 1 };
+/** Неактивные столбики: плотнее прежних 0.4 — те выглядели выцветшими. */
+const IDLE_ALPHA = 0.7;
 /** Разделителем служит сам зазор: все зелёные столбики кончаются на одной
  *  высоте, все жёлтые с неё начинаются, и просвет фона между ними читается как
  *  ось. Нарисованная линия поверх этого выглядела грубо. */
@@ -122,24 +127,24 @@ export function MonthlyIncomeChart({
                     { height: Math.max(2, (m.earned / maxEarned) * (POSITIVE_H - AXIS_GAP)) },
                   ]}
                 >
-                  <LinearGradient
-                    colors={BAR_GRADIENT.earned}
-                    start={GRADIENT_TOP}
-                    end={GRADIENT_BOTTOM}
-                    style={styles.barNet}
-                  />
-                  {m.taxWithheld > 0 ? (
+                  {active ? (
                     <LinearGradient
-                      colors={BAR_GRADIENT.withheld}
+                      colors={BAR_GRADIENT.earned}
                       start={GRADIENT_TOP}
                       end={GRADIENT_BOTTOM}
-                      style={{ height: `${Math.min(100, (m.taxWithheld / (m.earned || 1)) * 100)}%` }}
+                      style={styles.barNet}
+                    />
+                  ) : (
+                    <View style={[styles.barNet, { backgroundColor: hexToRgba(tokens.semantic.positive, IDLE_ALPHA) }]} />
+                  )}
+                  {m.taxWithheld > 0 ? (
+                    <View
+                      style={{
+                        height: `${Math.min(100, (m.taxWithheld / (m.earned || 1)) * 100)}%`,
+                        backgroundColor: active ? tokens.accent.base : hexToRgba(tokens.accent.base, IDLE_ALPHA),
+                      }}
                     />
                   ) : null}
-                  {/* Выбранный месяц = тот же цвет, притемнённый наложением.
-                      Так активным читается более НАСЫЩЕННЫЙ столбик, а не
-                      единственный непрозрачный среди выцветших. */}
-                  {active ? <View style={styles.barShade} pointerEvents="none" /> : null}
                 </View>
               </View>
               <View style={[styles.plotDown, { height: negativeH }]}>
@@ -148,15 +153,17 @@ export function MonthlyIncomeChart({
                     style={[
                       styles.barDown,
                       { height: Math.max(2, (m.taxSelf / (maxTax || 1)) * (negativeH - AXIS_GAP)) },
+                      !active && { backgroundColor: hexToRgba(tokens.semantic.warning, IDLE_ALPHA) },
                     ]}
                   >
-                    <LinearGradient
-                      colors={BAR_GRADIENT.tax}
-                      start={GRADIENT_TOP}
-                      end={GRADIENT_BOTTOM}
-                      style={StyleSheet.absoluteFill}
-                    />
-                    {active ? <View style={styles.barShade} pointerEvents="none" /> : null}
+                    {active ? (
+                      <LinearGradient
+                        colors={BAR_GRADIENT.tax}
+                        start={GRADIENT_TOP}
+                        end={GRADIENT_BOTTOM}
+                        style={StyleSheet.absoluteFill}
+                      />
+                    ) : null}
                   </View>
                 ) : null}
               </View>
@@ -244,12 +251,6 @@ const styles = StyleSheet.create({
   barNet: { flex: 1 },
   plotDown: { width: '100%', justifyContent: 'flex-start', paddingTop: AXIS_GAP },
   barDown: { width: '100%', borderBottomLeftRadius: 4, borderBottomRightRadius: 4, overflow: 'hidden' },
-  // Притемнение выбранного столбика — поверх градиента, внутри скруглённой
-  // обрезки, поэтому повторяет форму столбика без отдельного радиуса.
-  barShade: {
-    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
-    backgroundColor: hexToRgba('#000000', 0.2),
-  },
   monthLabel: {
     fontSize: tokens.typography.micro,
     lineHeight: 13,
