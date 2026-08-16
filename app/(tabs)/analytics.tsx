@@ -1,7 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Dimensions, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Pattern as SvgPattern, Rect } from 'react-native-svg';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -97,8 +105,16 @@ export default function AnalyticsScreen() {
   const byType = useMemo(() => distributionByType(data), [data]);
   const byOrg = useMemo(() => distributionByOrg(data), [data]);
   const monthlyIncome = useMemo(() => monthlyIncomeHistory(data, new Date().getFullYear()), [data]);
-  const heroDays = HERO_PERIODS.find((p) => p.key === heroPeriod)!.days;
-  const capSeries = useMemo(() => capitalHistorySeries(data, heroDays), [data, heroDays]);
+  const heroIndex = HERO_PERIODS.findIndex((p) => p.key === heroPeriod);
+  const heroDays = HERO_PERIODS[heroIndex].days;
+  // Ряды считаем сразу для всех трёх периодов: график — карусель из трёх
+  // полотен, во время свайпа соседнее уже должно быть нарисовано. Движок тот
+  // же, что и раньше, просто вызван трижды и мемоизирован на data.
+  const capSeriesAll = useMemo(
+    () => HERO_PERIODS.map((p) => capitalHistorySeries(data, p.days)),
+    [data],
+  );
+  const capSeries = capSeriesAll[heroIndex];
   const earnedPeriod = useMemo(() => earnedInPeriod(data, heroDays), [data, heroDays]);
   const incomePace = useMemo(() => incomePaceWindows(data, 30), [data]);
   const spread = useMemo(() => rateSpread(data), [data]);
@@ -113,6 +129,70 @@ export default function AnalyticsScreen() {
 
   const cur = data.settings.defaultCurrency;
   const hasAssets = byType.total > 0;
+
+  // Свайп по графику = тот же переключатель периода, что и чипы над ним.
+  // Позиция карусели в ПИКСЕЛЯХ (не дискретный индекс): вся анимация выводится
+  // из неё, поэтому палец тянет полотно один-в-один, а не «прыжком» после
+  // отпускания. Классический Animated тут не годится — native driver не умеет
+  // width/backgroundColor, и ряд бы дёргался на JS-потоке (см. CLAUDE.md).
+  const chartPos = useSharedValue(heroIndex * GRAPH_W);
+  const chartStart = useSharedValue(0);
+
+  // Тап по чипу двигает карусель; свайп двигает чипы через setHeroPeriod в
+  // onEnd. Чтобы эти два пути не толкали друг друга, синхронизируем только
+  // когда полотно реально стоит не на своём периоде.
+  useEffect(() => {
+    const target = heroIndex * GRAPH_W;
+    if (Math.abs(chartPos.value - target) < 1) return;
+    chartPos.value = withTiming(target, { duration: 420, easing: Easing.out(Easing.cubic) });
+  }, [heroIndex, chartPos]);
+
+  const applyHeroIndex = (idx: number) => {
+    const next = HERO_PERIODS[idx];
+    if (next && next.key !== heroPeriod) {
+      tapBuzz();
+      setHeroPeriod(next.key);
+    }
+  };
+
+  const chartPan = useMemo(
+    () =>
+      Gesture.Pan()
+        // Горизонталь забирает жест, вертикаль проваливается в скролл экрана —
+        // иначе график «съедал» прокрутку страницы.
+        .activeOffsetX([-12, 12])
+        .failOffsetY([-16, 16])
+        .onStart(() => {
+          cancelAnimation(chartPos);
+          chartStart.value = chartPos.value;
+        })
+        .onUpdate((e) => {
+          const raw = chartStart.value - e.translationX;
+          const max = (HERO_PERIODS.length - 1) * GRAPH_W;
+          // Резинка за краями: тянется, но втрое туже — край ощущается краем.
+          if (raw < 0) chartPos.value = raw / 3;
+          else if (raw > max) chartPos.value = max + (raw - max) / 3;
+          else chartPos.value = raw;
+        })
+        .onEnd((e) => {
+          const max = HERO_PERIODS.length - 1;
+          let idx = Math.round(chartPos.value / GRAPH_W);
+          // Быстрый флик продвигает на слайд дальше, даже если сам drag не
+          // дотянул до половины — иначе короткий резкий свайп «не считается».
+          const from = Math.round(chartStart.value / GRAPH_W);
+          if (Math.abs(e.velocityX) > 250 && idx === from) idx = e.velocityX < 0 ? from + 1 : from - 1;
+          idx = Math.min(Math.max(idx, 0), max);
+          chartPos.value = withTiming(idx * GRAPH_W, { duration: 420, easing: Easing.out(Easing.cubic) });
+          // Период меняем здесь, а не по завершении анимации: плашка чипов
+          // (withTiming 260) поедет одновременно с полотном, а не после него.
+          runOnJS(applyHeroIndex)(idx);
+        }),
+    // applyHeroIndex замыкает актуальный heroPeriod — пересобираем жест при смене.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [heroPeriod],
+  );
+
+  const chartRowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -chartPos.value }] }));
 
   // % прироста капитала за выбранный период — тот же ряд, что рисует график,
   // просто первое/последнее значение вместо всей кривой.
@@ -285,7 +365,19 @@ export default function AnalyticsScreen() {
               </Text>
             </View>
 
-            <CapitalAxisChart data={capSeries} width={GRAPH_W} height={210} />
+            {/* Карусель из трёх полотен (Месяц/Год/Всё время) — свайп по
+                графику и чипы ниже переключают одно и то же состояние. */}
+            <GestureDetector gesture={chartPan}>
+              <View style={styles.chartViewport}>
+                <Animated.View style={[styles.chartRow, chartRowStyle]}>
+                  {capSeriesAll.map((series, i) => (
+                    <View key={HERO_PERIODS[i].key} style={{ width: GRAPH_W }}>
+                      <CapitalAxisChart data={series} width={GRAPH_W} height={210} />
+                    </View>
+                  ))}
+                </Animated.View>
+              </View>
+            </GestureDetector>
 
             <View style={styles.heroSummaryCard}>
               <View style={styles.heroSummaryLeft}>
@@ -1048,6 +1140,9 @@ const styles = StyleSheet.create({
   paceDonutSpacer: { width: 140 },
   paceDonutOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   heroCapitalBlock: { gap: 8, marginBottom: 6 },
+  // Окно карусели: ровно одно полотно шириной GRAPH_W, соседние обрезаются.
+  chartViewport: { width: GRAPH_W, overflow: 'hidden' },
+  chartRow: { flexDirection: 'row' },
   heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
   heroGrowthPill: { borderRadius: tokens.radius.pill, paddingHorizontal: 7, paddingVertical: 3 },
