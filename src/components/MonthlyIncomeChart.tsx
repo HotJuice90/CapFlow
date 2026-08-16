@@ -34,7 +34,12 @@ const BAR_GRADIENT = {
 } as const;
 const GRADIENT_TOP = { x: 0, y: 0 };
 const GRADIENT_BOTTOM = { x: 0, y: 1 };
-/** Неактивные столбики: плотнее прежних 0.4 — те выглядели выцветшими. */
+/**
+ * Неактивные столбики: плотнее прежних 0.4 — те выглядели выцветшими.
+ * Зелёный из-под alpha выведен совсем — у него свой сплошной светлый токен
+ * (semantic.positiveLight): полупрозрачный зелёный подмешивал фон карточки и
+ * читался пыльным. Синий и жёлтый пока на alpha — они мельче и грязи не дают.
+ */
 const IDLE_ALPHA = 0.7;
 /** Разделителем служит сам зазор: все зелёные столбики кончаются на одной
  *  высоте, все жёлтые с неё начинаются, и просвет фона между ними читается как
@@ -135,7 +140,7 @@ export function MonthlyIncomeChart({
                       style={styles.barNet}
                     />
                   ) : (
-                    <View style={[styles.barNet, { backgroundColor: hexToRgba(tokens.semantic.positive, IDLE_ALPHA) }]} />
+                    <View style={[styles.barNet, { backgroundColor: tokens.semantic.positiveLight }]} />
                   )}
                   {m.taxWithheld > 0 ? (
                     <View
