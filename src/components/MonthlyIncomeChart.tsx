@@ -123,6 +123,14 @@ export function MonthlyIncomeChart({
               style={styles.col}
               onPress={() => { tapBuzz(); setSelected(i); }}
             >
+              {/* Выделение — подложка ПОД всей колонкой, тот же приём, что у
+                  иконки в плитках «Эффективность»: цвет с малой alpha и
+                  скруглением. Оттенком самих столбиков выбранный месяц отделить
+                  не выходило — активный залит градиентом, и любой соседний
+                  зелёный либо попадает внутрь его диапазона и сливается, либо
+                  уходит светлее верхней точки и становится бледно-неоновым.
+                  Подложка снимает вопрос: выбор читается по колонке целиком. */}
+              {active ? <View style={styles.colBackdrop} pointerEvents="none" /> : null}
               <View style={[styles.plotUp, { height: POSITIVE_H }]}>
                 {/* Удержанное банком — сегмент ВНУТРИ дохода: эти деньги были
                     частью дохода и уже вычтены, до счёта они не дошли. */}
@@ -251,6 +259,17 @@ const styles = StyleSheet.create({
 
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, position: 'relative' },
   col: { flex: 1, alignItems: 'center' },
+  // Тот же приём, что у effTileIconBox: цвет под малой alpha + скругление.
+  // Alpha меньше тамошних 0.16 — там подложка 36×36, тут во всю высоту графика,
+  // и на такой площади тот же процент читался бы уже заливкой, а не подсветкой.
+  // Уезжает по бокам на половину зазора между колонками (gap 3), чтобы подложка
+  // была шире столбика и он лежал на ней, а не совпадал с её краями. Низ
+  // подведён под подпись месяца — выделяется колонка целиком, вместе с ней.
+  colBackdrop: {
+    position: 'absolute', top: -6, bottom: -4, left: -1.5, right: -1.5,
+    borderRadius: 12,
+    backgroundColor: hexToRgba(tokens.semantic.positive, 0.1),
+  },
   plotUp: { width: '100%', justifyContent: 'flex-end', paddingBottom: AXIS_GAP },
   barUp: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4, overflow: 'hidden' },
   barNet: { flex: 1 },
