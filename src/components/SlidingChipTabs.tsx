@@ -148,7 +148,10 @@ function ChipLabel({
 
   return (
     <Pressable style={chipStyle} onLayout={onLayout} onPress={onPress}>
-      <Animated.Text style={[textStyle, labelStyle, active && activeFontFamily ? { fontFamily: activeFontFamily } : null]}>
+      {/* Цвет дублируется обычным стилем: анимированный применяется воркетом
+          после коммита, и на первом кадре подпись иначе брала цвет по
+          умолчанию, а не своё состояние. */}
+      <Animated.Text style={[textStyle, { color: active ? textColorOn : textColorOff }, labelStyle, active && activeFontFamily ? { fontFamily: activeFontFamily } : null]}>
         {label}
       </Animated.Text>
     </Pressable>

@@ -63,9 +63,13 @@ export function TabChip({
         onPress();
       }}
     >
-      <Animated.View style={[chipStyle, bgStyle]}>
+      {/* Цвета дублируются обычным стилем перед анимированным: анимированный
+          применяется воркетом уже ПОСЛЕ коммита, и на первом кадре чип иначе
+          оставался без фона, а подпись — цвета по умолчанию. Анимированный
+          стиль перебивает их, как только доходит до дела. */}
+      <Animated.View style={[chipStyle, { backgroundColor: active ? bgOn : bgOff }, bgStyle]}>
         {icon}
-        <Animated.Text style={[textStyle, labelStyle, active && activeFontFamily ? { fontFamily: activeFontFamily } : null]}>
+        <Animated.Text style={[textStyle, { color: active ? textColorOn : textColorOff }, labelStyle, active && activeFontFamily ? { fontFamily: activeFontFamily } : null]}>
           {label}
         </Animated.Text>
       </Animated.View>

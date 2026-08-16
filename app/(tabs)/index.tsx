@@ -115,7 +115,18 @@ function GoalDot({ index, pos }: { index: number; pos: SharedValue<number> }) {
       opacity: interpolate(pos.value, input, [0.3, 1, 0.3], Extrapolation.CLAMP),
     };
   });
-  return <Animated.View style={[styles.goalDotBase, style]} />;
+  // Стартовая геометрия — обычным стилем. Анимированный стиль применяется
+  // воркетом уже ПОСЛЕ коммита, а ширины в базовом стиле нет, поэтому до
+  // первого прохода Reanimated точки висели вью нулевой ширины (невидимыми).
+  // Считаем от текущей позиции слайдера: на первом кадре точка сразу своего
+  // размера, дальше её ведёт анимированный стиль.
+  const home = index * SLIDE_W;
+  const dist = Math.min(1, Math.abs(pos.value - home) / SLIDE_W);
+  const initial = {
+    width: DOT_ACTIVE_W + (DOT_W - DOT_ACTIVE_W) * dist,
+    opacity: 1 + (0.3 - 1) * dist,
+  };
+  return <Animated.View style={[styles.goalDotBase, initial, style]} />;
 }
 
 export default function HomeScreen() {
