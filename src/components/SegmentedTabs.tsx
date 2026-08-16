@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { tapBuzz } from '@/lib/haptics';
@@ -35,10 +35,21 @@ export function SegmentedTabs<T extends string>({
   const idx = Math.max(0, segments.findIndex((s) => s.key === value));
   const segW = width / segments.length;
   const pos = useSharedValue(0);
+  // Пилюлю нельзя нарисовать до onLayout — ширины ещё нет. Первую установку
+  // делаем БЕЗ анимации: иначе на монтировании она едет из нуля, и при активном
+  // не-первом сегменте это видно как влёт плашки слева.
+  const positioned = useRef(false);
+  const measured = width > 0;
 
   useEffect(() => {
+    if (!measured) return;
+    if (!positioned.current) {
+      positioned.current = true;
+      pos.value = idx * segW;
+      return;
+    }
     pos.value = withTiming(idx * segW, { duration: 260, easing: Easing.out(Easing.cubic) });
-  }, [idx, segW, pos]);
+  }, [idx, segW, pos, measured]);
 
   const pillStyle = useAnimatedStyle(() => ({
     width: segW,
@@ -49,7 +60,7 @@ export function SegmentedTabs<T extends string>({
 
   return (
     <Animated.View style={[styles.track, { backgroundColor: trackColor }, style]} onLayout={onLayout}>
-      {width > 0 ? (
+      {measured ? (
         <Animated.View pointerEvents="none" style={[styles.pill, { backgroundColor: pillColor }, pillStyle]} />
       ) : null}
       {segments.map((s) => {
@@ -57,7 +68,10 @@ export function SegmentedTabs<T extends string>({
         return (
           <Pressable
             key={s.key}
-            style={styles.segment}
+            // До первого onLayout активный сегмент красится сам: скользящей
+            // пилюли ещё нет, и без этого переключатель на первом кадре
+            // показывался вообще без выделения — читалось как «подгружается».
+            style={[styles.segment, !measured && active && { backgroundColor: pillColor, borderRadius: tokens.radius.pill }]}
             onPress={() => {
               if (!active) {
                 tapBuzz();

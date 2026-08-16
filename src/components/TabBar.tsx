@@ -61,7 +61,7 @@ export function TabBar({ state, navigation }: TabBarProps) {
           const pair = ICONS[route.name];
           if (!pair) return null;
           const focused = state.index === i;
-          const Icon = focused ? pair[1] : pair[0];
+          const [IdleIcon, ActiveIcon] = pair;
           const onPress = () => {
             tapBuzz();
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -69,7 +69,23 @@ export function TabBar({ state, navigation }: TabBarProps) {
           };
           return (
             <Pressable key={route.key} onPress={onPress} hitSlop={10} style={styles.item}>
-              <Icon width={24} height={24} color={focused ? c.active : c.inactive} />
+              {/* Обе иконки смонтированы ВСЕГДА, переключается только
+                  прозрачность. Раньше рендерилась одна из пары — а это два
+                  разных типа компонента, поэтому смена таба размонтировала
+                  старую иконку и монтировала новую: создание дерева нативных
+                  вью react-native-svg плюс разбор путей выпадали на тот же
+                  кадр, что и переход между экранами, и активная иконка
+                  появлялась с задержкой в несколько кадров (выглядело как
+                  ленивая подгрузка). Сейчас монтировать при переключении
+                  нечего — обе уже на экране. */}
+              <View style={styles.iconBox}>
+                <View style={[styles.iconLayer, { opacity: focused ? 0 : 1 }]}>
+                  <IdleIcon width={24} height={24} color={c.inactive} />
+                </View>
+                <View style={[styles.iconLayer, { opacity: focused ? 1 : 0 }]}>
+                  <ActiveIcon width={24} height={24} color={c.active} />
+                </View>
+              </View>
             </Pressable>
           );
         })}
@@ -91,4 +107,8 @@ const styles = StyleSheet.create({
     boxShadow: '0px 8px 24px rgba(48,69,62,0.16)',
   },
   item: { alignItems: 'center', justifyContent: 'center' },
+  // Размер задан явно: обе иконки лежат absolute-слоями друг на друге, и без
+  // этого у бокса не осталось бы собственной высоты.
+  iconBox: { width: 24, height: 24 },
+  iconLayer: { position: 'absolute', top: 0, left: 0 },
 });

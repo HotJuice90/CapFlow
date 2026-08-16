@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleProp, TextStyle, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
@@ -45,7 +45,9 @@ export function SlidingChipTabs<T extends string>({
   activeFontFamily,
 }: SlidingChipTabsProps<T>) {
   const layouts = useRef<Partial<Record<T, Layout>>>({}).current;
-  const measured = useRef(false);
+  // Именно состояние, а не ref: до первого onLayout пилюли нет вовсе, и активный
+  // чип должен покраситься сам — а для этого нужен ре-рендер по факту замера.
+  const [measured, setMeasured] = useState(false);
   const pillX = useSharedValue(0);
   const pillW = useSharedValue(0);
 
@@ -62,16 +64,16 @@ export function SlidingChipTabs<T extends string>({
   };
 
   useEffect(() => {
-    applyPill(measured.current);
+    applyPill(measured);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const onItemLayout = (key: T) => (e: LayoutChangeEvent) => {
     const { x, width } = e.nativeEvent.layout;
     layouts[key] = { x, width };
-    if (key === value && !measured.current) {
-      measured.current = true;
+    if (key === value && !measured) {
       applyPill(false);
+      setMeasured(true);
     }
   };
 
@@ -88,7 +90,9 @@ export function SlidingChipTabs<T extends string>({
           key={item.key}
           active={item.key === value}
           label={item.label}
-          chipStyle={chipStyle}
+          // До первого замера пилюли нет — активный чип красится собственным
+          // фоном, иначе на первом кадре ряд показывался без выделения вообще.
+          chipStyle={[chipStyle, !measured && item.key === value && { backgroundColor: pillColor }]}
           textStyle={textStyle}
           textColorOff={textColorOff}
           textColorOn={textColorOn}
