@@ -82,9 +82,23 @@ export function SlidingChipTabs<T extends string>({
     width: pillW.value,
   }));
 
+  // Замеренная геометрия активного чипа обычным стилем. Анимированный стиль
+  // применяется воркетом уже ПОСЛЕ коммита, и без этого пилюля до первого
+  // прохода Reanimated висит вью нулевой ширины — невидимой; на занятом
+  // JS-потоке это тянется секундами и читается как «таб подгружается».
+  const cur = layouts[value];
+
   return (
     <View style={[styles.track, trackStyle]}>
-      <Animated.View pointerEvents="none" style={[styles.pill, { backgroundColor: pillColor }, pillStyle]} />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.pill,
+          { backgroundColor: pillColor },
+          cur ? { width: cur.width, transform: [{ translateX: cur.x }] } : null,
+          pillStyle,
+        ]}
+      />
       {items.map((item) => (
         <ChipLabel
           key={item.key}

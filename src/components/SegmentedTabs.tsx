@@ -51,8 +51,12 @@ export function SegmentedTabs<T extends string>({
     pos.value = withTiming(idx * segW, { duration: 260, easing: Easing.out(Easing.cubic) });
   }, [idx, segW, pos, measured]);
 
+  // ТОЛЬКО положение. Ширину сюда класть нельзя: анимированный стиль
+  // применяется воркетом на UI-потоке уже ПОСЛЕ коммита, и до первого прохода
+  // Reanimated пилюля висела вью нулевой ширины — невидимой. На входе в экран,
+  // где JS-поток занят (курсы, история, график), это растягивалось с кадра до
+  // секунд и читалось как «активный таб подгружается».
   const pillStyle = useAnimatedStyle(() => ({
-    width: segW,
     transform: [{ translateX: pos.value }],
   }));
 
@@ -61,7 +65,18 @@ export function SegmentedTabs<T extends string>({
   return (
     <Animated.View style={[styles.track, { backgroundColor: trackColor }, style]} onLayout={onLayout}>
       {measured ? (
-        <Animated.View pointerEvents="none" style={[styles.pill, { backgroundColor: pillColor }, pillStyle]} />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.pill,
+            // Ширина и стартовое положение — обычным стилем, они известны на
+            // рендере. Анимированный стиль ниже перебивает transform, когда
+            // воркет доходит до дела; до этого пилюля уже нарисована и стоит
+            // на своём месте, а не съезжает от левого края.
+            { backgroundColor: pillColor, width: segW, transform: [{ translateX: idx * segW }] },
+            pillStyle,
+          ]}
+        />
       ) : null}
       {segments.map((s) => {
         const active = s.key === value;
