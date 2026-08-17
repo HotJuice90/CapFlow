@@ -49,6 +49,9 @@ function migrate(data: AppData): AppData {
   if (next.settings.kopecks === undefined) {
     next.settings = { ...next.settings, kopecks: 'auto' };
   }
+  if (next.settings.navLabels === undefined) {
+    next.settings = { ...next.settings, navLabels: false };
+  }
   // Самовосстанавливающийся мердж, не только «если пусто» — если сохранённая
   // история где-то обрезалась (напр. неудачный live-фетч), старый бэйзлайн
   // с 2013 года всё равно домердживается на каждой загрузке, не только один раз.

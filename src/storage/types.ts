@@ -17,6 +17,9 @@ export interface AppSettings {
   kopecks: KopecksMode;
   theme: 'light'; // тёмную добавим позже (решение #10)
   navBar: 'light' | 'dark'; // оформление плавающего навбара
+  /** Подписи под иконками навбара. По умолчанию выкл. — так навбар и рисовался
+   *  всё время, включение не должно менять вид у тех, кто ничего не просил. */
+  navLabels: boolean;
   /** Сокращать суммы от 1 млн («2,4 млн ₽») в обзорных блоках — выкл. показывает полностью. */
   abbreviateMillions: boolean;
   /** УСТАРЕЛО — заменено лентой `AppData.freeCapitalEntries`. Поля оставлены
@@ -91,6 +94,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   kopecks: 'auto',
   theme: 'light',
   navBar: 'light',
+  navLabels: false,
   abbreviateMillions: true,
 };
 

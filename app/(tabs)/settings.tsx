@@ -129,6 +129,16 @@ export default function SettingsScreen() {
               onChange: (v) => updateSettings({ navBar: v ? 'dark' : 'light' }),
             }}
           />
+          <Divider />
+          <SettingsRow
+            icon="label-outline"
+            color={tokens.accent.base}
+            label="Подписи в навбаре"
+            toggle={{
+              value: data.settings.navLabels ?? false,
+              onChange: (v) => updateSettings({ navLabels: v }),
+            }}
+          />
           {/* Тема — временно скрыта, готова только светлая. Не удалять, просто не рендерим. */}
         </Group>
 

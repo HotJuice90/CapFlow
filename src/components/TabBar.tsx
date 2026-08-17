@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tapBuzz } from '@/lib/haptics';
 import { useData } from '@/state/DataContext';
-import { tokens, hexToRgba } from '@/theme';
+import { tokens, font, hexToRgba } from '@/theme';
+import { t } from '@/i18n';
 import HomeIcon from '../../assets/nav/home.svg';
 import HomeActiveIcon from '../../assets/nav/home-active.svg';
 import CalendarIcon from '../../assets/nav/calendar.svg';
@@ -22,6 +23,16 @@ const ICONS: Record<string, [React.FC<any>, React.FC<any>]> = {
   converter: [ConverterIcon, ConverterActiveIcon],
   analytics: [AnalyticsIcon, AnalyticsActiveIcon],
   settings: [SettingsIcon, SettingsActiveIcon],
+};
+
+// Подписи берём из тех же строк, что и заголовки экранов, — под иконкой должно
+// стоять ровно то слово, которое человек увидит, открыв таб.
+const LABELS: Record<string, string> = {
+  index: t.tabs.home,
+  calendar: t.tabs.calendar,
+  converter: t.tabs.converter,
+  analytics: t.tabs.analytics,
+  settings: t.tabs.settings,
 };
 
 // dimezisBlurView крашит на этом устройстве (Android 16 / HyperOS 3) — настоящий
@@ -54,9 +65,10 @@ export function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const { data } = useData();
   const c = THEME[data.settings.navBar ?? 'light'];
+  const labeled = data.settings.navLabels ?? false;
   return (
     <View style={[styles.wrap, { bottom: insets.bottom + 6 }]} pointerEvents="box-none">
-      <View style={[styles.bar, { backgroundColor: c.bg, borderColor: c.border }]}>
+      <View style={[styles.bar, labeled && styles.barLabeled, { backgroundColor: c.bg, borderColor: c.border }]}>
         {state.routes.map((route, i) => {
           const pair = ICONS[route.name];
           if (!pair) return null;
@@ -68,7 +80,12 @@ export function TabBar({ state, navigation }: TabBarProps) {
             if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
           };
           return (
-            <Pressable key={route.key} onPress={onPress} hitSlop={10} style={styles.item}>
+            <Pressable
+              key={route.key}
+              onPress={onPress}
+              hitSlop={10}
+              style={[styles.item, labeled && styles.itemLabeled]}
+            >
               {/* Обе иконки смонтированы ВСЕГДА, переключается только
                   прозрачность. Раньше рендерилась одна из пары — а это два
                   разных типа компонента, поэтому смена таба размонтировала
@@ -86,6 +103,14 @@ export function TabBar({ state, navigation }: TabBarProps) {
                   <ActiveIcon width={24} height={24} color={c.active} />
                 </View>
               </View>
+              {/* Цвет подписи повторяет состояние иконки: серая подпись под
+                  активной иконкой читалась бы как два разных состояния одной
+                  кнопки. */}
+              {labeled ? (
+                <Text numberOfLines={1} style={[styles.label, { color: focused ? c.active : c.inactive }]}>
+                  {LABELS[route.name]}
+                </Text>
+              ) : null}
             </Pressable>
           );
         })}
@@ -106,7 +131,19 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     boxShadow: '0px 8px 24px rgba(48,69,62,0.16)',
   },
+  // С подписями бар должен остаться ТОЙ ЖЕ высоты: нижние отступы экранов
+  // захардкожены под неё (`insets.bottom + 80`, см. CLAUDE.md), и подросший бар
+  // просто накрыл бы конец контента на всех экранах сразу. Поэтому место под
+  // подпись выкупается у вертикального паддинга, а не добавляется к высоте:
+  // 18 + 24 + 18 = 60 против 10 + 24 + 2 + 12 + 10 = 58.
+  barLabeled: { paddingVertical: 10, paddingHorizontal: 8 },
   item: { alignItems: 'center', justifyContent: 'center' },
+  // Ширину не задаём: пять подписей делят строку равными долями, а «Календарь»
+  // с «Аналитикой» длиннее остальных — фиксированная ширина срезала бы их.
+  itemLabeled: { flex: 1, gap: 2 },
+  label: {
+    fontSize: 10, lineHeight: 12, fontFamily: font.medium, letterSpacing: -0.1,
+  },
   // Размер задан явно: обе иконки лежат absolute-слоями друг на друге, и без
   // этого у бокса не осталось бы собственной высоты.
   iconBox: { width: 24, height: 24 },
