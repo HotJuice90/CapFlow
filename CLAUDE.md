@@ -209,6 +209,20 @@ Metro регулярно отваливался и терял времени б�
   OTA-обновлении. Как и `debuggableVariants = []`, это правка в gitignored
   `android/` — её не завезёт `git clone`; если `android/` пересоздаётся, проверить.
   Эмулятор — разово через `-PreactNativeArchitectures=x86_64`.
+- **Битая распаковка пакетов из-за YandexDisk.** Проект лежит в синхронизируемой
+  папке, и `npm install` иногда оставляет пакет неполным — часть файлов просто
+  не доезжает. Ловилось на `expo-status-bar`: в `node_modules` основного репо
+  не было ни `src/`, ни `build/`, ни `app.plugin.js`, при том что в npm пакет
+  полный, а в воркитри установлен целиком (поэтому `tsc` и `expo-doctor` там
+  проходили). Симптомы обманчивы: gradle падает на `:expo-constants:createExpoConfig`
+  и `:app:createBundleReleaseJsAndAssets` с бесполезным `Process 'command 'cmd''
+  finished with non-zero exit value 1`, и это легко принять за breaking change
+  в SDK — я так и сделал, выкинул из `app.json` живой плагин, пришлось откатывать.
+  Порядок разбора: `npx expo config` (даёт настоящую ошибку вместо кода 1) →
+  сверить содержимое пакета с `npm pack <pkg> --dry-run` → если на диске меньше,
+  чем в тарболе, это НЕ баг пакета, а обрезанная установка: удалить каталог
+  пакета и переставить. `npm ls --depth=0` такое не видит — он сверяет версии,
+  а не файлы.
 - **Память Gradle: `org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m`**
   в `android/gradle.properties`. С прежними 2048m/512m сборка на RN 0.86 падает
   с `Failed to notify build model lifecycle listener > Metaspace` — сообщение
