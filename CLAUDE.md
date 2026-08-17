@@ -208,6 +208,19 @@ Metro регулярно отваливался и терял времени б�
   OTA-обновлении. Как и `debuggableVariants = []`, это правка в gitignored
   `android/` — её не завезёт `git clone`; если `android/` пересоздаётся, проверить.
   Эмулятор — разово через `-PreactNativeArchitectures=x86_64`.
+- **Память Gradle: `org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m`**
+  в `android/gradle.properties`. С прежними 2048m/512m сборка на RN 0.86 падает
+  с `Failed to notify build model lifecycle listener > Metaspace` — сообщение
+  про код ничего не говорит, легко принять за поломку апгрейда. Третья правка
+  в gitignored `android/`, которую не завезёт `git clone` (первые две —
+  `debuggableVariants = []` и `reactNativeArchitectures`).
+- **Апгрейд Expo SDK**: `npm install expo@^NN` + `npx expo install --fix` (версии
+  берёт из `bundledNativeModules` SDK, руками не подбирать), затем `npx expo-doctor`.
+  `prebuild` для этого НЕ нужен: gradle-плагин приезжает из `node_modules`, и
+  минорный шаг RN собирается на существующем `android/`. Проверено на 56→57
+  (RN 0.85.3 → 0.86.2) — хватило поднять память Gradle. Перед любыми работами с
+  нативной частью бэкапить `android/app/debug.keystore` и сверять его после:
+  другой keystore = другая подпись = OTA не встанет поверх установленного.
 - **Дальше по размеру, если понадобится**: R8 выключен (`enableMinifyInReleaseBuilds`),
   а `classes*.dex` — это ещё 39.6 МБ. Включать осторожно: нужны proguard-правила,
   ломается всё, что ходит через рефлексию.
