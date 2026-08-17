@@ -55,12 +55,12 @@ const LABELS: Record<string, string> = {
  * стекло получается мутным пятном без ощущения объёма.
  */
 const CAN_BLUR = Platform.OS === 'android' && Number(Platform.Version) >= 31;
-const BLUR_INTENSITY = 60;
+const BLUR_INTENSITY = 75;
 
 const THEME = {
   light: {
     bg: hexToRgba(tokens.surface.white, 0.92),
-    tintGradient: [hexToRgba(tokens.surface.white, 0.6), hexToRgba(tokens.surface.white, 0.44)] as const,
+    tintGradient: [hexToRgba(tokens.surface.white, 0.6), hexToRgba(tokens.surface.white, 0.48)] as const,
     tint: 'light' as const,
     border: tokens.surface.glassBorder,
     active: tokens.accent.base,
