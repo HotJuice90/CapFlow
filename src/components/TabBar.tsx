@@ -60,7 +60,7 @@ const BLUR_INTENSITY = 60;
 const THEME = {
   light: {
     bg: hexToRgba(tokens.surface.white, 0.92),
-    tintGradient: [hexToRgba(tokens.surface.white, 0.82), hexToRgba(tokens.surface.white, 0.66)] as const,
+    tintGradient: [hexToRgba(tokens.surface.white, 0.6), hexToRgba(tokens.surface.white, 0.44)] as const,
     tint: 'light' as const,
     border: tokens.surface.glassBorder,
     active: tokens.accent.base,
@@ -68,11 +68,11 @@ const THEME = {
   },
   dark: {
     bg: 'rgba(34,42,68,0.92)',
-    // Тёмное стекло держим ПЛОТНЫМ: сквозь редкую тонировку пробивался светлый
-    // фон экрана, бар уходил в серо-синюю муть и переставал читаться как
-    // тёмный. Плюс контраст самих иконок поднят — на просвечивающем фоне
-    // белый под 0.5 растворялся.
-    tintGradient: ['rgba(30,37,62,0.88)', 'rgba(30,37,62,0.78)'] as const,
+    // У тёмного вилка узкая: на 0.55 сквозь него пробивался светлый фон и бар
+    // уходил в серо-синюю муть, на 0.88 блюра уже не видно вовсе — глухая
+    // плашка. Держим между, ближе к прозрачному, а читаемость добираем не
+    // плотностью, а контрастом иконок и рамки.
+    tintGradient: ['rgba(30,37,62,0.7)', 'rgba(30,37,62,0.58)'] as const,
     tint: 'dark' as const,
     border: hexToRgba(tokens.text.inverse, 0.18),
     active: tokens.accent.light,
