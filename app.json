@@ -6,7 +6,6 @@
     "scheme": "capflow",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "android": {
       "package": "com.capflow.app",
       "versionCode": 40,
