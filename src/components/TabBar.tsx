@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Pressable, StyleSheet, Text, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBlurTarget } from '@/lib/blurTarget';
 import { tapBuzz } from '@/lib/haptics';
@@ -47,16 +48,19 @@ const LABELS: Record<string, string> = {
  * явной: так на старых устройствах остаётся ровно прежний вид бара, а не то,
  * что решит библиотека.
  *
- * `bg` — плотная заливка для фолбэка, `blurBg` — лёгкая тонировка поверх
- * блюра. Без тонировки стекло отдаёт сырые цвета того, что под ним, и выглядит
- * грязным, а не белым.
+ * `bg` — плотная заливка для фолбэка, `tintGradient` — тонировка ПОВЕРХ блюра.
+ * Тонировка обязательна и именно градиентная (сверху плотнее, снизу легче):
+ * сам по себе блюр отдаёт сырые цвета того, что под ним, и стекло выглядит
+ * серым и грязным, а не белым. Плоская заливка эту работу делает хуже —
+ * стекло получается мутным пятном без ощущения объёма.
  */
 const CAN_BLUR = Platform.OS === 'android' && Number(Platform.Version) >= 31;
+const BLUR_INTENSITY = 60;
 
 const THEME = {
   light: {
     bg: hexToRgba(tokens.surface.white, 0.92),
-    blurBg: hexToRgba(tokens.surface.white, 0.55),
+    tintGradient: [hexToRgba(tokens.surface.white, 0.82), hexToRgba(tokens.surface.white, 0.66)] as const,
     tint: 'light' as const,
     border: tokens.surface.glassBorder,
     active: tokens.accent.base,
@@ -64,11 +68,15 @@ const THEME = {
   },
   dark: {
     bg: 'rgba(34,42,68,0.92)',
-    blurBg: 'rgba(34,42,68,0.55)',
+    // Тёмное стекло держим ПЛОТНЫМ: сквозь редкую тонировку пробивался светлый
+    // фон экрана, бар уходил в серо-синюю муть и переставал читаться как
+    // тёмный. Плюс контраст самих иконок поднят — на просвечивающем фоне
+    // белый под 0.5 растворялся.
+    tintGradient: ['rgba(30,37,62,0.88)', 'rgba(30,37,62,0.78)'] as const,
     tint: 'dark' as const,
-    border: hexToRgba(tokens.text.inverse, 0.14),
+    border: hexToRgba(tokens.text.inverse, 0.18),
     active: tokens.accent.light,
-    inactive: hexToRgba(tokens.text.inverse, 0.5),
+    inactive: hexToRgba(tokens.text.inverse, 0.66),
   },
 };
 
@@ -152,10 +160,17 @@ export function TabBar({ state, navigation }: TabBarProps) {
           key={revision}
           blurTarget={blurTarget ?? undefined}
           blurMethod="dimezisBlurViewSdk31Plus"
-          intensity={40}
+          intensity={BLUR_INTENSITY}
           tint={c.tint}
-          style={[shape, styles.barBlur, { backgroundColor: c.blurBg }]}
+          style={[shape, styles.barBlur]}
         >
+          <LinearGradient
+            colors={c.tintGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           {items}
         </BlurView>
       ) : (
