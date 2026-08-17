@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutChangeEvent, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Animated, Easing, LayoutChangeEvent, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import { tapBuzz } from '@/lib/haptics';
 import { tokens } from '@/theme';
 
@@ -18,9 +17,15 @@ type SegmentedTabsProps<T extends string> = {
 
 /**
  * Сегментированный переключатель с одной скользящей плашкой под активным
- * пунктом (вместо мгновенного snap фона) — reanimated withTiming по X.
- * Годится для равноширинных сегментов (flex:1 каждый), пилюля меряется
- * от общей ширины трека / кол-ва сегментов.
+ * пунктом (вместо мгновенного snap фона). Годится для равноширинных сегментов
+ * (flex:1 каждый), плашка меряется от общей ширины трека / кол-ва сегментов.
+ *
+ * Намеренно на КЛАССИЧЕСКОМ `Animated` — см. подробный разбор в
+ * SlidingChipTabs: `Animated.Value` попадает в нативные пропсы того же
+ * коммита, тогда как `useAnimatedStyle` считается на UI-потоке вне коммита и
+ * до приезда апдейта навязывает нулевую геометрию, перебивая обычный стиль.
+ * Запрет классического `Animated` из CLAUDE.md касается жестовых анимаций,
+ * здесь анимация от тапа.
  */
 export function SegmentedTabs<T extends string>({
   segments,
@@ -34,59 +39,44 @@ export function SegmentedTabs<T extends string>({
   const [width, setWidth] = useState(0);
   const idx = Math.max(0, segments.findIndex((s) => s.key === value));
   const segW = width / segments.length;
-  const pos = useSharedValue(0);
-  // Пилюлю нельзя нарисовать до onLayout — ширины ещё нет. Первую установку
-  // делаем БЕЗ анимации: иначе на монтировании она едет из нуля, и при активном
-  // не-первом сегменте это видно как влёт плашки слева.
-  const positioned = useRef(false);
-  const measured = width > 0;
+  const [pos] = useState(() => new Animated.Value(0));
+  // Первую установку делаем без анимации: иначе плашка едет из нуля на
+  // монтировании, и при активном не-первом сегменте это влёт слева.
+  const placed = useRef(false);
 
   useEffect(() => {
-    if (!measured) return;
-    if (!positioned.current) {
-      positioned.current = true;
-      pos.value = idx * segW;
+    if (segW <= 0) return;
+    if (!placed.current) {
+      placed.current = true;
+      pos.setValue(idx * segW);
       return;
     }
-    pos.value = withTiming(idx * segW, { duration: 260, easing: Easing.out(Easing.cubic) });
-  }, [idx, segW, pos, measured]);
-
-  // ТОЛЬКО положение. Ширину сюда класть нельзя: анимированный стиль
-  // применяется воркетом на UI-потоке уже ПОСЛЕ коммита, и до первого прохода
-  // Reanimated пилюля висела вью нулевой ширины — невидимой. На входе в экран,
-  // где JS-поток занят (курсы, история, график), это растягивалось с кадра до
-  // секунд и читалось как «активный таб подгружается».
-  const pillStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: pos.value }],
-  }));
+    // Ширина сегмента здесь постоянна, двигается только позиция — значит
+    // transform можно отдать нативному драйверу.
+    Animated.timing(pos, {
+      toValue: idx * segW,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [idx, segW, pos]);
 
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
   return (
     <Animated.View style={[styles.track, { backgroundColor: trackColor }, style]} onLayout={onLayout}>
-      {measured ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.pill,
-            // Ширина и стартовое положение — обычным стилем, они известны на
-            // рендере. Анимированный стиль ниже перебивает transform, когда
-            // воркет доходит до дела; до этого пилюля уже нарисована и стоит
-            // на своём месте, а не съезжает от левого края.
-            { backgroundColor: pillColor, width: segW, transform: [{ translateX: idx * segW }] },
-            pillStyle,
-          ]}
-        />
-      ) : null}
+      {/* Ширина — обычным числом: она известна из замера трека и не
+          анимируется, у всех сегментов одинаковая. */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.pill, { backgroundColor: pillColor, width: segW, transform: [{ translateX: pos }] }]}
+      />
       {segments.map((s) => {
         const active = s.key === value;
         return (
           <Pressable
             key={s.key}
-            // До первого onLayout активный сегмент красится сам: скользящей
-            // пилюли ещё нет, и без этого переключатель на первом кадре
-            // показывался вообще без выделения — читалось как «подгружается».
-            style={[styles.segment, !measured && active && { backgroundColor: pillColor, borderRadius: tokens.radius.pill }]}
+            style={styles.segment}
             onPress={() => {
               if (!active) {
                 tapBuzz();
