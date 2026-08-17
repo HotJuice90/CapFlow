@@ -28,6 +28,7 @@
           "imageWidth": 180
         }
       ],
+      "expo-status-bar",
       "expo-sharing"
     ],
     "experiments": {
