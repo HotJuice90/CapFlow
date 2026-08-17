@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Text } from 'react-native';
+import { View, Pressable, StyleSheet, Text, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBlurTarget } from '@/lib/blurTarget';
 import { tapBuzz } from '@/lib/haptics';
 import { useData } from '@/state/DataContext';
 import { tokens, font, hexToRgba } from '@/theme';
@@ -35,17 +37,35 @@ const LABELS: Record<string, string> = {
   settings: t.tabs.settings,
 };
 
-// dimezisBlurView крашит на этом устройстве (Android 16 / HyperOS 3) — настоящий
-// блюр отложен. Полупрозрачная плашка без BlurView — стабильно, визуально близко.
+/**
+ * Живой блюр — только на Android 12+ (API 31): там `dimezisBlurViewSdk31Plus`
+ * идёт через системный RenderEffect. Старый `dimezisBlurView` крашил на
+ * устройстве (Android 16 / HyperOS 3), и блюр из-за этого был отложен — новый
+ * метод работает по другому пути и требует явной цели (`blurTarget`).
+ *
+ * Ниже API 31 метод и сам откатился бы на плоскую заливку, но ветку держим
+ * явной: так на старых устройствах остаётся ровно прежний вид бара, а не то,
+ * что решит библиотека.
+ *
+ * `bg` — плотная заливка для фолбэка, `blurBg` — лёгкая тонировка поверх
+ * блюра. Без тонировки стекло отдаёт сырые цвета того, что под ним, и выглядит
+ * грязным, а не белым.
+ */
+const CAN_BLUR = Platform.OS === 'android' && Number(Platform.Version) >= 31;
+
 const THEME = {
   light: {
     bg: hexToRgba(tokens.surface.white, 0.92),
+    blurBg: hexToRgba(tokens.surface.white, 0.55),
+    tint: 'light' as const,
     border: tokens.surface.glassBorder,
     active: tokens.accent.base,
     inactive: tokens.text.secondary,
   },
   dark: {
     bg: 'rgba(34,42,68,0.92)',
+    blurBg: 'rgba(34,42,68,0.55)',
+    tint: 'dark' as const,
     border: hexToRgba(tokens.text.inverse, 0.14),
     active: tokens.accent.light,
     inactive: hexToRgba(tokens.text.inverse, 0.5),
@@ -66,9 +86,13 @@ export function TabBar({ state, navigation }: TabBarProps) {
   const { data } = useData();
   const c = THEME[data.settings.navBar ?? 'light'];
   const labeled = data.settings.navLabels ?? false;
-  return (
-    <View style={[styles.wrap, { bottom: insets.bottom + 6 }]} pointerEvents="box-none">
-      <View style={[styles.bar, labeled && styles.barLabeled, { backgroundColor: c.bg, borderColor: c.border }]}>
+  // Цель блюра — контент сфокусированного экрана (см. BlurTargetRoot). Пока её
+  // нет (первый кадр, экран вне (tabs)), рисуем обычную плашку: блюрить нечего.
+  const { ref: blurTarget, revision } = useBlurTarget();
+  const blurred = CAN_BLUR && blurTarget != null;
+
+  const items = (
+    <>
         {state.routes.map((route, i) => {
           const pair = ICONS[route.name];
           if (!pair) return null;
@@ -114,7 +138,29 @@ export function TabBar({ state, navigation }: TabBarProps) {
             </Pressable>
           );
         })}
-      </View>
+    </>
+  );
+
+  const shape = [styles.bar, labeled && styles.barLabeled, { borderColor: c.border }];
+
+  return (
+    <View style={[styles.wrap, { bottom: insets.bottom + 6 }]} pointerEvents="box-none">
+      {blurred ? (
+        // key по revision: при смене экрана меняется и цель, а BlurView
+        // подхватывает её только при пересоздании.
+        <BlurView
+          key={revision}
+          blurTarget={blurTarget ?? undefined}
+          blurMethod="dimezisBlurViewSdk31Plus"
+          intensity={40}
+          tint={c.tint}
+          style={[shape, styles.barBlur, { backgroundColor: c.blurBg }]}
+        >
+          {items}
+        </BlurView>
+      ) : (
+        <View style={[shape, { backgroundColor: c.bg }]}>{items}</View>
+      )}
     </View>
   );
 }
@@ -131,6 +177,9 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     boxShadow: '0px 8px 24px rgba(48,69,62,0.16)',
   },
+  // Блюр рисуется прямоугольником на всю вью и без обрезки вылезал бы за
+  // скругление пилюли углами. Фолбэк-ветке это не нужно — там просто заливка.
+  barBlur: { overflow: 'hidden' },
   // Бар с подписями ВЫШЕ, а не ужат: выкупать место у паддинга — значит поджать
   // иконки сильнее, чем без подписей, хотя контента стало больше. Вертикальный
   // паддинг чуть меньше базовых 18 (подпись сама по себе создаёт нижнее поле,

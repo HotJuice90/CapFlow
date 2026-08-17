@@ -34,6 +34,7 @@ import { SpinIcon, RotateOnTap } from '@/components/SpinIcon';
 import { RefreshIcon } from '@/components/RefreshIcon';
 import { openCurrencyPicker } from '@/lib/currencyPicker';
 import { ScreenTitle } from '@/components/ScreenTitle';
+import { BlurTargetRoot } from '@/components/BlurTargetRoot';
 import { Toggle } from '@/components/Toggle';
 import WalletAddIcon from '../../assets/icons/converter/wallet-add.svg';
 import ArrowDownIcon from '../../assets/icons/converter/arrow-down.svg';
@@ -477,7 +478,9 @@ export default function ConverterScreen() {
   );
 
   return (
-    <View style={{ flex: 1 }}>
+    // Свой корень мимо ScreenBackground (у экрана собственный градиент), поэтому
+    // цель блюра для таб-бара оборачивается здесь вручную.
+    <BlurTargetRoot>
       <LinearGradient
         colors={[D.bg1, D.bg2, D.bg3]}
         locations={[0.027, 0.565, 0.992]}
@@ -734,7 +737,7 @@ export default function ConverterScreen() {
         </>
         )}
       </View>
-    </View>
+    </BlurTargetRoot>
   );
 }
 
