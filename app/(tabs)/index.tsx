@@ -413,8 +413,11 @@ export default function HomeScreen() {
               </View>
             </View>
 
+            {/* Весь блок «сегодня принесёт» — ссылка в календарь: там этот же
+                доход разложен по дням, и это единственный вопрос, который
+                возникает к цифре («а дальше сколько?»). */}
             {hasAssets ? (
-              <View style={styles.heroMain}>
+              <Pressable style={styles.heroMain} onPress={() => router.push('/calendar')}>
                 <Text style={styles.heroLabel}>Сегодня принесёт</Text>
                 <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
                   +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
@@ -423,7 +426,7 @@ export default function HomeScreen() {
                   <View style={[styles.heroStatusDot, { backgroundColor: hero.tone }]} />
                   <Text style={styles.heroStatus}>{hero.label}</Text>
                 </View>
-              </View>
+              </Pressable>
             ) : null}
           </View>
         </View>
@@ -457,7 +460,10 @@ export default function HomeScreen() {
                 Подпись разная нарочно — за выплатой, в отличие от срока,
                 никакого обязательного действия не следует. */}
             {nearestEvent ? (
-              <Pressable style={styles.heroEventPill} onPress={() => router.push('/calendar')}>
+              <Pressable
+                style={styles.heroEventPill}
+                onPress={() => router.push(`/asset/${nearestEvent.assetId}`)}
+              >
                 {/* Кольцо обратного отсчёта — как в списке событий: для срока
                     это доля пройденного срока, для выплаты — доля периода
                     начисления. Иконка типа события внутри кольца, чтобы не
