@@ -47,7 +47,7 @@ import {
 } from '@/state/selectors';
 import type { AssetView, Goal } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney } from '@/format';
+import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
@@ -89,6 +89,41 @@ function sortViews(views: AssetView[], key: SortKey): AssetView[] {
   }
 }
 
+/**
+ * Плитка факта под hero. Подпись всегда в две строки (с явным 
+): три плитки
+ * в ряд дают ~120px, однострочная подпись там всё равно переносится, но тогда
+ * высота плиток скачет от длины текста и ряд перестаёт быть ровным.
+ */
+function StatTile({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  label: [string, string];
+  value: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.statTile} onPress={onPress}>
+      <View style={styles.statHead}>
+        <View style={styles.statIcon}>
+          <MaterialCommunityIcons name={icon} size={14} color={tokens.accent.base} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.statLabel}>{label[0]}</Text>
+          <Text style={styles.statLabel}>{label[1]}</Text>
+        </View>
+      </View>
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {value}
+      </Text>
+    </Pressable>
+  );
+}
+
 /** Прогресс срока (0..1) для активов с датой окончания — для мини-кольца в списке событий. */
 function termProgress(view: AssetView): number {
   const { asset, derived } = view;
@@ -98,10 +133,6 @@ function termProgress(view: AssetView): number {
     Math.round((new Date(asset.endDate).getTime() - new Date(asset.openDate).getTime()) / 86_400_000),
   );
   return Math.min(1, Math.max(0, 1 - derived.daysRemaining / totalDays));
-}
-
-function pluralPlatform(n: number): string {
-  return n === 1 ? 'площадке' : 'площадках';
 }
 
 /**
@@ -160,7 +191,6 @@ export default function HomeScreen() {
       return () => { statusBarVeil.value = 1; };
     }, [scrollY]),
   );
-  const assetsSectionRef = useRef<View>(null);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
@@ -183,6 +213,9 @@ export default function HomeScreen() {
         .slice(0, 3),
     [views],
   );
+
+  /** Дата ближайшего окончания срока — для плитки под hero. */
+  const nearestEvent = upcoming[0]?.asset.endDate;
 
   const sort = SORTS[sortIdx];
   const sortedViews = useMemo(() => sortViews(views, sort.key), [views, sort.key]);
@@ -272,17 +305,6 @@ export default function HomeScreen() {
   const hasAssets = views.length > 0;
   const hasArchived = data.assets.some((a) => a.status !== 'active');
   const cur = data.settings.defaultCurrency;
-  const orgCount = new Set(views.map((v) => v.organization.id)).size;
-
-  // Тап по «Активов в работе» — якорь вниз, к списку активов на этом же
-  // экране (не отдельный роут). measureLayout — координаты цели относительно
-  // ScrollView, а не окна, поэтому не зависит от текущей позиции скролла.
-  const scrollToAssets = () => {
-    assetsSectionRef.current?.measureLayout(
-      scrollRef.current as unknown as React.ComponentRef<typeof View>,
-      (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true }),
-    );
-  };
 
   // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
@@ -349,41 +371,74 @@ export default function HomeScreen() {
 
         {hasAssets ? (
           <>
+            {/* Три факта под hero: сколько работает, под какую ставку, когда
+                ближайшее событие. «Лидер дохода» отсюда убран — он менялся раз в
+                полгода, ничего не предлагал сделать и повторял список активов,
+                занимая при этом целую строку в самом дорогом месте экрана. */}
             <View style={styles.heroStatsRow}>
-              <Pressable style={styles.heroStatTile} onPress={() => router.push('/analytics')}>
-                <View style={styles.heroStatLabelRow}>
-                  <MaterialCommunityIcons name="wallet-outline" size={14} color={tokens.text.tertiary} />
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>Капитал в работе</Text>
-                </View>
-                <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
-                </Text>
-              </Pressable>
-              <Pressable style={styles.heroStatTile} onPress={scrollToAssets}>
-                <View style={styles.heroStatLabelRow}>
-                  <MaterialCommunityIcons name="star-outline" size={14} color={tokens.text.tertiary} />
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>Активов в работе</Text>
-                </View>
-                <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {views.length} на {orgCount} {pluralPlatform(orgCount)}
-                </Text>
-              </Pressable>
+              <StatTile
+                icon="wallet-outline"
+                label={['Капитал', 'в работе']}
+                value={formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
+                onPress={() => router.push('/analytics')}
+              />
+              <StatTile
+                icon="chart-line"
+                label={['Доходность', 'годовая']}
+                value={formatPercent(summary.avgRate)}
+                onPress={() => router.push('/analytics')}
+              />
+              <StatTile
+                icon="calendar-blank-outline"
+                label={['Ближайшее', 'событие']}
+                value={nearestEvent ? formatDateShort(nearestEvent) : '—'}
+                onPress={() => router.push('/calendar')}
+              />
             </View>
 
-            {taxSummary.topInstrument ? (
-              <View style={styles.heroLeaderPill}>
-                <View style={styles.heroLeaderIcon}>
-                  <MaterialCommunityIcons name="star-four-points" size={14} color={tokens.semantic.positive} />
+            {upcoming.length > 0 ? (
+              <>
+                <View style={styles.sectionRow}>
+                  <Text style={styles.sectionTitleInline}>Ближайшие события</Text>
+                  <Pressable onPress={() => router.push('/calendar')} hitSlop={8}>
+                    <Text style={styles.link}>Календарь</Text>
+                  </Pressable>
                 </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.heroLeaderLabel}>Лидер дохода</Text>
-                  <Text style={styles.heroLeaderName} numberOfLines={1}>{taxSummary.topInstrument.name}</Text>
-                </View>
-                <Text style={styles.heroLeaderValue} numberOfLines={1}>
-                  +{formatMoney(taxSummary.topInstrument.incomePerDay, { currency: cur, kopecks: 'hide' })}/д
-                </Text>
-              </View>
+                <Card padded={false}>
+                  <View style={styles.listInner}>
+                    {upcoming.map((v, i) => {
+                      const progress = termProgress(v);
+                      const daysRemaining = v.derived.daysRemaining ?? 0;
+                      return (
+                        <View key={v.asset.id}>
+                          {i > 0 && <View style={styles.divider} />}
+                          <Pressable style={styles.eventRow} onPress={() => router.push(`/asset/${v.asset.id}`)}>
+                            <Donut
+                              segments={[
+                                { value: progress, color: tokens.accent.base },
+                                { value: 1 - progress, color: tokens.surface.neutral },
+                              ]}
+                              size={38}
+                              strokeWidth={4.5}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.eventName} numberOfLines={1}>{v.instrument.name}</Text>
+                              <Text style={styles.eventSub}>
+                                {formatDateShort(v.asset.endDate as string)} · {daysRemaining} {pluralDays(daysRemaining)}
+                              </Text>
+                            </View>
+                            <Text style={styles.eventAmount}>
+                              {formatMoney(v.derived.finalAmount ?? v.asset.amount, { currency: v.asset.currency })}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </Card>
+              </>
             ) : null}
+
 
             {/* marginBottom:0, когда есть слайдер — его карточка сама даёт 14px
                 сверху через paddingVertical у goalSlidePage (нужен и для отступа
@@ -583,50 +638,7 @@ export default function HomeScreen() {
               ) : null}
             </Card>
 
-            {upcoming.length > 0 ? (
-              <>
-                <View style={styles.sectionRow}>
-                  <Text style={styles.sectionTitleInline}>Ближайшие события</Text>
-                  <Pressable onPress={() => router.push('/calendar')} hitSlop={8}>
-                    <Text style={styles.link}>Календарь</Text>
-                  </Pressable>
-                </View>
-                <Card padded={false}>
-                  <View style={styles.listInner}>
-                    {upcoming.map((v, i) => {
-                      const progress = termProgress(v);
-                      const daysRemaining = v.derived.daysRemaining ?? 0;
-                      return (
-                        <View key={v.asset.id}>
-                          {i > 0 && <View style={styles.divider} />}
-                          <Pressable style={styles.eventRow} onPress={() => router.push(`/asset/${v.asset.id}`)}>
-                            <Donut
-                              segments={[
-                                { value: progress, color: tokens.accent.base },
-                                { value: 1 - progress, color: tokens.surface.neutral },
-                              ]}
-                              size={38}
-                              strokeWidth={4.5}
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.eventName} numberOfLines={1}>{v.instrument.name}</Text>
-                              <Text style={styles.eventSub}>
-                                {formatDateShort(v.asset.endDate as string)} · {daysRemaining} {pluralDays(daysRemaining)}
-                              </Text>
-                            </View>
-                            <Text style={styles.eventAmount}>
-                              {formatMoney(v.derived.finalAmount ?? v.asset.amount, { currency: v.asset.currency })}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </Card>
-              </>
-            ) : null}
-
-            <View style={styles.sectionRow} ref={assetsSectionRef}>
+            <View style={styles.sectionRow}>
               <View style={styles.sectionTitleWrap}>
                 <Text style={styles.sectionTitleInline}>{t.home.assets}</Text>
                 {/* Счётчик только от двух: при одном активе цифра «1» ничего не
@@ -802,22 +814,35 @@ const styles = StyleSheet.create({
   heroStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   heroStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3FB8C4' },
   heroStatus: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.medium, color: tokens.text.secondary },
-  heroStatsRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
-  heroStatTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 12 },
-  heroStatLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  heroStatLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary, flexShrink: 1 },
-  heroStatValue: { fontSize: tokens.typography.body, fontFamily: font.bold, color: tokens.text.primary, marginTop: 6 },
-  heroLeaderPill: {
-    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm,
-    backgroundColor: hexToRgba(tokens.semantic.positive, 0.08),
+  heroStatsRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.xl },
+  statTile: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.72),
     borderRadius: tokens.radius.md,
-    paddingHorizontal: 14, paddingVertical: 12,
-    marginTop: tokens.spacing.sm,
+    borderWidth: 1,
+    borderColor: tokens.surface.glassBorder,
+    padding: tokens.spacing.md,
   },
-  heroLeaderIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: hexToRgba(tokens.semantic.positive, 0.16), alignItems: 'center', justifyContent: 'center' },
-  heroLeaderLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
-  heroLeaderName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
-  heroLeaderValue: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.semantic.positive },
+  statHead: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.chip },
+  statIcon: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: tokens.accent.soft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  statLabel: {
+    fontSize: tokens.typography.micro,
+    lineHeight: tokens.typography.micro + 3,
+    fontFamily: font.medium,
+    color: tokens.text.tertiary,
+  },
+  statValue: {
+    fontSize: tokens.typography.labelLg,
+    lineHeight: tokens.typography.labelLg + 2,
+    fontFamily: font.semibold,
+    color: tokens.text.primary,
+    marginTop: tokens.spacing.tight,
+  },
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH, overflow: 'hidden' },
   goalTrack: { flexDirection: 'row' },
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
