@@ -24,8 +24,9 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { HeroField } from '@/components/hero/HeroField';
+import { heroState } from '@/components/hero/heroState';
 import { Card } from '@/components/Card';
-import { Sparkline } from '@/components/Sparkline';
 import { TypeCardsRow } from '@/components/TypeCardsRow';
 import { Donut } from '@/components/Donut';
 import { AssetRow } from '@/components/AssetRow';
@@ -150,6 +151,10 @@ export default function HomeScreen() {
   const grouped = useMemo(() => groupByInstrumentType(data), [data]);
   const spark = useMemo(() => incomeSparkline(data, 30), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
+  const hero = useMemo(
+    () => heroState({ incomePerDay: summary.incomePerDay, cumulative: spark, assetCount: views.length }),
+    [summary.incomePerDay, spark, views.length],
+  );
   const liq = useMemo(() => liquidity(data), [data]);
   const liqTotal = liq.liquid + liq.frozen;
   const liqLiquidShare = liqTotal > 0 ? liq.liquid / liqTotal : 0;
@@ -288,44 +293,44 @@ export default function HomeScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.topRow}>
-          <Text style={styles.wordmark}>CapFlow</Text>
-          <View style={styles.topActions}>
-            <Pressable style={styles.iconBtn} onPress={() => router.push('/search')} hitSlop={8}>
-              <MaterialIcons name="search" size={22} color={tokens.text.secondary} />
-            </Pressable>
-            <Pressable style={styles.addBtn} onPress={() => router.push('/asset/form')} hitSlop={8}>
-              <MaterialCommunityIcons name="plus" size={24} color={tokens.text.inverse} />
-            </Pressable>
+        {/* Зона hero. Живое поле лежит первым ребёнком БЕЗ padding'а у родителя:
+            absolute top:0/left:0 тогда однозначен и не зависит от того, считает
+            ли Yoga инсеты абсолютных детей от padding-box или от content-box.
+            Отрицательные margin'ы выносят зону на всю ширину и под шапку. */}
+        <View style={styles.heroZone}>
+          {hasAssets ? (
+            <HeroField height={HERO_FIELD_H} intensity={hero.intensity} warmth={hero.warmth} />
+          ) : null}
+          <View style={styles.heroZoneInner}>
+            <View style={styles.topRow}>
+              <Text style={styles.wordmark}>CapFlow</Text>
+              <View style={styles.topActions}>
+                <Pressable style={styles.iconBtn} onPress={() => router.push('/search')} hitSlop={8}>
+                  <MaterialIcons name="search" size={22} color={tokens.text.secondary} />
+                </Pressable>
+                <Pressable style={styles.addBtn} onPress={() => router.push('/asset/form')} hitSlop={8}>
+                  <MaterialCommunityIcons name="plus" size={24} color={tokens.text.inverse} />
+                </Pressable>
+              </View>
+            </View>
+
+            {hasAssets ? (
+              <View style={styles.heroMain}>
+                <Text style={styles.heroLabel}>Сегодня принесёт</Text>
+                <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                  +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
+                </Text>
+                <View style={styles.heroStatusRow}>
+                  <View style={styles.heroStatusDot} />
+                  <Text style={styles.heroStatus}>{hero.label}</Text>
+                </View>
+              </View>
+            ) : null}
           </View>
         </View>
 
         {hasAssets ? (
           <>
-            <View style={styles.heroTopRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.heroLabel}>Сегодня принесёт</Text>
-                <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                  +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
-                </Text>
-              </View>
-              <View style={styles.heroMonthPill}>
-                <View style={styles.heroMonthIconRow}>
-                  <MaterialCommunityIcons name="calendar-month-outline" size={13} color={tokens.text.tertiary} />
-                  <Text style={styles.heroMonthLabel}>в месяц</Text>
-                </View>
-                <Text style={styles.heroMonthValue} numberOfLines={1} adjustsFontSizeToFit>
-                  ~ +{formatMoney(summary.incomePerMonth, { currency: cur, kopecks: 'hide' })}
-                </Text>
-              </View>
-            </View>
-
-            {spark.length >= 2 ? (
-              <View style={styles.heroSparkWrap}>
-                <Sparkline data={spark} width={SPARK_W} height={42} color={tokens.semantic.positive} />
-              </View>
-            ) : null}
-
             <View style={styles.heroStatsRow}>
               <Pressable style={styles.heroStatTile} onPress={() => router.push('/analytics')}>
                 <View style={styles.heroStatLabelRow}>
@@ -660,7 +665,9 @@ function EmptyAssets() {
   );
 }
 
-const SPARK_W = Dimensions.get('window').width - tokens.spacing.screenH * 2;
+/** Высота живого поля. Фиксированная: шейдеру размер нужен на первом кадре,
+ *  а зона ровно такой же высоты (minHeight) — поле никуда не вылезает. */
+const HERO_FIELD_H = 300;
 const SLIDE_W = Dimensions.get('window').width;
 const DOT_W = 6;
 const DOT_GAP = 5;
@@ -752,20 +759,25 @@ const styles = StyleSheet.create({
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
   emptyBtn: { marginTop: tokens.spacing.lg, backgroundColor: tokens.accent.base, paddingHorizontal: tokens.spacing.xl, paddingVertical: tokens.spacing.md, borderRadius: tokens.radius.pill },
   emptyBtnText: { color: tokens.text.inverse, fontWeight: '600', fontSize: tokens.typography.label },
-  heroLabel: { fontSize: tokens.typography.label, fontFamily: font.medium, color: tokens.text.tertiary },
-  heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md },
-  heroValue: { fontSize: tokens.typography.metricLg, fontFamily: font.extrabold, color: tokens.semantic.positive, marginTop: 4, letterSpacing: -0.6 },
-  heroMonthPill: {
-    minWidth: 112,
-    backgroundColor: hexToRgba(tokens.surface.white, 0.7),
-    borderRadius: tokens.radius.md,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.md,
+  heroZone: {
+    marginTop: -tokens.spacing.screenTop,
+    marginHorizontal: -tokens.spacing.screenH,
+    minHeight: HERO_FIELD_H,
   },
-  heroMonthIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  heroMonthLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary },
-  heroMonthValue: { fontSize: tokens.typography.body, fontFamily: font.bold, color: tokens.text.primary, marginTop: 2 },
-  heroSparkWrap: { marginTop: tokens.spacing.md },
+  heroZoneInner: { paddingTop: tokens.spacing.screenTop, paddingHorizontal: tokens.spacing.screenH },
+  heroMain: { alignItems: 'center', marginTop: 46 },
+  heroLabel: { fontSize: tokens.typography.label, lineHeight: tokens.typography.label + 2, fontFamily: font.medium, color: tokens.text.secondary },
+  heroValue: {
+    fontSize: 42,
+    lineHeight: 52,
+    fontFamily: font.extrabold,
+    color: tokens.text.primary,
+    marginTop: 6,
+    letterSpacing: -1,
+  },
+  heroStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  heroStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3FB8C4' },
+  heroStatus: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.medium, color: tokens.text.secondary },
   heroStatsRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
   heroStatTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 12 },
   heroStatLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
