@@ -38,6 +38,7 @@ import {
   portfolioSummary,
   groupByInstrumentType,
   incomeRunRateSeries,
+  freeCapitalBalance,
   analyticsSummary,
   liquidity,
   goalsProgress,
@@ -233,8 +234,16 @@ export default function HomeScreen() {
   const runRate = useMemo(() => incomeRunRateSeries(data, 30), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
   const hero = useMemo(
-    () => heroState({ incomePerDay: summary.incomePerDay, daily: runRate, assetCount: views.length }),
-    [summary.incomePerDay, runRate, views.length],
+    () =>
+      heroState({
+        incomePerDay: summary.incomePerDay,
+        daily: runRate,
+        assetCount: views.length,
+        workingCapital: summary.workingCapital,
+        freeCapital: freeCapitalBalance(data),
+        premiumToKeyRate: summary.premiumToKeyRate,
+      }),
+    [summary, runRate, views.length, data],
   );
   const liq = useMemo(() => liquidity(data), [data]);
   const liqTotal = liq.liquid + liq.frozen;
@@ -411,7 +420,7 @@ export default function HomeScreen() {
                   +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
                 </Text>
                 <View style={styles.heroStatusRow}>
-                  <View style={styles.heroStatusDot} />
+                  <View style={[styles.heroStatusDot, { backgroundColor: hero.tone }]} />
                   <Text style={styles.heroStatus}>{hero.label}</Text>
                 </View>
               </View>
@@ -902,7 +911,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   heroStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  heroStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3FB8C4' },
+  heroStatusDot: { width: 6, height: 6, borderRadius: 3 },
   heroStatus: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.medium, color: tokens.text.secondary },
   heroStatsRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
   heroStatTile: {
