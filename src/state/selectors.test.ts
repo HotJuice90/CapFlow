@@ -663,12 +663,17 @@ describe('nearestEvent', () => {
     expect(e!.kind).toBe('payout');
     expect(e!.date).toBe('2026-03-20');
     expect(e!.daysRemaining).toBe(10);
+    // Период 20 фев — 20 мар, сегодня 10 марта: прошло 18 из 28 дней.
+    expect(e!.progress).toBeCloseTo(18 / 28, 2);
   });
 
   it('окончание срока выигрывает, если оно раньше выплаты', () => {
     const e = nearestEvent({ ...base, assets: [savings, deposit] }, now);
     expect(e!.kind).toBe('maturity');
     expect(e!.date).toBe('2026-03-15');
+    // Срок 1 сен 2025 — 15 мар 2026, сегодня 10 марта: почти весь позади.
+    expect(e!.progress).toBeGreaterThan(0.95);
+    expect(e!.progress).toBeLessThanOrEqual(1);
   });
 
   it('прошедшие даты не берём', () => {

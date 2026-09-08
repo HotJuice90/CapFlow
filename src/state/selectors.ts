@@ -1076,6 +1076,9 @@ export interface NearestEvent {
   amount: number;
   currency: CurrencyCode;
   daysRemaining: number;
+  /** 0..1 — сколько уже прошло: срока для maturity, периода начисления для
+   *  payout. Для кольца обратного отсчёта на главной. */
+  progress: number;
 }
 
 /**
@@ -1090,6 +1093,29 @@ export interface NearestEvent {
  */
 export function nearestEvent(data: AppData, now: Date = new Date()): NearestEvent | null {
   const today = isoDate(now);
+  const viewById = new Map(buildAssetViews(data, now).map((v) => [v.asset.id, v]));
+
+  /** Доля пройденного: от начала отсчёта до даты события. */
+  const elapsed = (from: Date | null, to: string): number => {
+    if (!from) return 0;
+    const total = diffDays(from, parseLocal(to));
+    if (total <= 0) return 1;
+    return Math.min(1, Math.max(0, diffDays(from, now) / total));
+  };
+
+  /** Начало текущего периода начисления — предыдущая плановая выплата. */
+  const payoutStart = (assetId: string, date: string): Date | null => {
+    const v = viewById.get(assetId);
+    if (!v) return null;
+    const period = v.asset.payoutPeriod ?? v.instrument.payoutPeriod;
+    const step = period ? PAYOUT_STEP_MONTHS[period] : undefined;
+    if (!step) return null;
+    const prev = parseLocal(date);
+    prev.setMonth(prev.getMonth() - step);
+    // Первого периода ещё не было — считаем от открытия актива.
+    const open = parseLocal(v.asset.openDate);
+    return prev < open ? open : prev;
+  };
   let best: NearestEvent | null = null;
   const take = (e: NearestEvent) => {
     if (e.date < today) return;
@@ -1105,6 +1131,10 @@ export function nearestEvent(data: AppData, now: Date = new Date()): NearestEven
       amount: e.amount,
       currency: e.currency,
       daysRemaining: e.daysRemaining,
+      progress: elapsed(
+        viewById.get(e.assetId) ? parseLocal(viewById.get(e.assetId)!.asset.openDate) : null,
+        e.date,
+      ),
     });
   }
 
@@ -1119,6 +1149,7 @@ export function nearestEvent(data: AppData, now: Date = new Date()): NearestEven
         amount: e.amount,
         currency: e.currency,
         daysRemaining: Math.max(0, diffDays(now, parseLocal(e.date))),
+        progress: elapsed(payoutStart(e.assetId, e.date), e.date),
       });
     }
   }

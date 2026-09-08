@@ -101,8 +101,23 @@ function termProgress(view: AssetView): number {
   return Math.min(1, Math.max(0, 1 - derived.daysRemaining / totalDays));
 }
 
+/** Подписи под числами в плитке «В работе» — именительный падеж, не «на 3 площадках». */
 function pluralPlatform(n: number): string {
-  return n === 1 ? 'площадке' : 'площадках';
+  const t = n % 100;
+  if (t >= 11 && t <= 14) return 'площадок';
+  const d = n % 10;
+  if (d === 1) return 'площадка';
+  if (d >= 2 && d <= 4) return 'площадки';
+  return 'площадок';
+}
+
+function pluralAssets(n: number): string {
+  const t = n % 100;
+  if (t >= 11 && t <= 14) return 'активов';
+  const d = n % 10;
+  if (d === 1) return 'актив';
+  if (d >= 2 && d <= 4) return 'актива';
+  return 'активов';
 }
 
 /**
@@ -360,21 +375,33 @@ export default function HomeScreen() {
             <View style={styles.heroStatsRow}>
               <Pressable style={styles.heroStatTile} onPress={() => router.push('/analytics')}>
                 <View style={styles.heroStatLabelRow}>
-                  <MaterialCommunityIcons name="wallet-outline" size={14} color={tokens.text.tertiary} />
+                  <MaterialCommunityIcons name="wallet-outline" size={14} color={tokens.accent.base} />
                   <Text style={styles.heroStatLabel} numberOfLines={1}>Капитал в работе</Text>
                 </View>
                 <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
                   {formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
                 </Text>
               </Pressable>
+              {/* Два числа в одной плитке через разделитель, а не фразой
+                  «4 на 3 площадках»: фраза читается как предложение, которое
+                  надо разобрать, а тут глазу сразу видно два независимых
+                  факта — сколько активов и по скольким площадкам. */}
               <Pressable style={styles.heroStatTile} onPress={scrollToAssets}>
                 <View style={styles.heroStatLabelRow}>
-                  <MaterialCommunityIcons name="star-outline" size={14} color={tokens.text.tertiary} />
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>Активов в работе</Text>
+                  <MaterialCommunityIcons name="layers-outline" size={14} color={tokens.accent.base} />
+                  <Text style={styles.heroStatLabel} numberOfLines={1}>В работе</Text>
                 </View>
-                <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {views.length} на {orgCount} {pluralPlatform(orgCount)}
-                </Text>
+                <View style={styles.heroSplitRow}>
+                  <View style={styles.heroSplitCell}>
+                    <Text style={styles.heroStatValue}>{views.length}</Text>
+                    <Text style={styles.heroSplitCaption}>{pluralAssets(views.length)}</Text>
+                  </View>
+                  <View style={styles.heroSplitDivider} />
+                  <View style={styles.heroSplitCell}>
+                    <Text style={styles.heroStatValue}>{orgCount}</Text>
+                    <Text style={styles.heroSplitCaption}>{pluralPlatform(orgCount)}</Text>
+                  </View>
+                </View>
               </Pressable>
             </View>
 
@@ -387,12 +414,26 @@ export default function HomeScreen() {
                 никакого обязательного действия не следует. */}
             {nearestEvent ? (
               <Pressable style={styles.heroEventPill} onPress={() => router.push('/calendar')}>
-                <View style={styles.heroEventIcon}>
-                  <MaterialCommunityIcons
-                    name={nearestEvent.kind === 'maturity' ? 'calendar-blank-outline' : 'cash-plus'}
-                    size={15}
-                    color={tokens.accent.base}
+                {/* Кольцо обратного отсчёта — как в списке событий: для срока
+                    это доля пройденного срока, для выплаты — доля периода
+                    начисления. Иконка типа события внутри кольца, чтобы не
+                    занимать ещё одно место в строке. */}
+                <View style={styles.heroEventRing}>
+                  <Donut
+                    segments={[
+                      { value: nearestEvent.progress, color: tokens.accent.base },
+                      { value: 1 - nearestEvent.progress, color: tokens.surface.neutral },
+                    ]}
+                    size={40}
+                    strokeWidth={4.5}
                   />
+                  <View style={styles.heroEventRingIcon} pointerEvents="none">
+                    <MaterialCommunityIcons
+                      name={nearestEvent.kind === 'maturity' ? 'flag-outline' : 'cash'}
+                      size={15}
+                      color={tokens.accent.base}
+                    />
+                  </View>
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.heroEventLabel}>
@@ -829,22 +870,38 @@ const styles = StyleSheet.create({
   heroStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3FB8C4' },
   heroStatus: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.medium, color: tokens.text.secondary },
   heroStatsRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
-  heroStatTile: { flex: 1, minWidth: 0, backgroundColor: tokens.surface.neutral, borderRadius: tokens.radius.md, padding: 12 },
-  heroStatLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  heroStatTile: {
+    flex: 1, minWidth: 0,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.72),
+    borderRadius: tokens.radius.md,
+    borderWidth: 1, borderColor: tokens.surface.glassBorder,
+    paddingHorizontal: 14, paddingVertical: 14,
+  },
+  heroStatLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   heroStatLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary, flexShrink: 1 },
-  heroStatValue: { fontSize: tokens.typography.body, fontFamily: font.bold, color: tokens.text.primary, marginTop: 6 },
+  heroStatValue: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 8 },
+  heroSplitRow: { flexDirection: 'row', alignItems: 'center' },
+  heroSplitCell: { flex: 1, minWidth: 0 },
+  // Разделитель тянется на всю высоту ячеек, а не на фиксированные N пикселей:
+  // подписи под числами разной длины, и жёсткая высота ловит то одно, то другое.
+  heroSplitDivider: { alignSelf: 'stretch', width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: 10 },
+  heroSplitCaption: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 1 },
+  // Тонирована акцентом, в отличие от белых плиток фактов над ней: плитки
+  // сообщают состояние, а эта строка — единственное, что может потребовать
+  // действия, и должна отличаться от них не только содержанием.
   heroEventPill: {
-    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md,
     backgroundColor: hexToRgba(tokens.accent.base, 0.07),
     borderRadius: tokens.radius.md,
-    paddingHorizontal: 14, paddingVertical: 12,
+    paddingHorizontal: 14, paddingVertical: 14,
     marginTop: tokens.spacing.sm,
   },
-  heroEventIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: hexToRgba(tokens.accent.base, 0.14), alignItems: 'center', justifyContent: 'center' },
-  heroEventLabel: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary },
-  heroEventName: { fontSize: tokens.typography.caption, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 1 },
+  heroEventRing: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  heroEventRingIcon: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  heroEventLabel: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: font.regular, color: tokens.text.tertiary },
+  heroEventName: { fontSize: tokens.typography.labelLg, lineHeight: tokens.typography.labelLg + 2, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 2 },
   heroEventWhen: { alignItems: 'flex-end' },
-  heroEventDate: { fontSize: tokens.typography.caption, fontFamily: font.bold, color: tokens.accent.base },
+  heroEventDate: { fontSize: tokens.typography.labelLg, lineHeight: tokens.typography.labelLg + 2, fontFamily: font.semibold, color: tokens.accent.base },
   heroEventDays: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 1 },
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH, overflow: 'hidden' },
   goalTrack: { flexDirection: 'row' },
