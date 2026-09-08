@@ -11,9 +11,18 @@ import {
 } from 'react-native-reanimated';
 import { HERO_SHADER } from './shader';
 
-// Не бросаем: ошибка компиляции шейдера не должна уносить весь экран в белое.
-// Без поля главная просто выглядит как раньше — это плохо, но живо.
-const effect = Skia.RuntimeEffect.Make(HERO_SHADER);
+/**
+ * Компиляция шейдера — на СТАРТЕ приложения и в try/catch. `Make` на ошибке
+ * не всегда возвращает null: с нативной стороны она может и бросить, а это
+ * модульный уровень — падение здесь уносит всё приложение ещё до первого
+ * кадра. Без поля главная просто выглядит как раньше, это переживаемо.
+ */
+let effect: ReturnType<typeof Skia.RuntimeEffect.Make> = null;
+try {
+  effect = Skia.RuntimeEffect.Make(HERO_SHADER);
+} catch (e) {
+  console.warn('HeroField: шейдер не скомпилировался', e);
+}
 
 export interface HeroFieldProps {
   /** Высота поля в пикселях. Фиксированная, а не измеренная: шейдеру размер

@@ -25,7 +25,6 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { ScreenBackground } from '@/components/ScreenBackground';
-import { GlassIconButton } from '@/components/GlassIconButton';
 import { HeroField } from '@/components/hero/HeroField';
 import { heroState } from '@/components/hero/heroState';
 import { Card } from '@/components/Card';
@@ -324,9 +323,9 @@ export default function HomeScreen() {
             <View style={styles.topRow}>
               <Text style={styles.wordmark}>CapFlow</Text>
               <View style={styles.topActions}>
-                <GlassIconButton onPress={() => router.push('/search')}>
+                <Pressable style={styles.iconBtn} onPress={() => router.push('/search')} hitSlop={8}>
                   <MaterialIcons name="search" size={22} color={tokens.text.secondary} />
-                </GlassIconButton>
+                </Pressable>
                 <Pressable style={styles.addBtn} onPress={() => router.push('/asset/form')} hitSlop={8}>
                   <MaterialCommunityIcons name="plus" size={24} color={tokens.text.inverse} />
                 </Pressable>
@@ -697,6 +696,15 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.xl },
   wordmark: { fontSize: 28, fontWeight: '800', color: tokens.text.primary, letterSpacing: -0.4 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
+  // Просто полупрозрачная заливка, БЕЗ живого блюра: BlurView здесь оказался
+  // внутри той же цели блюра, которую сам же и размывает (корень экрана из
+  // BlurTargetRoot), и приложение падало на первом же запуске. Таб-бар так
+  // может — он рисуется навигатором и потомком экрана не является.
+  iconBtn: {
+    width: 44, height: 44, borderRadius: tokens.radius.pill,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.55), borderWidth: 1, borderColor: tokens.surface.glassBorder,
+    alignItems: 'center', justifyContent: 'center',
+  },
   addBtn: { width: 44, height: 44, borderRadius: tokens.radius.pill, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
   // marginTop/marginBottom — на самой строке, не на заголовке: раньше они висели
   // на sectionTitle, и alignItems:'center' центрировал соседнюю ссылку по всей
