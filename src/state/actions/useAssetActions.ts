@@ -1,14 +1,13 @@
 import { useCallback, useMemo } from 'react';
 import type { Asset, AssetStatus, FinancialInstrument, Organization, Snapshot } from '@/domain/types';
-import type { AppData } from '@/storage/types';
 import { calculate, ENGINE_VERSION } from '@/calc';
 import { uid } from '@/utils/id';
+import type { Persist } from './persist';
 
 export interface AssetActions {
   addAsset: (asset: Asset) => Promise<void>;
-  /** Атомарное создание актива вместе с новыми организацией/инструментом (флоу
-   * «Новый актив»): последовательные addOrganization+addInstrument+addAsset из
-   * одного обработчика затирали бы друг друга — каждый persist от одного data. */
+  /** Создание актива вместе с новыми организацией/инструментом (флоу «Новый
+   * актив») одной записью. */
   createAssetBundle: (bundle: { organization?: Organization; instrument?: FinancialInstrument; asset: Asset }) => Promise<void>;
   updateAsset: (asset: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
@@ -17,77 +16,79 @@ export interface AssetActions {
   setAssetStatus: (id: string, status: AssetStatus, closedDate?: string) => Promise<void>;
 }
 
-export function useAssetActions(data: AppData, persist: (next: AppData) => Promise<void>): AssetActions {
+export function useAssetActions(persist: Persist): AssetActions {
   const addAsset = useCallback(
     async (asset: Asset) => {
-      await persist({ ...data, assets: [...data.assets, asset] });
+      await persist((prev) => ({ ...prev, assets: [...prev.assets, asset] }));
     },
-    [data, persist],
+    [persist],
   );
 
   const createAssetBundle = useCallback(
     async (bundle: { organization?: Organization; instrument?: FinancialInstrument; asset: Asset }) => {
-      await persist({
-        ...data,
-        organizations: bundle.organization ? [...data.organizations, bundle.organization] : data.organizations,
-        instruments: bundle.instrument ? [...data.instruments, bundle.instrument] : data.instruments,
-        assets: [...data.assets, bundle.asset],
-      });
+      await persist((prev) => ({
+        ...prev,
+        organizations: bundle.organization ? [...prev.organizations, bundle.organization] : prev.organizations,
+        instruments: bundle.instrument ? [...prev.instruments, bundle.instrument] : prev.instruments,
+        assets: [...prev.assets, bundle.asset],
+      }));
     },
-    [data, persist],
+    [persist],
   );
 
   const updateAsset = useCallback(
     async (asset: Asset) => {
-      await persist({
-        ...data,
-        assets: data.assets.map((a) => (a.id === asset.id ? asset : a)),
-      });
+      await persist((prev) => ({
+        ...prev,
+        assets: prev.assets.map((a) => (a.id === asset.id ? asset : a)),
+      }));
     },
-    [data, persist],
+    [persist],
   );
 
   const deleteAsset = useCallback(
     async (id: string) => {
-      await persist({ ...data, assets: data.assets.filter((a) => a.id !== id) });
+      await persist((prev) => ({ ...prev, assets: prev.assets.filter((a) => a.id !== id) }));
     },
-    [data, persist],
+    [persist],
   );
 
   const setAssetStatus = useCallback(
     async (id: string, status: AssetStatus, closedDate?: string) => {
-      const asset = data.assets.find((a) => a.id === id);
-      let snapshots = data.snapshots;
-      // фиксируем Snapshot при закрытии/архивации активного актива (решение #8)
-      if (asset && asset.status === 'active' && (status === 'closed' || status === 'archived')) {
-        const instr = data.instruments.find((i) => i.id === asset.instrumentId);
-        if (instr) {
-          const snap: Snapshot = {
-            id: uid('snap-'),
-            assetId: id,
-            createdAt: new Date().toISOString(),
-            reason: status,
-            excludeFromAnalytics: status === 'archived',
-            engineVersion: ENGINE_VERSION,
-            derived: calculate(asset, instr, data.params),
-            assetSnapshot: { ...asset, status, closedDate },
-          };
-          snapshots = [...data.snapshots, snap];
+      await persist((prev) => {
+        const asset = prev.assets.find((a) => a.id === id);
+        let snapshots = prev.snapshots;
+        // фиксируем Snapshot при закрытии/архивации активного актива (решение #8)
+        if (asset && asset.status === 'active' && (status === 'closed' || status === 'archived')) {
+          const instr = prev.instruments.find((i) => i.id === asset.instrumentId);
+          if (instr) {
+            const snap: Snapshot = {
+              id: uid('snap-'),
+              assetId: id,
+              createdAt: new Date().toISOString(),
+              reason: status,
+              excludeFromAnalytics: status === 'archived',
+              engineVersion: ENGINE_VERSION,
+              derived: calculate(asset, instr, prev.params),
+              assetSnapshot: { ...asset, status, closedDate },
+            };
+            snapshots = [...prev.snapshots, snap];
+          }
         }
-      }
-      await persist({
-        ...data,
-        assets: data.assets.map((a) =>
-          a.id === id
-            // Возврат в active (восстановление из архива) — дату закрытия убираем,
-            // иначе актив останется «мёртвым» на графике после восстановления.
-            ? { ...a, status, closedDate: status === 'active' ? undefined : closedDate ?? a.closedDate }
-            : a,
-        ),
-        snapshots,
+        return {
+          ...prev,
+          assets: prev.assets.map((a) =>
+            a.id === id
+              // Возврат в active (восстановление из архива) — дату закрытия убираем,
+              // иначе актив останется «мёртвым» на графике после восстановления.
+              ? { ...a, status, closedDate: status === 'active' ? undefined : closedDate ?? a.closedDate }
+              : a,
+          ),
+          snapshots,
+        };
       });
     },
-    [data, persist],
+    [persist],
   );
 
   return useMemo(

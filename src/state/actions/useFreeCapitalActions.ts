@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import type { FreeCapitalEntry } from '@/domain/types';
-import type { AppData } from '@/storage/types';
+import type { Persist } from './persist';
 
 export interface FreeCapitalActions {
   addFreeCapitalEntry: (entry: FreeCapitalEntry) => Promise<void>;
@@ -8,26 +8,29 @@ export interface FreeCapitalActions {
   deleteFreeCapitalEntry: (id: string) => Promise<void>;
 }
 
-export function useFreeCapitalActions(data: AppData, persist: (next: AppData) => Promise<void>): FreeCapitalActions {
+export function useFreeCapitalActions(persist: Persist): FreeCapitalActions {
   const addFreeCapitalEntry = useCallback(
     async (entry: FreeCapitalEntry) => {
-      await persist({ ...data, freeCapitalEntries: [...data.freeCapitalEntries, entry] });
+      await persist((prev) => ({ ...prev, freeCapitalEntries: [...prev.freeCapitalEntries, entry] }));
     },
-    [data, persist],
+    [persist],
   );
 
   const updateFreeCapitalEntry = useCallback(
     async (entry: FreeCapitalEntry) => {
-      await persist({ ...data, freeCapitalEntries: data.freeCapitalEntries.map((e) => (e.id === entry.id ? entry : e)) });
+      await persist((prev) => ({
+        ...prev,
+        freeCapitalEntries: prev.freeCapitalEntries.map((e) => (e.id === entry.id ? entry : e)),
+      }));
     },
-    [data, persist],
+    [persist],
   );
 
   const deleteFreeCapitalEntry = useCallback(
     async (id: string) => {
-      await persist({ ...data, freeCapitalEntries: data.freeCapitalEntries.filter((e) => e.id !== id) });
+      await persist((prev) => ({ ...prev, freeCapitalEntries: prev.freeCapitalEntries.filter((e) => e.id !== id) }));
     },
-    [data, persist],
+    [persist],
   );
 
   return useMemo(

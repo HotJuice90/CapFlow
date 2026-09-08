@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { Organization, TaxYearRecord } from '@/domain/types';
@@ -20,6 +21,7 @@ import { useFreeCapitalActions, type FreeCapitalActions } from './actions/useFre
 import { useGoalActions, type GoalActions } from './actions/useGoalActions';
 import { useRatesActions, appendSnapshot, type RatesActions } from './actions/useRatesActions';
 import { useSettingsActions, type SettingsActions } from './actions/useSettingsActions';
+import type { Persist } from './actions/persist';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
 
@@ -85,9 +87,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<AppData>(emptyAppData());
   const [loading, setLoading] = useState(true);
 
-  const persist = useCallback(async (next: AppData) => {
+  /**
+   * Актуальные данные для апдейтеров. Нужен именно ref, а не `data` из рендера:
+   * два persist подряд из одного обработчика происходят ДО следующего рендера,
+   * и по стейту второй увидел бы состояние «до первого» (см. ./actions/persist).
+   */
+  const dataRef = useRef(data);
+
+  const persist = useCallback<Persist>(async (update) => {
+    const next = update(dataRef.current);
+    // Апдейтер вернул то же самое (например, отказ по guard'у) — писать нечего.
+    if (next === dataRef.current) return;
+    dataRef.current = next;
     setData(next);
     await repository.save(next);
+  }, []);
+
+  /** Загрузка/замена состояния мимо persist — ref обязан ехать вместе с ним. */
+  const applyLoaded = useCallback((next: AppData) => {
+    dataRef.current = next;
+    setData(next);
   }, []);
 
   const reload = useCallback(async () => {
@@ -110,7 +129,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       loaded = withTaxYears;
       await repository.save(loaded);
     }
-    setData(loaded);
+    applyLoaded(loaded);
     setLoading(false);
 
     // авто-обновление курсов ЦБ раз в сутки (не блокирует UI)
@@ -121,21 +140,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       void (async () => {
         try {
           const fetched = await fetchCbrRates();
-          const rates = { ...loaded.rates, ...fetched };
-          const updated: AppData = {
-            ...loaded,
-            rates,
-            ratesUpdatedAt: new Date().toISOString(),
-            ratesHistory: appendSnapshot(loaded.ratesHistory, rates),
-          };
-          setData(updated);
-          await repository.save(updated);
+          await persist((prev) => {
+            const rates = { ...prev.rates, ...fetched };
+            return {
+              ...prev,
+              rates,
+              ratesUpdatedAt: new Date().toISOString(),
+              ratesHistory: appendSnapshot(prev.ratesHistory, rates),
+            };
+          });
         } catch {
           // офлайн / ЦБ недоступен — оставляем последние известные курсы
         }
       })();
     }
-  }, []);
+  }, [applyLoaded, persist]);
 
   useEffect(() => {
     void reload();
@@ -154,16 +173,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // запущенном приложении, «повиснет» без записи до следующего рестарта.
   useEffect(() => {
     if (loading) return;
-    const next = ensureTaxYearRecords(data);
-    if (next !== data) void persist(next);
+    if (ensureTaxYearRecords(data) !== data) void persist(ensureTaxYearRecords);
   }, [data, loading, persist]);
 
-  const assetActions = useAssetActions(data, persist);
-  const catalogActions = useCatalogActions(data, persist);
-  const freeCapitalActions = useFreeCapitalActions(data, persist);
-  const goalActions = useGoalActions(data, persist);
+  const assetActions = useAssetActions(persist);
+  const catalogActions = useCatalogActions(persist);
+  const freeCapitalActions = useFreeCapitalActions(persist);
+  const goalActions = useGoalActions(persist);
   const ratesActions = useRatesActions(data, persist);
-  const settingsActions = useSettingsActions(data, persist);
+  const settingsActions = useSettingsActions(persist);
 
   const hasDemo = useMemo(() => data.assets.some((a) => a.isDemo), [data.assets]);
 

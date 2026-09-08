@@ -4,6 +4,7 @@ import type { AppData, RateSnapshot } from '@/storage/types';
 import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
 import { fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
 import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
+import type { Persist } from './persist';
 
 /** Добавляет срез курсов за сегодня в историю (дедуп по дню, последние 90). */
 export function appendSnapshot(history: RateSnapshot[], rates: AppData['rates']): RateSnapshot[] {
@@ -22,38 +23,46 @@ export interface RatesActions {
   refreshKeyRate: () => Promise<void>;
 }
 
-export function useRatesActions(data: AppData, persist: (next: AppData) => Promise<void>): RatesActions {
+// `data` здесь нужен только на ЧТЕНИЕ (с какой даты тянуть историю ключевой
+// ставки) — все записи идут через апдейтер, от свежего состояния.
+export function useRatesActions(data: AppData, persist: Persist): RatesActions {
   const setManualRate = useCallback(
     async (code: CurrencyCode, value: number | undefined) => {
-      const manualRates = { ...data.manualRates };
-      if (value === undefined) delete manualRates[code];
-      else manualRates[code] = value;
-      await persist({ ...data, manualRates });
+      await persist((prev) => {
+        const manualRates = { ...prev.manualRates };
+        if (value === undefined) delete manualRates[code];
+        else manualRates[code] = value;
+        return { ...prev, manualRates };
+      });
     },
-    [data, persist],
+    [persist],
   );
 
   const refreshRates = useCallback(async () => {
     const fetched = await fetchCbrRates();
-    const rates = { ...data.rates, ...fetched };
-    await persist({
-      ...data,
-      rates,
-      ratesUpdatedAt: new Date().toISOString(),
-      ratesHistory: appendSnapshot(data.ratesHistory, rates),
+    await persist((prev) => {
+      const rates = { ...prev.rates, ...fetched };
+      return {
+        ...prev,
+        rates,
+        ratesUpdatedAt: new Date().toISOString(),
+        ratesHistory: appendSnapshot(prev.ratesHistory, rates),
+      };
     });
-  }, [data, persist]);
+  }, [persist]);
 
   const backfillRateHistory = useCallback(async () => {
     const hist = await fetchCbrHistory();
-    const byDate = new Map<string, RateSnapshot>();
-    for (const s of data.ratesHistory) byDate.set(s.date, s);
-    for (const s of hist) byDate.set(s.date, s);
-    const merged = [...byDate.values()]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-90);
-    await persist({ ...data, ratesHistory: merged });
-  }, [data, persist]);
+    await persist((prev) => {
+      const byDate = new Map<string, RateSnapshot>();
+      for (const s of prev.ratesHistory) byDate.set(s.date, s);
+      for (const s of hist) byDate.set(s.date, s);
+      const merged = [...byDate.values()]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-90);
+      return { ...prev, ratesHistory: merged };
+    });
+  }, [persist]);
 
   /**
    * Полный пересбор истории курсов с нуля — выбрасывает всё старое (в т.ч.
@@ -64,27 +73,32 @@ export function useRatesActions(data: AppData, persist: (next: AppData) => Promi
   const resetRateHistory = useCallback(async () => {
     const hist = await fetchCbrHistory();
     const fetched = await fetchCbrRates();
-    const rates = { ...data.rates, ...fetched };
-    const withToday = appendSnapshot(hist, rates);
-    await persist({
-      ...data,
-      rates,
-      ratesUpdatedAt: new Date().toISOString(),
-      ratesHistory: withToday.slice(-90),
+    await persist((prev) => {
+      const rates = { ...prev.rates, ...fetched };
+      const withToday = appendSnapshot(hist, rates);
+      return {
+        ...prev,
+        rates,
+        ratesUpdatedAt: new Date().toISOString(),
+        ratesHistory: withToday.slice(-90),
+      };
     });
-  }, [data, persist]);
+  }, [persist]);
 
   const refreshKeyRate = useCallback(async () => {
     const stored = data.keyRateHistory.length > 0 ? data.keyRateHistory : KEY_RATE_HISTORY;
     const fromDate = stored[0]?.date ?? EARLIEST_DATE;
     const fetched = await fetchKeyRateHistory(fromDate);
-    const merged = mergeKeyRateHistory(stored, fetched);
-    await persist({
-      ...data,
-      keyRateHistory: merged,
-      params: { ...data.params, keyRate: merged[0].rate },
+    await persist((prev) => {
+      const base = prev.keyRateHistory.length > 0 ? prev.keyRateHistory : KEY_RATE_HISTORY;
+      const merged = mergeKeyRateHistory(base, fetched);
+      return {
+        ...prev,
+        keyRateHistory: merged,
+        params: { ...prev.params, keyRate: merged[0].rate },
+      };
     });
-  }, [data, persist]);
+  }, [data.keyRateHistory, persist]);
 
   return useMemo(
     () => ({ setManualRate, refreshRates, backfillRateHistory, resetRateHistory, refreshKeyRate }),

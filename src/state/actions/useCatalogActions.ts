@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import type { FinancialInstrument, Organization } from '@/domain/types';
-import type { AppData } from '@/storage/types';
+import type { Persist } from './persist';
 
 export interface CatalogActions {
   addOrganization: (org: Organization) => Promise<void>;
@@ -13,59 +13,67 @@ export interface CatalogActions {
   deleteInstrument: (id: string) => Promise<boolean>;
 }
 
-export function useCatalogActions(data: AppData, persist: (next: AppData) => Promise<void>): CatalogActions {
+export function useCatalogActions(persist: Persist): CatalogActions {
   const addOrganization = useCallback(
     async (org: Organization) => {
-      await persist({ ...data, organizations: [...data.organizations, org] });
+      await persist((prev) => ({ ...prev, organizations: [...prev.organizations, org] }));
     },
-    [data, persist],
+    [persist],
   );
 
   const updateOrganization = useCallback(
     async (org: Organization) => {
-      await persist({
-        ...data,
-        organizations: data.organizations.map((o) => (o.id === org.id ? org : o)),
-      });
+      await persist((prev) => ({
+        ...prev,
+        organizations: prev.organizations.map((o) => (o.id === org.id ? org : o)),
+      }));
     },
-    [data, persist],
+    [persist],
   );
 
   const deleteOrganization = useCallback(
     async (id: string) => {
-      // Защита на уровне данных, а не только в UI каталога — иначе инструмент
-      // остаётся без площадки и «висит» так, будто не существует, но не удаляется нигде.
-      if (data.instruments.some((i) => i.organizationId === id)) return false;
-      await persist({ ...data, organizations: data.organizations.filter((o) => o.id !== id) });
-      return true;
+      let ok = true;
+      await persist((prev) => {
+        // Защита на уровне данных, а не только в UI каталога — иначе инструмент
+        // остаётся без площадки и «висит» так, будто не существует, но не удаляется нигде.
+        // Проверяем внутри апдейтера (по свежим данным), отказ отдаём наружу флагом:
+        // вернуть `prev` как есть — сигнал persist'у ничего не писать.
+        if (prev.instruments.some((i) => i.organizationId === id)) { ok = false; return prev; }
+        return { ...prev, organizations: prev.organizations.filter((o) => o.id !== id) };
+      });
+      return ok;
     },
-    [data, persist],
+    [persist],
   );
 
   const addInstrument = useCallback(
     async (instrument: FinancialInstrument) => {
-      await persist({ ...data, instruments: [...data.instruments, instrument] });
+      await persist((prev) => ({ ...prev, instruments: [...prev.instruments, instrument] }));
     },
-    [data, persist],
+    [persist],
   );
 
   const updateInstrument = useCallback(
     async (instrument: FinancialInstrument) => {
-      await persist({
-        ...data,
-        instruments: data.instruments.map((i) => (i.id === instrument.id ? instrument : i)),
-      });
+      await persist((prev) => ({
+        ...prev,
+        instruments: prev.instruments.map((i) => (i.id === instrument.id ? instrument : i)),
+      }));
     },
-    [data, persist],
+    [persist],
   );
 
   const deleteInstrument = useCallback(
     async (id: string) => {
-      if (data.assets.some((a) => a.instrumentId === id)) return false;
-      await persist({ ...data, instruments: data.instruments.filter((i) => i.id !== id) });
-      return true;
+      let ok = true;
+      await persist((prev) => {
+        if (prev.assets.some((a) => a.instrumentId === id)) { ok = false; return prev; }
+        return { ...prev, instruments: prev.instruments.filter((i) => i.id !== id) };
+      });
+      return ok;
     },
-    [data, persist],
+    [persist],
   );
 
   return useMemo(

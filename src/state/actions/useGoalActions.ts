@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import type { Goal } from '@/domain/types';
-import type { AppData } from '@/storage/types';
+import type { Persist } from './persist';
 
 export interface GoalActions {
   addGoal: (goal: Goal) => Promise<void>;
@@ -8,26 +8,26 @@ export interface GoalActions {
   deleteGoal: (id: string) => Promise<void>;
 }
 
-export function useGoalActions(data: AppData, persist: (next: AppData) => Promise<void>): GoalActions {
+export function useGoalActions(persist: Persist): GoalActions {
   const addGoal = useCallback(
     async (goal: Goal) => {
-      await persist({ ...data, goals: [...data.goals, goal] });
+      await persist((prev) => ({ ...prev, goals: [...prev.goals, goal] }));
     },
-    [data, persist],
+    [persist],
   );
 
   const updateGoal = useCallback(
     async (goal: Goal) => {
-      await persist({ ...data, goals: data.goals.map((g) => (g.id === goal.id ? goal : g)) });
+      await persist((prev) => ({ ...prev, goals: prev.goals.map((g) => (g.id === goal.id ? goal : g)) }));
     },
-    [data, persist],
+    [persist],
   );
 
   const deleteGoal = useCallback(
     async (id: string) => {
-      await persist({ ...data, goals: data.goals.filter((g) => g.id !== id) });
+      await persist((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== id) }));
     },
-    [data, persist],
+    [persist],
   );
 
   return useMemo(() => ({ addGoal, updateGoal, deleteGoal }), [addGoal, updateGoal, deleteGoal]);
