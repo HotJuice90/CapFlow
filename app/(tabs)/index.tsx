@@ -37,7 +37,7 @@ import {
   buildAssetViews,
   portfolioSummary,
   groupByInstrumentType,
-  incomeSparkline,
+  incomeRunRateSeries,
   analyticsSummary,
   liquidity,
   goalsProgress,
@@ -230,11 +230,11 @@ export default function HomeScreen() {
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
   const grouped = useMemo(() => groupByInstrumentType(data), [data]);
-  const spark = useMemo(() => incomeSparkline(data, 30), [data]);
+  const runRate = useMemo(() => incomeRunRateSeries(data, 30), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
   const hero = useMemo(
-    () => heroState({ incomePerDay: summary.incomePerDay, cumulative: spark, assetCount: views.length }),
-    [summary.incomePerDay, spark, views.length],
+    () => heroState({ incomePerDay: summary.incomePerDay, daily: runRate, assetCount: views.length }),
+    [summary.incomePerDay, runRate, views.length],
   );
   const liq = useMemo(() => liquidity(data), [data]);
   const liqTotal = liq.liquid + liq.frozen;

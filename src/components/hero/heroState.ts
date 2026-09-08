@@ -22,19 +22,23 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 /**
- * `cumulative` — накопительный ряд дохода из incomeSparkline (последние N дней).
- * Средний дневной берём как наклон ряда: для портфеля фикс-инструментов он
- * почти константа, и заметно расходится с сегодняшним только когда портфель
- * реально изменился — именно этот момент и должен «оживлять» поле.
+ * `daily` — дневной доход за последние N дней из incomeRunRateSeries.
+ *
+ * Важно, что ряд считает ТОТ ЖЕ движок, что и сегодняшнее число: раньше сюда
+ * шёл накопительный ряд incomeSparkline, а он берёт тело вклада на открытии
+ * (`asset.amount`) и не знает про капитализацию, тогда как `incomePerDay`
+ * считается от текущего баланса. У портфеля с капитализацией «сегодня» из-за
+ * этого систематически обгоняло «среднее», отношение всегда было больше
+ * единицы, и подпись навсегда залипала на «Выше среднего» — сравнивались не
+ * дни, а две разные формулы.
  */
 export function heroState(args: {
   incomePerDay: number;
-  cumulative: number[];
+  daily: number[];
   assetCount: number;
 }): HeroState {
-  const { incomePerDay, cumulative, assetCount } = args;
-  const n = cumulative.length;
-  const avg = n >= 2 ? (cumulative[n - 1] - cumulative[0]) / (n - 1) : incomePerDay;
+  const { incomePerDay, daily, assetCount } = args;
+  const avg = daily.length > 0 ? daily.reduce((s, v) => s + v, 0) / daily.length : incomePerDay;
   const ratio = avg > 0 ? incomePerDay / avg : 1;
 
   // Ширина портфеля даёт лёгкий постоянный вклад: пять работающих активов
