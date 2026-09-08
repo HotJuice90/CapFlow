@@ -90,6 +90,55 @@ function sortViews(views: AssetView[], key: SortKey): AssetView[] {
   }
 }
 
+/**
+ * Плитка факта под hero. Баланс содержимого задан макетом: шапка (иконка +
+ * подпись) сверху, крупное значение снизу, шеврон выровнен по строке значения,
+ * а не по центру блока — иначе в плитке с подстрочником он уезжает вниз.
+ *
+ * Подпись приходит массивом строк, а не одной строкой с переносом: перенос
+ * тут смысловой («Капитал / в работе»), и отдавать его автопереносу нельзя —
+ * он сломается на другой ширине экрана.
+ */
+function HeroTile({
+  icon,
+  label,
+  value,
+  sub,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  label: string[];
+  value: string;
+  sub?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.heroStatTile} onPress={onPress}>
+      <View style={styles.heroTileHead}>
+        <View style={styles.heroTileIcon}>
+          <MaterialCommunityIcons name={icon} size={19} color={tokens.accent.base} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {label.map((line) => (
+            <Text key={line} style={styles.heroStatLabel} numberOfLines={1}>{line}</Text>
+          ))}
+        </View>
+      </View>
+      <View style={styles.heroTileValueRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {value}
+          </Text>
+          {sub ? <Text style={styles.heroTileSub} numberOfLines={1}>{sub}</Text> : null}
+        </View>
+        <View style={styles.heroTileChevron}>
+          <MaterialIcons name="chevron-right" size={22} color={hexToRgba(tokens.accent.base, 0.75)} />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 /** Прогресс срока (0..1) для активов с датой окончания — для мини-кольца в списке событий. */
 function termProgress(view: AssetView): number {
   const { asset, derived } = view;
@@ -373,36 +422,22 @@ export default function HomeScreen() {
         {hasAssets ? (
           <>
             <View style={styles.heroStatsRow}>
-              <Pressable style={styles.heroStatTile} onPress={() => router.push('/analytics')}>
-                <View style={styles.heroStatLabelRow}>
-                  <MaterialCommunityIcons name="wallet-outline" size={14} color={tokens.accent.base} />
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>Капитал в работе</Text>
-                </View>
-                <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>
-                  {formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
-                </Text>
-              </Pressable>
-              {/* Два числа в одной плитке через разделитель, а не фразой
-                  «4 на 3 площадках»: фраза читается как предложение, которое
-                  надо разобрать, а тут глазу сразу видно два независимых
-                  факта — сколько активов и по скольким площадкам. */}
-              <Pressable style={styles.heroStatTile} onPress={scrollToAssets}>
-                <View style={styles.heroStatLabelRow}>
-                  <MaterialCommunityIcons name="layers-outline" size={14} color={tokens.accent.base} />
-                  <Text style={styles.heroStatLabel} numberOfLines={1}>В работе</Text>
-                </View>
-                <View style={styles.heroSplitRow}>
-                  <View style={styles.heroSplitCell}>
-                    <Text style={styles.heroStatValue}>{views.length}</Text>
-                    <Text style={styles.heroSplitCaption}>{pluralAssets(views.length)}</Text>
-                  </View>
-                  <View style={styles.heroSplitDivider} />
-                  <View style={styles.heroSplitCell}>
-                    <Text style={styles.heroStatValue}>{orgCount}</Text>
-                    <Text style={styles.heroSplitCaption}>{pluralPlatform(orgCount)}</Text>
-                  </View>
-                </View>
-              </Pressable>
+              <HeroTile
+                icon="wallet-outline"
+                label={['Капитал', 'в работе']}
+                value={formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
+                onPress={() => router.push('/analytics')}
+              />
+              {/* Два числа стопкой, а не фразой «4 на 3 площадках»: фраза
+                  читается как предложение, которое надо разобрать, а тут глазу
+                  сразу видно два независимых факта. */}
+              <HeroTile
+                icon="layers-outline"
+                label={['В работе']}
+                value={`${views.length} ${pluralAssets(views.length)}`}
+                sub={`${orgCount} ${pluralPlatform(orgCount)}`}
+                onPress={scrollToAssets}
+              />
             </View>
 
             {/* Здесь был «Лидер дохода» — он менялся раз в полгода, ничего не
@@ -872,20 +907,41 @@ const styles = StyleSheet.create({
   heroStatsRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
   heroStatTile: {
     flex: 1, minWidth: 0,
-    backgroundColor: hexToRgba(tokens.surface.white, 0.72),
-    borderRadius: tokens.radius.md,
-    borderWidth: 1, borderColor: tokens.surface.glassBorder,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.68),
+    borderRadius: tokens.radius.lg,
     paddingHorizontal: 14, paddingVertical: 14,
+    boxShadow: tokens.shadow.subtle,
   },
-  heroStatLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  heroStatLabel: { fontSize: tokens.typography.micro, fontFamily: font.medium, color: tokens.text.tertiary, flexShrink: 1 },
-  heroStatValue: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 8 },
-  heroSplitRow: { flexDirection: 'row', alignItems: 'center' },
-  heroSplitCell: { flex: 1, minWidth: 0 },
-  // Разделитель тянется на всю высоту ячеек, а не на фиксированные N пикселей:
-  // подписи под числами разной длины, и жёсткая высота ловит то одно, то другое.
-  heroSplitDivider: { alignSelf: 'stretch', width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: 10 },
-  heroSplitCaption: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 1 },
+  heroTileHead: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.tight },
+  heroTileIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: hexToRgba(tokens.accent.base, 0.10),
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heroStatLabel: {
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 3,
+    fontFamily: font.medium,
+    color: tokens.text.secondary,
+  },
+  heroTileValueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.xs, marginTop: 14 },
+  heroStatValue: {
+    fontSize: 21,
+    lineHeight: 26,
+    fontFamily: font.bold,
+    color: tokens.text.primary,
+    letterSpacing: -0.3,
+  },
+  heroTileSub: {
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 3,
+    fontFamily: font.regular,
+    color: tokens.text.tertiary,
+    marginTop: 2,
+  },
+  // Шеврон центрируем по СТРОКЕ значения (её высота), а не по всему блоку:
+  // в плитке с подстрочником центр блока уезжает вниз и шеврон едет с ним.
+  heroTileChevron: { height: 26, alignItems: 'center', justifyContent: 'center' },
   // Тонирована акцентом, в отличие от белых плиток фактов над ней: плитки
   // сообщают состояние, а эта строка — единственное, что может потребовать
   // действия, и должна отличаться от них не только содержанием.
