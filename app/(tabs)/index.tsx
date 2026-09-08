@@ -667,7 +667,7 @@ function EmptyAssets() {
 
 /** Высота живого поля. Фиксированная: шейдеру размер нужен на первом кадре,
  *  а зона ровно такой же высоты (minHeight) — поле никуда не вылезает. */
-const HERO_FIELD_H = 300;
+const HERO_FIELD_H = 380;
 const SLIDE_W = Dimensions.get('window').width;
 const DOT_W = 6;
 const DOT_GAP = 5;
