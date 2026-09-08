@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -18,12 +18,14 @@ import Animated, {
   Easing as ReanimatedEasing,
   Extrapolation,
   interpolate,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { ScreenBackground } from '@/components/ScreenBackground';
+import { GlassIconButton } from '@/components/GlassIconButton';
 import { HeroField } from '@/components/hero/HeroField';
 import { heroState } from '@/components/hero/heroState';
 import { Card } from '@/components/Card';
@@ -49,6 +51,7 @@ import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
+import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
 import { t } from '@/i18n';
 
 /**
@@ -144,6 +147,20 @@ export default function HomeScreen() {
   const goalPos = useSharedValue(0);
   const goalStartPos = useSharedValue(0);
   const scrollRef = useRef<ScrollView>(null);
+  // Маска статус-бара опускается, пока экран не прокручен: иначе она срезает
+  // верх живого поля серой полосой. На расфокусе обязаны вернуть её —
+  // остальные экраны про эту механику не знают и рассчитывают на маску.
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+    statusBarVeil.value = veilForOffset(e.contentOffset.y);
+  });
+  useFocusEffect(
+    useCallback(() => {
+      statusBarVeil.value = veilForOffset(scrollY.value);
+      return () => { statusBarVeil.value = 1; };
+    }, [scrollY]),
+  );
   const assetsSectionRef = useRef<View>(null);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
@@ -284,8 +301,10 @@ export default function HomeScreen() {
 
   return (
     <ScreenBackground>
-      <ScrollView
-        ref={scrollRef}
+      <Animated.ScrollView
+        ref={scrollRef as never}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={{
           paddingTop: tokens.spacing.screenTop,
           paddingHorizontal: tokens.spacing.screenH,
@@ -305,9 +324,9 @@ export default function HomeScreen() {
             <View style={styles.topRow}>
               <Text style={styles.wordmark}>CapFlow</Text>
               <View style={styles.topActions}>
-                <Pressable style={styles.iconBtn} onPress={() => router.push('/search')} hitSlop={8}>
+                <GlassIconButton onPress={() => router.push('/search')}>
                   <MaterialIcons name="search" size={22} color={tokens.text.secondary} />
-                </Pressable>
+                </GlassIconButton>
                 <Pressable style={styles.addBtn} onPress={() => router.push('/asset/form')} hitSlop={8}>
                   <MaterialCommunityIcons name="plus" size={24} color={tokens.text.inverse} />
                 </Pressable>
@@ -646,7 +665,7 @@ export default function HomeScreen() {
         ) : (
           <EmptyAssets />
         )}
-      </ScrollView>
+      </Animated.ScrollView>
     </ScreenBackground>
   );
 }
@@ -676,13 +695,8 @@ const DOT_ACTIVE_W = 16;
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.xl },
-  wordmark: { fontSize: tokens.typography.display, fontWeight: '800', color: tokens.text.primary, letterSpacing: -0.5 },
+  wordmark: { fontSize: 28, fontWeight: '800', color: tokens.text.primary, letterSpacing: -0.4 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
-  iconBtn: {
-    width: 44, height: 44, borderRadius: tokens.radius.pill,
-    backgroundColor: hexToRgba(tokens.surface.white, 0.85), borderWidth: 1, borderColor: tokens.surface.glassBorder,
-    alignItems: 'center', justifyContent: 'center',
-  },
   addBtn: { width: 44, height: 44, borderRadius: tokens.radius.pill, backgroundColor: tokens.accent.base, alignItems: 'center', justifyContent: 'center' },
   // marginTop/marginBottom — на самой строке, не на заголовке: раньше они висели
   // на sectionTitle, и alignItems:'center' центрировал соседнюю ссылку по всей
@@ -770,7 +784,9 @@ const styles = StyleSheet.create({
   heroValue: {
     fontSize: 42,
     lineHeight: 52,
-    fontFamily: font.extrabold,
+    // Не extrabold: в интерфейсе больше нигде такого веса нет, и сумма
+    // выпадала из набора. SemiBold на 42pt держит акцент сама по себе.
+    fontFamily: font.semibold,
     color: tokens.text.primary,
     marginTop: 6,
     letterSpacing: -1,

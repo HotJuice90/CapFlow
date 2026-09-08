@@ -3,6 +3,8 @@ import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { statusBarVeil } from '@/lib/statusBarVeil';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -26,18 +28,24 @@ const SHEET_ROUTES = ['/currency-picker', '/option-picker', '/date-picker', '/go
 function StatusBarMask() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  // Непрозрачность живая: экран может опустить маску, когда под строкой у него
+  // своя картинка (главная в непрокрученном состоянии). См. statusBarVeil.
+  const style = useAnimatedStyle(() => ({ opacity: statusBarVeil.value }));
   // Пока открыт нативный шит — не рисуем маску поверх статус-бара, иначе она
   // перекрывает системное затемнение фона под шитом (строка остаётся «светлой»).
   if (SHEET_ROUTES.includes(pathname)) return null;
   return (
-    <View
+    <Animated.View
       pointerEvents="none"
-      style={{
-        position: 'absolute',
-        top: 0, left: 0, right: 0,
-        height: insets.top,
-        backgroundColor: tokens.backgroundGradient.colors[0],
-      }}
+      style={[
+        {
+          position: 'absolute',
+          top: 0, left: 0, right: 0,
+          height: insets.top,
+          backgroundColor: tokens.backgroundGradient.colors[0],
+        },
+        style,
+      ]}
     />
   );
 }
