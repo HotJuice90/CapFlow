@@ -41,6 +41,7 @@ import {
   analyticsSummary,
   liquidity,
   goalsProgress,
+  nearestEvent as nearestEventOf,
   standaloneGoalsProgress,
   type GoalProgress,
   type GoalMetric,
@@ -184,9 +185,12 @@ export default function HomeScreen() {
     [views],
   );
 
-  /** Ближайшее окончание срока — строка под плитками. */
-  const nearestEvent = upcoming[0];
-  const nearestEventDays = nearestEvent?.derived.daysRemaining ?? 0;
+  /**
+   * Ближайшее событие — строка под плитками. Не только окончание срока:
+   * у бессрочного портфеля их не бывает вовсе, а начисление процентов —
+   * тоже событие, просто за ним не следует обязательного действия.
+   */
+  const nearestEvent = useMemo(() => nearestEventOf(data), [data]);
 
   const sort = SORTS[sortIdx];
   const sortedViews = useMemo(() => sortViews(views, sort.key), [views, sort.key]);
@@ -376,25 +380,32 @@ export default function HomeScreen() {
 
             {/* Здесь был «Лидер дохода» — он менялся раз в полгода, ничего не
                 предлагал сделать и повторял отсортированный список активов.
-                Ближайшее событие — единственное на экране, где бездействие
-                стоит денег: истёкший вклад лежит под 0%. Пусто, когда срочных
-                активов нет вовсе (накопительные счета бессрочны) — тогда и
-                события никакого нет, и строка честно не рисуется. */}
+                Событие — окончание срока ИЛИ ближайшая выплата процентов
+                (см. nearestEvent): только окончаний мало, у бессрочного
+                портфеля их не бывает вовсе и строка пустовала бы всегда.
+                Подпись разная нарочно — за выплатой, в отличие от срока,
+                никакого обязательного действия не следует. */}
             {nearestEvent ? (
               <Pressable style={styles.heroEventPill} onPress={() => router.push('/calendar')}>
                 <View style={styles.heroEventIcon}>
-                  <MaterialCommunityIcons name="calendar-blank-outline" size={15} color={tokens.accent.base} />
+                  <MaterialCommunityIcons
+                    name={nearestEvent.kind === 'maturity' ? 'calendar-blank-outline' : 'cash-plus'}
+                    size={15}
+                    color={tokens.accent.base}
+                  />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.heroEventLabel}>Ближайшее событие</Text>
-                  <Text style={styles.heroEventName} numberOfLines={1}>
-                    {nearestEvent.asset.title || nearestEvent.instrument.name}
+                  <Text style={styles.heroEventLabel}>
+                    {nearestEvent.kind === 'maturity' ? 'Окончание срока' : 'Выплата процентов'}
                   </Text>
+                  <Text style={styles.heroEventName} numberOfLines={1}>{nearestEvent.name}</Text>
                 </View>
                 <View style={styles.heroEventWhen}>
-                  <Text style={styles.heroEventDate}>{formatDateShort(nearestEvent.asset.endDate as string)}</Text>
+                  <Text style={styles.heroEventDate}>{formatDateShort(nearestEvent.date)}</Text>
                   <Text style={styles.heroEventDays}>
-                    {nearestEventDays} {pluralDays(nearestEventDays)}
+                    {nearestEvent.daysRemaining === 0
+                      ? 'сегодня'
+                      : `${nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)}`}
                   </Text>
                 </View>
               </Pressable>

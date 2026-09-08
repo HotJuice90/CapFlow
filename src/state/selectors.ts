@@ -1064,6 +1064,67 @@ export function payoutEventsForMonth(data: AppData, year: number, month: number,
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface NearestEvent {
+  /** `maturity` — кончается срок, деньги освобождаются и требуют решения.
+   *  `payout` — плановое начисление процентов, делать ничего не нужно. */
+  kind: 'maturity' | 'payout';
+  date: string; // YYYY-MM-DD
+  assetId: string;
+  /** Пользовательское название актива, если задано, иначе имя инструмента. */
+  name: string;
+  /** Для maturity — сколько освободится, для payout — размер начисления. */
+  amount: number;
+  currency: CurrencyCode;
+  daysRemaining: number;
+}
+
+/**
+ * Ближайшее событие по портфелю — окончание срока ИЛИ плановая выплата, что
+ * раньше. Одних окончаний мало: у бессрочного портфеля (накопительные счета)
+ * их не бывает вовсе, и строка на главной оставалась пустой навсегда, хотя
+ * начисление процентов — вполне себе событие. Разница в том, что за выплатой
+ * не следует обязательного действия, и `kind` позволяет сказать это подписью.
+ *
+ * Выплаты смотрим на два месяца вперёд: одного мало — 31-го числа ближайшая
+ * ежемесячная выплата уже в следующем месяце.
+ */
+export function nearestEvent(data: AppData, now: Date = new Date()): NearestEvent | null {
+  const today = isoDate(now);
+  let best: NearestEvent | null = null;
+  const take = (e: NearestEvent) => {
+    if (e.date < today) return;
+    if (!best || e.date < best.date) best = e;
+  };
+
+  for (const e of calendarEvents(data, now)) {
+    take({
+      kind: 'maturity',
+      date: e.date,
+      assetId: e.assetId,
+      name: e.title || e.instrumentName,
+      amount: e.amount,
+      currency: e.currency,
+      daysRemaining: e.daysRemaining,
+    });
+  }
+
+  for (let k = 0; k < 2; k++) {
+    const m = new Date(now.getFullYear(), now.getMonth() + k, 1);
+    for (const e of payoutEventsForMonth(data, m.getFullYear(), m.getMonth(), now)) {
+      take({
+        kind: 'payout',
+        date: e.date,
+        assetId: e.assetId,
+        name: e.title || e.instrumentName,
+        amount: e.amount,
+        currency: e.currency,
+        daysRemaining: Math.max(0, diffDays(now, parseLocal(e.date))),
+      });
+    }
+  }
+  return best;
+}
+
 export interface ForecastDayChange {
   assetId: string;
   instrumentName: string;

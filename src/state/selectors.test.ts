@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument } from './selectors';
+import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -624,3 +624,65 @@ describe('taxByInstrument: факт только у бессрочных', () =>
     expect(sumYear).toBeCloseTo(analyticsSummary(data, now).taxYearGross, 6);
   });
 });;
+
+describe('nearestEvent', () => {
+  const now = new Date(2026, 2, 10); // 10 марта 2026
+
+  const base = {
+    ...emptyAppData(),
+    organizations: [{ id: 'o1', name: 'Тест-Банк', type: 'Банк', color: '#000000' } as Organization],
+    instruments: [depositInstrument, savingsInstrument],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+
+  const savings: Asset = {
+    id: 'as1',
+    instrumentId: 'i1',
+    amount: 1_000_000,
+    currency: 'RUB' as const,
+    rate: 12,
+    openDate: '2026-01-20',
+    payoutPeriod: 'monthly' as const,
+    status: 'active' as const,
+  };
+
+  const deposit: Asset = {
+    id: 'ad1',
+    instrumentId: 'i0',
+    amount: 500_000,
+    currency: 'RUB' as const,
+    rate: 15,
+    openDate: '2025-09-01',
+    endDate: '2026-03-15',
+    status: 'active' as const,
+  };
+
+  it('без срочных активов отдаёт ближайшую выплату', () => {
+    const e = nearestEvent({ ...base, assets: [savings] }, now);
+    expect(e).not.toBeNull();
+    expect(e!.kind).toBe('payout');
+    expect(e!.date).toBe('2026-03-20');
+    expect(e!.daysRemaining).toBe(10);
+  });
+
+  it('окончание срока выигрывает, если оно раньше выплаты', () => {
+    const e = nearestEvent({ ...base, assets: [savings, deposit] }, now);
+    expect(e!.kind).toBe('maturity');
+    expect(e!.date).toBe('2026-03-15');
+  });
+
+  it('прошедшие даты не берём', () => {
+    const past = { ...deposit, endDate: '2026-03-01' };
+    const e = nearestEvent({ ...base, assets: [past] }, now);
+    expect(e).toBeNull();
+  });
+
+  it('в конце месяца заглядывает в следующий', () => {
+    const e = nearestEvent({ ...base, assets: [savings] }, new Date(2026, 2, 25));
+    expect(e!.date).toBe('2026-04-20');
+  });
+
+  it('без активов — null', () => {
+    expect(nearestEvent(base, now)).toBeNull();
+  });
+});
