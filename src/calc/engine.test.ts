@@ -319,3 +319,27 @@ describe('изменения ставки (rateAdjustments)', () => {
     expect(d.earnedSoFar).toBeCloseTo(expected, 2);
   });
 });
+
+describe('актив, который ещё не открылся', () => {
+  const future: Asset = {
+    id: 'af',
+    instrumentId: 'i1',
+    amount: 1_000_000,
+    currency: 'RUB',
+    rate: 15,
+    openDate: '2027-01-01',
+    status: 'active',
+  };
+
+  test('не приносит дохода до дня открытия', () => {
+    const d = calculate(future, savingsInstrument, params, '2026-09-26');
+    expect(d.incomePerDay).toBe(0);
+    expect(d.incomePerMonth).toBe(0);
+    expect(d.earnedSoFar).toBe(0);
+  });
+
+  test('в день открытия доход появляется', () => {
+    const d = calculate(future, savingsInstrument, params, '2027-01-01');
+    expect(d.incomePerDay).toBeCloseTo((1_000_000 * 0.15) / 365, 4);
+  });
+});

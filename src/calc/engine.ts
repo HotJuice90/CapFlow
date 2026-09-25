@@ -198,10 +198,16 @@ export function calculate(
   const effectiveRate = currentRate / 100;
 
   const { balanceNow, accrued: accruedToNow } = walkAccrual(timeline, rates, mode, payout, now);
-  const incomePerDay = (balanceNow * effectiveRate) / daysInYear(now);
+  // Актив, который ещё не открылся, НЕ приносит дохода. Без этой проверки
+  // опечатка в дате открытия (или запись «на будущее») молча добавляла в
+  // «Сегодня принесёт» доход по несуществующему вкладу — при том, что
+  // incomeRunRateOn такие активы пропускает, и «сегодня» со «средним»
+  // начинали считаться по разным наборам активов.
+  const started = diffDays(asset.openDate, now) >= 0;
+  const incomePerDay = started ? (balanceNow * effectiveRate) / daysInYear(now) : 0;
   // Прогноз вперёд (месяц/год) — от ТЕКУЩЕГО баланса, а не от суммы открытия:
   // при капитализации проценты уже легли на баланс и сами приносят доход.
-  const annualRunRate = balanceNow * effectiveRate;
+  const annualRunRate = started ? balanceNow * effectiveRate : 0;
   // Месяц — по факту дней в ТЕКУЩЕМ календарном месяце (как считают банки:
   // прогноз «за июль» = дневной доход × 31, а не среднемесячное /12).
   const incomePerMonth = incomePerDay * daysInMonth(now);

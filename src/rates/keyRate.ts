@@ -79,3 +79,50 @@ export function mergeKeyRateHistory(stored: KeyRatePoint[], fetched: KeyRatePoin
   for (const p of fetched) byDate.set(p.date, p);
   return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
+
+/**
+ * Ставка, действующая НА СЕГОДНЯ. Не просто `history[0]`: точки хранят дату
+ * вступления в силу, а ЦБ объявляет решение заранее — запись с будущей датой
+ * не должна становиться текущей ставкой раньше времени.
+ */
+export function currentKeyRate(history: KeyRatePoint[], now: Date = new Date()): number {
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let best: KeyRatePoint | undefined;
+  for (const p of history) {
+    if (p.date > today) continue;
+    if (!best || p.date > best.date) best = p;
+  }
+  return best?.rate ?? 0;
+}
+
+/** Ставка, действовавшая на дату `at` (последняя точка не позже неё). */
+function keyRateAt(ascending: KeyRatePoint[], at: string): number {
+  let cur = 0;
+  for (const p of ascending) {
+    if (p.date <= at) cur = p.rate;
+    else break;
+  }
+  return cur;
+}
+
+/** Максимальная ключевая ставка на 1-е число любого месяца года — по НК так считается лимит. */
+export function maxKeyRateForYear(history: KeyRatePoint[], year: number): number {
+  const ascending = [...history].sort((a, b) => a.date.localeCompare(b.date));
+  let max = 0;
+  for (let month = 1; month <= 12; month++) {
+    max = Math.max(max, keyRateAt(ascending, `${year}-${String(month).padStart(2, '0')}-01`));
+  }
+  return max;
+}
+
+/**
+ * Необлагаемый лимит года по ст. 214.2 НК: 1 млн × максимальная ключевая
+ * ставка на 1-е число месяца внутри года.
+ *
+ * Для ТЕКУЩЕГО года значение предварительное — год не кончился, и ЦБ может
+ * поднять ставку позже. Месяцы, которые ещё не наступили, считаются по
+ * последней известной ставке: это лучшая доступная оценка, а не гадание.
+ */
+export function taxFreeLimitForYear(history: KeyRatePoint[], year: number): number {
+  return (1_000_000 * maxKeyRateForYear(history, year)) / 100;
+}

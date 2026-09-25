@@ -129,17 +129,24 @@ export function DateField({
   value,
   onChange,
   hint,
+  minDate,
+  maxDate,
 }: {
   label: string;
   value: string | undefined;
   onChange: (iso: string) => void;
   hint?: string;
+  /** Границы выбора. Без них форма позволяла сохранить срок, кончающийся
+   *  раньше открытия, и дату открытия в будущем — движок такое переживает,
+   *  но актив навсегда залипает либо в «срок истёк», либо в «ещё не начал». */
+  minDate?: string;
+  maxDate?: string;
 }) {
   return (
     <Field label={label} hint={hint}>
       <Pressable
         style={[styles.input, styles.selectRow]}
-        onPress={() => openDatePicker({ title: label, value, onPick: onChange })}
+        onPress={() => openDatePicker({ title: label, value, minDate, maxDate, onPick: onChange })}
       >
         <Text style={[styles.selectText, !value && styles.placeholder]} numberOfLines={1}>
           {value ? isoToDisplay(value) : 'ДД.ММ.ГГГГ'}

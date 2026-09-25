@@ -5,6 +5,7 @@ import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
 import { uid } from '@/utils/id';
 import { CURRENCY_SYMBOL } from '@/format';
+import { maxKeyRateForYear, taxFreeLimitForYear } from '@/rates/keyRate';
 
 const CURRENCY_COLOR: Record<string, string> = {
   RUB: '#62709C',
@@ -1872,17 +1873,6 @@ function keyRateAt(history: KeyRatePoint[], at: string): number {
   return cur;
 }
 
-/** Максимальная ключевая ставка на 1-е число любого месяца года `year` — по НК так считается лимит года. */
-function maxKeyRateForYear(history: KeyRatePoint[], year: number): number {
-  const ascending = [...history].sort((a, b) => a.date.localeCompare(b.date));
-  let max = 0;
-  for (let month = 1; month <= 12; month++) {
-    const d = `${year}-${String(month).padStart(2, '0')}-01`;
-    max = Math.max(max, keyRateAt(ascending, d));
-  }
-  return max;
-}
-
 /**
  * Фиксирует налоговую статистику за календарный ГОД: считаем доход каждого
  * актива, заработанный именно В ГРАНИЦАХ этого года (не с открытия), делим
@@ -1911,7 +1901,7 @@ export function computeTaxYearRecord(data: AppData, year: number): TaxYearRecord
   }
 
   const keyRateUsed = maxKeyRateForYear(data.keyRateHistory, year);
-  const taxFreeLimit = (1_000_000 * keyRateUsed) / 100;
+  const taxFreeLimit = taxFreeLimitForYear(data.keyRateHistory, year);
   const taxableIncome = withheldIncome + selfIncome;
   // Лимит года — льгота только для «доплатить самому»; «удержит банк» считается
   // отдельно и плоско (свой правовой режим, см. calcAssetTax), не пропорцией.

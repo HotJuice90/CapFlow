@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { appAlert } from '@/lib/dialog';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +13,9 @@ import { useData } from '@/state/DataContext';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens } from '@/theme';
 import { CURRENCY_SYMBOL, formatMoney, formatPercent } from '@/format';
+import { formatDateFull } from '@/format/date';
 import { exportData, importData } from '@/backup/backup';
+import { repository, type RescueCopy } from '@/storage/repository';
 import { t } from '@/i18n';
 import { useUpdateBadge } from '@/update/useUpdate';
 import Constants from 'expo-constants';
@@ -34,6 +36,14 @@ export default function SettingsScreen() {
   // чтобы про новую версию узнавать самому, а не заходить и жать кнопку наугад.
   const update = useUpdateBadge();
 
+  /**
+   * Аварийная копия появляется, когда приложение не смогло прочитать
+   * сохранение (см. RESCUE_KEY в repository). Строка живёт только при её
+   * наличии: в обычной жизни её быть не должно.
+   */
+  const [rescue, setRescue] = useState<RescueCopy | null>(null);
+  useEffect(() => { void repository.readRescue().then(setRescue); }, []);
+
   const openCurrency = () => {
     openCurrencyPicker((code) => { void updateSettings({ defaultCurrency: code }); }, data.settings.defaultCurrency);
   };
@@ -53,6 +63,33 @@ export default function SettingsScreen() {
       { text: t.common.cancel, style: 'cancel' },
       { text: t.common.delete, style: 'destructive', onPress: () => void deleteDemoData() },
     ]);
+  };
+
+  const doRestore = () => {
+    if (!rescue) return;
+    appAlert(
+      'Восстановить из копии?',
+      `Текущие данные будут заменены копией от ${formatDateFull(rescue.savedAt.slice(0, 10))}.`,
+      [
+        { text: t.common.cancel, style: 'cancel' },
+        {
+          text: 'Восстановить',
+          onPress: async () => {
+            try {
+              const parsed = JSON.parse(rescue.raw) as Parameters<typeof replaceAll>[0];
+              await replaceAll(parsed);
+              // Копию убираем только после успешной записи — если разбор упал,
+              // она должна остаться на месте и дать попробовать ещё раз.
+              await repository.dropRescue();
+              setRescue(null);
+              appAlert('Готово', 'Данные восстановлены.');
+            } catch {
+              appAlert('Ошибка', 'Копия не читается. Не удаляй её — выгрузи экспортом и пришли разработчику.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const doImport = () => {
@@ -109,6 +146,18 @@ export default function SettingsScreen() {
         </Group>
 
         <Group title="Приложение">
+          {rescue ? (
+            <>
+              <SettingsRow
+                icon="restore"
+                color={tokens.semantic.negative}
+                label="Аварийная копия"
+                value={formatDateFull(rescue.savedAt.slice(0, 10))}
+                onPress={doRestore}
+              />
+              <Divider />
+            </>
+          ) : null}
           <SettingsRow icon="save-alt" color="#3E63DD" label="Экспорт данных" chevron={false} onPress={doExport} />
           <Divider />
           <SettingsRow icon="file-upload" color="#3E63DD" label="Импорт данных" chevron={false} onPress={doImport} />

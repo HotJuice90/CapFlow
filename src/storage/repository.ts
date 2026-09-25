@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { type AppData, DEFAULT_RATES, emptyAppData, SCHEMA_VERSION } from './types';
-import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
-import { mergeKeyRateHistory } from '@/rates/keyRate';
+import { type AppData, emptyAppData } from './types';
+import { migrate } from './migrate';
 
 /**
  * Абстракция хранилища (решение #14). Весь UI работает ТОЛЬКО через этот интерфейс —
@@ -11,66 +10,85 @@ export interface Repository {
   load(): Promise<AppData>;
   save(data: AppData): Promise<void>;
   clear(): Promise<void>;
+  /** Сведения о неудачной загрузке (см. RESCUE_KEY) — или null, если всё прочиталось. */
+  loadFailure(): LoadFailure | null;
+  /** Сырой текст аварийной копии, если она есть. */
+  readRescue(): Promise<RescueCopy | null>;
+  dropRescue(): Promise<void>;
+}
+
+export interface LoadFailure {
+  /** `parse` — файл не JSON, `migrate` — JSON прочитался, но упала миграция. */
+  kind: 'parse' | 'migrate';
+  message: string;
+}
+
+export interface RescueCopy {
+  savedAt: string;
+  raw: string;
 }
 
 const STORAGE_KEY = 'capflow:data:v1';
-
-function migrate(data: AppData): AppData {
-  // бэкафилл полей, появившихся позже (для уже установленных копий)
-  const next: AppData = { ...data };
-  // мерж с дефолтами — добавляет валюты, появившиеся позже (напр. CNY)
-  next.rates = { ...DEFAULT_RATES, ...data.rates };
-  if (!next.ratesHistory) next.ratesHistory = [];
-  if (!next.manualRates) next.manualRates = {};
-  if (!next.taxYearRecords) next.taxYearRecords = [];
-  if (!next.goals) next.goals = [];
-  if (!next.freeCapitalEntries) next.freeCapitalEntries = [];
-
-  // Смена фирменного цвета банка в реестре (src/domain/banks.ts) НЕ доходит до
-  // уже заведённых площадок: цвет копируется в организацию в момент создания
-  // (`color: bank.color`) и дальше живёт в данных. Поэтому переносим точечно —
-  // только ровно то старое значение, которое заменили в реестре.
-  //
-  // Сплошным «выровнять все по реестру» делать нельзя: цвет площадки
-  // редактируется вручную (ColorField в app/catalog/organization.tsx), и такая
-  // миграция затёрла бы осознанный выбор пользователя.
-  const REBRANDED: { logo: string; from: string; to: string }[] = [
-    { logo: 'tbank', from: '#1D1D1B', to: '#FFDD2D' },
-  ];
-  if (next.organizations?.length) {
-    next.organizations = next.organizations.map((o) => {
-      const hit = REBRANDED.find((r) => r.logo === o.logo && o.color?.toUpperCase() === r.from);
-      return hit ? { ...o, color: hit.to } : o;
-    });
-  }
-  if (next.settings.abbreviateMillions === undefined) {
-    next.settings = { ...next.settings, abbreviateMillions: true };
-  }
-  if (next.settings.kopecks === undefined) {
-    next.settings = { ...next.settings, kopecks: 'auto' };
-  }
-  if (next.settings.navLabels === undefined) {
-    next.settings = { ...next.settings, navLabels: false };
-  }
-  // Самовосстанавливающийся мердж, не только «если пусто» — если сохранённая
-  // история где-то обрезалась (напр. неудачный live-фетч), старый бэйзлайн
-  // с 2013 года всё равно домердживается на каждой загрузке, не только один раз.
-  next.keyRateHistory = mergeKeyRateHistory(KEY_RATE_HISTORY, next.keyRateHistory ?? []);
-  if (next.schemaVersion < SCHEMA_VERSION) next.schemaVersion = SCHEMA_VERSION;
-  return next;
-}
+/**
+ * Аварийная копия последнего НЕПРОЧИТАННОГО состояния.
+ *
+ * Раньше любое исключение при загрузке (битый JSON, но и любая ошибка внутри
+ * migrate) молча возвращало пустые данные. Дальше DataProvider видел
+ * `seededDemo: false`, засевал демо и СОХРАНЯЛ — то есть настоящие данные
+ * пользователя затирались демо-портфелем безвозвратно. Для приложения про
+ * деньги это худший из возможных сценариев, и защищаться от него надо не
+ * аккуратностью migrate (её всегда не хватит), а тем, что сырой текст
+ * откладывается в сторону ДО того, как что-то будет перезаписано.
+ */
+const RESCUE_KEY = 'capflow:data:v1:rescue';
 
 export function createAsyncStorageRepository(): Repository {
+  let failure: LoadFailure | null = null;
+
   return {
     async load() {
+      failure = null;
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (!raw) return emptyAppData();
+
+      let parsed: AppData;
       try {
-        return migrate(JSON.parse(raw) as AppData);
-      } catch {
-        // повреждённые данные — не роняем приложение, начинаем чисто
+        parsed = JSON.parse(raw) as AppData;
+      } catch (e) {
+        failure = { kind: 'parse', message: String(e) };
+        await AsyncStorage.setItem(RESCUE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), raw }));
         return emptyAppData();
       }
+
+      try {
+        return migrate(parsed);
+      } catch (e) {
+        // JSON целый — значит данные, скорее всего, живые, а сломалась миграция.
+        // Такое чинится кодом, поэтому копию храним и НЕ даём приложению
+        // молча начать с чистого листа (см. DataProvider: демо не сеется,
+        // пока есть незакрытая аварийная копия).
+        failure = { kind: 'migrate', message: String(e) };
+        await AsyncStorage.setItem(RESCUE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), raw }));
+        return emptyAppData();
+      }
+    },
+
+    loadFailure() {
+      return failure;
+    },
+
+    async readRescue() {
+      const raw = await AsyncStorage.getItem(RESCUE_KEY);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw) as RescueCopy;
+      } catch {
+        return null;
+      }
+    },
+
+    async dropRescue() {
+      await AsyncStorage.removeItem(RESCUE_KEY);
     },
     async save(data) {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));

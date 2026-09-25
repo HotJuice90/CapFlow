@@ -382,9 +382,19 @@ export default function AssetFormScreen() {
     return calculate(draft, previewInstrument, data.params);
   }, [previewInstrument, amount, rate, openDate, endDate, currency, effectiveCapitalization, payoutPeriod, isTerm, data.params, editing?.id]);
 
+  /**
+   * Открыть актив задним числом можно, «наперёд» — нет: до дня открытия он
+   * ничего не приносит, а до этой проверки такая запись молча падала в
+   * «Капитал в работе». Верхняя граница — сегодня, но не позже даты окончания,
+   * если срок уже указан (бывает при вводе давно закрытого вклада).
+   */
+  const openMaxDate = endDate && endDate < todayIso() ? endDate : todayIso();
+  const datesValid =
+    !!openDate && openDate <= openMaxDate && (!endDate || !!openDate && endDate >= openDate);
+
   const canSave =
     !!platform && productChosen && !!amount && amount > 0 && rate !== undefined && !!openDate &&
-    (!needsPayout || !!payoutPeriod) && (!isTerm || !!endDate);
+    (!needsPayout || !!payoutPeriod) && (!isTerm || !!endDate) && datesValid;
 
   // Баланс свободных денег именно в валюте актива — без конвертации по курсу,
   // чтобы списание было точным (лента считает сумму по каждой валюте отдельно).
@@ -951,9 +961,9 @@ export default function AssetFormScreen() {
                   </View>
                 </Field>
                 <NumberField label="Ставка" value={rate} onChange={setRate} suffix="%" placeholder="0" />
-                <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} />
+                <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} maxDate={openMaxDate} />
                 {isTerm ? (
-                  <DateField label="Дата окончания" value={endDate} onChange={setEndDate} />
+                  <DateField label="Дата окончания" value={endDate} onChange={setEndDate} minDate={openDate} />
                 ) : null}
                 {showCapitalizationChoice ? (
                   <Segmented

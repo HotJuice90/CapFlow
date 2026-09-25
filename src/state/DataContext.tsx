@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import type { Organization, TaxYearRecord } from '@/domain/types';
 import { repository } from '@/storage/repository';
+import { appAlert } from '@/lib/dialog';
 import { type AppData, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
 import { findBankByName } from '@/domain/banks';
@@ -112,8 +113,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const reload = useCallback(async () => {
     setLoading(true);
     let loaded = await repository.load();
-    // первый запуск — сеем демо-портфель (решение #15)
-    if (!loaded.seededDemo) {
+    const failure = repository.loadFailure();
+    // Демо сеем ТОЛЬКО когда данные действительно прочитались. Иначе неудачная
+    // загрузка выглядит как первый запуск, поверх неё ложится демо-портфель и
+    // сохраняется — именно так настоящие данные и терялись безвозвратно.
+    if (!loaded.seededDemo && !failure) {
       loaded = withDemo(loaded);
       await repository.save(loaded);
     }
@@ -131,6 +135,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
     applyLoaded(loaded);
     setLoading(false);
+
+    if (failure) {
+      appAlert(
+        'Не удалось прочитать данные',
+        failure.kind === 'parse'
+          ? 'Файл сохранения повреждён. Копия отложена — «Настройки → Аварийная копия».'
+          : 'Сохранение прочиталось, но приложение не смогло его открыть. Копия отложена целиком — «Настройки → Аварийная копия», оттуда данные можно восстановить.',
+      );
+    }
 
     // авто-обновление курсов ЦБ раз в сутки (не блокирует UI)
     const age = loaded.ratesUpdatedAt

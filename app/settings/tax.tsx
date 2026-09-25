@@ -8,12 +8,20 @@ import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
+import { taxFreeLimitForYear } from '@/rates/keyRate';
 
 export default function TaxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, updateParams } = useData();
   const cur = data.settings.defaultCurrency;
+
+  // Лимит по закону для текущего года — из истории ключевой ставки.
+  const legalLimit = useMemo(
+    () => taxFreeLimitForYear(data.keyRateHistory, new Date().getFullYear()),
+    [data.keyRateHistory],
+  );
+  const manual = data.params.taxFreeLimitManual === true;
 
   const years = useMemo(
     () => [...data.taxYearRecords].sort((a, b) => b.year - a.year),
@@ -46,16 +54,32 @@ export default function TaxScreen() {
           />
           <TaxRow
             label="Необлагаемый лимит"
-            hint="Доход сверх лимита — в год"
+            hint={manual ? 'Задан вручную' : 'Считается по ключевой ставке'}
             value={data.params.taxFreeLimit}
             suffix="₽"
-            onChange={(v) => void updateParams({ taxFreeLimit: v })}
+            onChange={(v) => void updateParams({ taxFreeLimit: v, taxFreeLimitManual: true })}
           />
         </View>
 
         <Text style={styles.footnote}>
-          Доход сверх лимита облагается налогом. По Налоговому кодексу лимит ≈ 1 млн ₽ × максимальная ключевая ставка года.
+          Доход сверх лимита облагается налогом. По Налоговому кодексу лимит = 1 млн ₽ × максимальная ключевая ставка на 1-е число месяца в году.
+          {manual ? ' Сейчас значение задано вручную и за ставкой не следует.' : ' Пересчитывается сам при изменении ключевой ставки.'}
         </Text>
+
+        {/* Возврат к закону нужен именно кнопкой: молча перетирать введённое
+            человеком число нельзя, а оставлять его навсегда — значит дать ему
+            устареть при следующей смене ставки ЦБ. */}
+        {manual && Math.round(legalLimit) !== Math.round(data.params.taxFreeLimit) ? (
+          <Pressable
+            style={styles.legalBtn}
+            onPress={() => void updateParams({ taxFreeLimit: legalLimit, taxFreeLimitManual: false })}
+          >
+            <MaterialIcons name="auto-fix-high" size={18} color={tokens.accent.base} />
+            <Text style={styles.legalBtnText}>
+              Вернуть по закону — {formatMoney(legalLimit, { currency: cur, kopecks: 'hide' })}
+            </Text>
+          </Pressable>
+        ) : null}
 
         {years.length > 0 ? (
           <>
@@ -165,6 +189,21 @@ const styles = StyleSheet.create({
   valueInput: { fontFamily: font.semibold, fontSize: 18, color: tokens.text.primary, minWidth: 50, padding: 0 },
   suffix: { fontFamily: font.regular, fontSize: 16, color: tokens.text.tertiary },
 
+  legalBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm,
+    alignSelf: 'flex-start',
+    marginTop: tokens.spacing.md,
+    marginHorizontal: tokens.spacing.tight,
+    paddingHorizontal: 14, paddingVertical: tokens.spacing.tight,
+    borderRadius: tokens.radius.pill,
+    backgroundColor: hexToRgba(tokens.accent.base, 0.08),
+  },
+  legalBtnText: {
+    fontFamily: font.medium,
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 2,
+    color: tokens.accent.base,
+  },
   footnote: {
     fontFamily: font.regular,
     fontSize: tokens.typography.hint,
