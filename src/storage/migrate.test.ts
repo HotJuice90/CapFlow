@@ -32,6 +32,16 @@ describe('migrate', () => {
     expect(migrate(data).params.taxFreeLimit).toBe(160_000);
   });
 
+  it('добирает отметку о сверке с ЦБ, если её не было', () => {
+    const old = { ...emptyAppData(), keyRateUpdatedAt: undefined } as unknown as AppData;
+    expect(migrate(old).keyRateUpdatedAt).toBeNull();
+  });
+
+  it('не затирает уже проставленную отметку о сверке', () => {
+    const data = { ...emptyAppData(), keyRateUpdatedAt: '2026-09-20T10:00:00.000Z' };
+    expect(migrate(data).keyRateUpdatedAt).toBe('2026-09-20T10:00:00.000Z');
+  });
+
   it('НЕ трогает лимит, заданный руками', () => {
     const data = {
       ...emptyAppData(),

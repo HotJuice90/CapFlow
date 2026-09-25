@@ -14,6 +14,8 @@ import { type AppData, emptyAppData } from '@/storage/types';
 import { buildDemoData } from '@/data/seed';
 import { findBankByName } from '@/domain/banks';
 import { fetchCbrRates } from '@/rates/cbr';
+import { currentKeyRate, fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
+import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import { computeTaxYearRecord } from './selectors';
 import { setAbbreviateMillionsDefault, setKopecksDefault } from '@/format';
 import { useAssetActions, type AssetActions } from './actions/useAssetActions';
@@ -25,6 +27,10 @@ import { useSettingsActions, type SettingsActions } from './actions/useSettingsA
 import type { Persist } from './actions/persist';
 
 const RATES_TTL_MS = 22 * 3600 * 1000; // ~раз в сутки
+// Ключевая ставка меняется раз в несколько недель, но СВЕРЯТЬСЯ с ЦБ надо
+// регулярно: иначе «действует с июня» на экране неотличимо от «мы с июня не
+// смотрели», и человек не знает, актуальны ли цифры.
+const KEY_RATE_TTL_MS = 7 * 24 * 3600 * 1000;
 
 interface DataContextValue extends AssetActions, CatalogActions, FreeCapitalActions, GoalActions, RatesActions, SettingsActions {
   data: AppData;
@@ -164,6 +170,32 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           });
         } catch {
           // офлайн / ЦБ недоступен — оставляем последние известные курсы
+        }
+      })();
+    }
+
+    const keyRateAge = loaded.keyRateUpdatedAt
+      ? Date.now() - new Date(loaded.keyRateUpdatedAt).getTime()
+      : Infinity;
+    if (keyRateAge > KEY_RATE_TTL_MS) {
+      void (async () => {
+        try {
+          const stored = loaded.keyRateHistory.length > 0 ? loaded.keyRateHistory : KEY_RATE_HISTORY;
+          const fetched = await fetchKeyRateHistory(stored[0]?.date ?? EARLIEST_DATE);
+          await persist((prev) => {
+            const base = prev.keyRateHistory.length > 0 ? prev.keyRateHistory : KEY_RATE_HISTORY;
+            const merged = mergeKeyRateHistory(base, fetched);
+            return {
+              ...prev,
+              keyRateHistory: merged,
+              // Отметку ставим даже когда ставка не изменилась: смысл именно
+              // в том, что мы СВЕРИЛИСЬ, а не в том, что что-то приехало.
+              keyRateUpdatedAt: new Date().toISOString(),
+              params: { ...prev.params, keyRate: currentKeyRate(merged) },
+            };
+          });
+        } catch {
+          // офлайн / ЦБ недоступен — оставляем последнюю известную историю
         }
       })();
     }

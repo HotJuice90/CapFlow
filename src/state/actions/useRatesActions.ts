@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import type { CurrencyCode } from '@/domain/types';
 import type { AppData, RateSnapshot } from '@/storage/types';
 import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
-import { fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
+import { currentKeyRate, fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
 import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import type { Persist } from './persist';
 
@@ -95,7 +95,8 @@ export function useRatesActions(data: AppData, persist: Persist): RatesActions {
       return {
         ...prev,
         keyRateHistory: merged,
-        params: { ...prev.params, keyRate: merged[0].rate },
+        keyRateUpdatedAt: new Date().toISOString(),
+        params: { ...prev.params, keyRate: currentKeyRate(merged) },
       };
     });
   }, [data.keyRateHistory, persist]);

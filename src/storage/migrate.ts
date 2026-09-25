@@ -46,6 +46,7 @@ export function migrate(data: AppData): AppData {
   // история где-то обрезалась (напр. неудачный live-фетч), старый бэйзлайн
   // с 2013 года всё равно домердживается на каждой загрузке, не только один раз.
   next.keyRateHistory = mergeKeyRateHistory(KEY_RATE_HISTORY, next.keyRateHistory ?? []);
+  if (next.keyRateUpdatedAt === undefined) next.keyRateUpdatedAt = null;
   // Ключевая ставка в расчётах — производная от истории, а не отдельно
   // хранимое число: руками её нигде не редактируют (на экране ставки есть
   // только кнопка «Обновить»), а история домердживается на каждой загрузке.

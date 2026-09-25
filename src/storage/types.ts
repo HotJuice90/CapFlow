@@ -51,6 +51,10 @@ export interface AppData {
   /** история ключевой ставки ЦБ (точки изменений, новые сверху) — не меняется задним числом,
    *  поэтому храним и при «Обновить» только домердживаем свежие записи, не тянем всё заново */
   keyRateHistory: KeyRatePoint[];
+  /** когда историю ставки последний раз СВЕРЯЛИ с ЦБ (ISO), null — ещё ни разу.
+   *  Отдельно от даты последнего изменения: ставка может не меняться месяцами,
+   *  и без этой отметки «действует с июня» неотличимо от «мы с июня не смотрели». */
+  keyRateUpdatedAt: string | null;
   /** демо уже посеяно (чтобы не сеять повторно после удаления) */
   seededDemo: boolean;
   /** зафиксированная налоговая статистика по прошлым годам (решение — фиксируем
@@ -112,6 +116,7 @@ export function emptyAppData(): AppData {
     ratesUpdatedAt: null,
     ratesHistory: [],
     keyRateHistory: [...KEY_RATE_HISTORY],
+    keyRateUpdatedAt: null,
     seededDemo: false,
     taxYearRecords: [],
     goals: [],

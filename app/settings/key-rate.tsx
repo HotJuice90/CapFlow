@@ -200,6 +200,18 @@ export default function KeyRateScreen() {
           </Svg>
           <Text style={styles.percent}>%</Text>
         </View>
+
+        {/* Две РАЗНЫЕ даты, и путать их нельзя. «Действует с» — дата решения
+            ЦБ: ставка может стоять месяцами, и сама по себе старая дата ещё
+            не значит, что данные протухли. «Сверено» — когда мы последний раз
+            спрашивали у ЦБ; без него человек читает старую дату решения как
+            «приложение отстало». */}
+        <Text style={styles.effectiveFrom}>действует с {formatDateFull(latest.date)}</Text>
+        <Text style={styles.checkedAt}>
+          {data.keyRateUpdatedAt
+            ? `сверено с ЦБ ${formatDateFull(data.keyRateUpdatedAt.slice(0, 10))}`
+            : 'с ЦБ ещё не сверялись'}
+        </Text>
       </View>
 
       {/* «Динамика» — без общего белого бенто: заголовок и плашки лежат прямо
@@ -268,6 +280,20 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
+  effectiveFrom: {
+    fontFamily: font.medium,
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 2,
+    color: tokens.text.secondary,
+    marginTop: tokens.spacing.sm,
+  },
+  checkedAt: {
+    fontFamily: font.regular,
+    fontSize: tokens.typography.hint,
+    lineHeight: tokens.typography.hint + 2,
+    color: tokens.text.tertiary,
+    marginTop: 3,
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
