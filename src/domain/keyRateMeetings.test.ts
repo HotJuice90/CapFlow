@@ -1,4 +1,4 @@
-import { lastMeeting, meetingOutcome, nextMeeting } from './keyRateMeetings';
+import { lastMeeting, meetingOutcome, nextMeeting, shouldSyncKeyRate } from './keyRateMeetings';
 
 const meetings = ['2026-07-24', '2026-09-11', '2026-10-23'];
 
@@ -23,5 +23,23 @@ describe('график заседаний', () => {
 
   it('ставку изменили: решение вступило в силу через несколько дней после заседания', () => {
     expect(meetingOutcome('2026-07-24', ['2026-07-27', '2026-06-22'])).toBe('changed');
+  });
+});
+
+describe('shouldSyncKeyRate', () => {
+  it('ни разу не сверялись — сверяемся', () => {
+    expect(shouldSyncKeyRate(null, new Date(2026, 8, 26), meetings)).toBe(true);
+  });
+
+  it('после прошлой сверки прошло заседание — сверяемся', () => {
+    expect(shouldSyncKeyRate('2026-09-01T10:00:00.000Z', new Date(2026, 8, 26), meetings)).toBe(true);
+  });
+
+  it('заседаний с прошлой сверки не было — не дёргаем ЦБ', () => {
+    expect(shouldSyncKeyRate('2026-09-20T10:00:00.000Z', new Date(2026, 8, 26), meetings)).toBe(false);
+  });
+
+  it('график кончился, но сверка давно — всё равно сверяемся', () => {
+    expect(shouldSyncKeyRate('2026-11-01T10:00:00.000Z', new Date(2027, 5, 1), meetings)).toBe(true);
   });
 });

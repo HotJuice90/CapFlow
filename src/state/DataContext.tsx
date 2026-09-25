@@ -16,6 +16,7 @@ import { findBankByName } from '@/domain/banks';
 import { fetchCbrRates } from '@/rates/cbr';
 import { currentKeyRate, fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
 import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
+import { shouldSyncKeyRate } from '@/domain/keyRateMeetings';
 import { computeTaxYearRecord } from './selectors';
 import { setAbbreviateMillionsDefault, setKopecksDefault } from '@/format';
 import { useAssetActions, type AssetActions } from './actions/useAssetActions';

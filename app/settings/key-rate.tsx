@@ -11,8 +11,7 @@ import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatDateFull, formatDateShort } from '@/format/date';
-import { lastMeeting, meetingOutcome, nextMeeting } from '@/domain/keyRateMeetings';
+import { formatDateFull } from '@/format/date';
 import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 
 // Цвета трендов — 1в1 из Figma (не токены приложения: это конкретно палитра
@@ -129,25 +128,6 @@ export default function KeyRateScreen() {
 
   // Ширина SVG под цифры — впритык к их числу символов (эмпирически ~44px/символ
   // при fontSize 76 и letterSpacing -2), чтобы «%» рядом не гулял по экрану.
-  // Строка про заседания: график бэйзлайновый (см. keyRateMeetings) и может
-  // кончиться — тогда молчим про будущее, но прошедшее заседание всё равно
-  // показываем, оно уже состоялось и от полноты графика не зависит.
-  const meetingLine = useMemo(() => {
-    const last = lastMeeting();
-    const next = nextMeeting();
-    const outcome = meetingOutcome(last, history.map((p) => p.date));
-    const parts: string[] = [];
-    if (last) {
-      parts.push(
-        outcome === 'kept'
-          ? `${formatDateShort(last)} ставку сохранили`
-          : `изменена на заседании ${formatDateShort(last)}`,
-      );
-    }
-    if (next) parts.push(`следующее заседание ${formatDateShort(next)}`);
-    return parts.join(' · ');
-  }, [history]);
-
   const rateStr = formatRate(latest.rate);
   const numberW = rateStr.length * 44;
 
@@ -221,17 +201,6 @@ export default function KeyRateScreen() {
           <Text style={styles.percent}>%</Text>
         </View>
 
-        {/* Две РАЗНЫЕ даты, и путать их нельзя. «Действует с» — дата решения
-            ЦБ: ставка может стоять месяцами, и сама по себе старая дата ещё
-            не значит, что данные протухли. «Сверено» — когда мы последний раз
-            спрашивали у ЦБ; без него человек читает старую дату решения как
-            «приложение отстало». */}
-        <Text style={styles.effectiveFrom}>действует с {formatDateFull(latest.date)}</Text>
-        <Text style={styles.checkedAt}>
-          {data.keyRateUpdatedAt
-            ? `сверено с ЦБ ${formatDateFull(data.keyRateUpdatedAt.slice(0, 10))}`
-            : 'с ЦБ ещё не сверялись'}
-        </Text>
       </View>
 
       {/* «Динамика» — без общего белого бенто: заголовок и плашки лежат прямо
@@ -300,20 +269,6 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
-  effectiveFrom: {
-    fontFamily: font.medium,
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 2,
-    color: tokens.text.secondary,
-    marginTop: tokens.spacing.sm,
-  },
-  checkedAt: {
-    fontFamily: font.regular,
-    fontSize: tokens.typography.hint,
-    lineHeight: tokens.typography.hint + 2,
-    color: tokens.text.tertiary,
-    marginTop: 3,
-  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
