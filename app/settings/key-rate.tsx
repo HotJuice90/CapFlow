@@ -11,7 +11,8 @@ import { boxShadow } from '@/theme/shadow';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatDateFull } from '@/format/date';
+import { formatDateFull, formatDateShort } from '@/format/date';
+import { lastMeeting, meetingOutcome, nextMeeting } from '@/domain/keyRateMeetings';
 import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 
 // Цвета трендов — 1в1 из Figma (не токены приложения: это конкретно палитра
@@ -128,6 +129,25 @@ export default function KeyRateScreen() {
 
   // Ширина SVG под цифры — впритык к их числу символов (эмпирически ~44px/символ
   // при fontSize 76 и letterSpacing -2), чтобы «%» рядом не гулял по экрану.
+  // Строка про заседания: график бэйзлайновый (см. keyRateMeetings) и может
+  // кончиться — тогда молчим про будущее, но прошедшее заседание всё равно
+  // показываем, оно уже состоялось и от полноты графика не зависит.
+  const meetingLine = useMemo(() => {
+    const last = lastMeeting();
+    const next = nextMeeting();
+    const outcome = meetingOutcome(last, history.map((p) => p.date));
+    const parts: string[] = [];
+    if (last) {
+      parts.push(
+        outcome === 'kept'
+          ? `${formatDateShort(last)} ставку сохранили`
+          : `изменена на заседании ${formatDateShort(last)}`,
+      );
+    }
+    if (next) parts.push(`следующее заседание ${formatDateShort(next)}`);
+    return parts.join(' · ');
+  }, [history]);
+
   const rateStr = formatRate(latest.rate);
   const numberW = rateStr.length * 44;
 
