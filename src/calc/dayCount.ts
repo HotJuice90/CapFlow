@@ -12,9 +12,31 @@ export function parseLocal(value: string | Date): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-/** Индекс календарного дня (целое) — стабилен к часовым поясам. */
-function dayIndex(value: string | Date): number {
-  const d = parseLocal(value);
+/**
+ * Индекс календарного дня (целое) — стабилен к часовым поясам.
+ *
+ * Для строк результат кэшируется: в расчётах одни и те же ISO-даты проходят
+ * через diffDays десятки тысяч раз (границы капитализации, контрольные точки),
+ * а каждый вызов иначе создаёт Date и уходит в Date.UTC. Кэш по строке —
+ * чистая экономия без изменения смысла: дата в строку не меняется никогда.
+ */
+const dayIndexCache = new Map<string, number>();
+
+export function dayIndex(value: string | Date): number {
+  if (typeof value === 'string') {
+    const hit = dayIndexCache.get(value);
+    if (hit !== undefined) return hit;
+    const computed = fromDate(parseLocal(value));
+    // Размер кэша ограничиваем: строки дат приходят из данных пользователя,
+    // и безлимитная карта на длинной сессии — медленная утечка.
+    if (dayIndexCache.size > 20_000) dayIndexCache.clear();
+    dayIndexCache.set(value, computed);
+    return computed;
+  }
+  return fromDate(value);
+}
+
+function fromDate(d: Date): number {
   return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
 }
 

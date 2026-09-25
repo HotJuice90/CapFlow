@@ -1,5 +1,5 @@
 import type { Asset, CalcParams, FinancialInstrument } from '@/domain/types';
-import { calculate } from './engine';
+import { accrualSeries, calculate } from './engine';
 import { diffDays, daysInYear, isLeapYear } from './dayCount';
 
 const params: CalcParams = { taxRate: 13, taxFreeLimit: 210_000, keyRate: 16 };
@@ -341,5 +341,50 @@ describe('актив, который ещё не открылся', () => {
   test('в день открытия доход появляется', () => {
     const d = calculate(future, savingsInstrument, params, '2027-01-01');
     expect(d.incomePerDay).toBeCloseTo((1_000_000 * 0.15) / 365, 4);
+  });
+});
+
+describe('accrualSeries', () => {
+  const daily: FinancialInstrument = { ...savingsInstrument, capitalization: 'capitalize' };
+  const asset: Asset = {
+    id: 'as',
+    instrumentId: 'i1',
+    amount: 1_000_000,
+    currency: 'RUB',
+    rate: 15,
+    openDate: '2024-01-01',
+    payoutPeriod: 'daily',
+    status: 'active',
+    balanceAdjustments: [{ id: 'b1', date: '2024-06-01', amount: 1_300_000 }],
+    rateAdjustments: [{ id: 'r1', date: '2024-09-01', rate: 12 }],
+  };
+
+  const dates = ['2024-03-15', '2024-07-20', '2025-01-01', '2026-02-02'];
+
+  test('даёт ровно то же, что calculate на каждую дату по отдельности', () => {
+    const series = accrualSeries(asset, daily, dates);
+    dates.forEach((d, i) => {
+      const one = calculate(asset, daily, params, d);
+      expect(series[i].accrued).toBeCloseTo(one.accrued, 6);
+      expect(series[i].balanceNow).toBeCloseTo(one.balanceNow, 6);
+      expect(series[i].currentValue).toBeCloseTo(one.currentValue, 6);
+    });
+  });
+
+  test('то же для простого процента и для срочного вклада после окончания', () => {
+    const term: Asset = { ...asset, endDate: '2025-01-01', balanceAdjustments: undefined, rateAdjustments: undefined };
+    const series = accrualSeries(term, depositInstrument, dates);
+    dates.forEach((d, i) => {
+      const one = calculate(term, depositInstrument, params, d);
+      expect(series[i].accrued).toBeCloseTo(one.accrued, 6);
+      expect(series[i].currentValue).toBeCloseTo(one.currentValue, 6);
+    });
+  });
+
+  test('повторяющиеся даты в выборке не сдвигают результат', () => {
+    const withRepeats = ['2024-03-15', '2024-03-15', '2025-01-01'];
+    const series = accrualSeries(asset, daily, withRepeats);
+    expect(series).toHaveLength(3);
+    expect(series[0].accrued).toBeCloseTo(series[1].accrued, 9);
   });
 });

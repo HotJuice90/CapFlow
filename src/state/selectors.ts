@@ -1,5 +1,5 @@
 import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, Snapshot, TaxYearRecord } from '@/domain/types';
-import { calculate, calcAssetTax, calcTax, daysInYear, diffDays, parseLocal, periodsPerYear } from '@/calc';
+import { accrualSeries, calculate, calcAssetTax, calcTax, daysInYear, diffDays, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
@@ -58,7 +58,32 @@ export function isPastYearMatured(asset: Asset, instrument: FinancialInstrument,
 }
 
 /** Активы в статусе active, развёрнутые в AssetView с расчётами. */
+/**
+ * Кэш представлений: почти каждый селектор начинает с buildAssetViews, а на
+ * одном экране их вызывается с десяток — и каждый заново прогонял движок по
+ * всем активам. Ключ — сам объект данных (WeakMap: новая версия данных после
+ * persist делает старую запись мусором автоматически) плюс календарный день,
+ * потому что от него зависят все расчёты.
+ */
+const viewsCache = new WeakMap<AppData, Map<number, AssetView[]>>();
+
 export function buildAssetViews(data: AppData, now: Date = new Date()): AssetView[] {
+  const dayKey = Math.floor(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
+  );
+  let byDay = viewsCache.get(data);
+  if (!byDay) {
+    byDay = new Map();
+    viewsCache.set(data, byDay);
+  }
+  const hit = byDay.get(dayKey);
+  if (hit) return hit;
+  const built = buildAssetViewsUncached(data, now);
+  byDay.set(dayKey, built);
+  return built;
+}
+
+function buildAssetViewsUncached(data: AppData, now: Date): AssetView[] {
   const orgById = new Map(data.organizations.map((o) => [o.id, o]));
   const instrById = new Map(data.instruments.map((i) => [i.id, i]));
 
@@ -1598,24 +1623,32 @@ export function capitalHistorySeries(data: AppData, days: HeroWindow, now: Date 
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const totalDays = Math.max(0, diffDays(start, now));
-  const out: number[] = [];
+  const dayList: Date[] = [];
   for (let k = 0; k <= totalDays; k++) {
     const day = new Date(start);
     day.setDate(day.getDate() + k);
-    let cap = 0;
-    for (const { asset, instrument, openDate, closedAt } of items) {
+    dayList.push(day);
+  }
+
+  // Как и в goalsProgress: один проход на актив вместо calculate на каждый день.
+  const out = new Array<number>(dayList.length).fill(0);
+  for (const { asset, instrument, openDate, closedAt } of items) {
+    const series = accrualSeries(asset, instrument, dayList);
+    for (let k = 0; k < dayList.length; k++) {
+      const day = dayList[k];
       if (openDate > day) continue;
       // `<=`, а не `<`: в день закрытия деньги уже ушли, актив в этот день НЕ
       // считается. Открытие же считается со своего дня включительно — иначе на
       // дне перевода капитала из вклада в новый счёт одни и те же деньги
       // попадали в сумму дважды и график давал ложный пик.
       if (closedAt && closedAt <= day) continue;
-      cap += convert(calculate(asset, instrument, data.params, day, 0).currentValue, asset.currency, data);
+      out[k] += convert(series[k].currentValue, asset.currency, data);
     }
+  }
+  for (let k = 0; k < dayList.length; k++) {
     for (const { date, amount } of freeEntries) {
-      if (date <= day) cap += amount;
+      if (date <= dayList[k]) out[k] += amount;
     }
-    out.push(cap);
   }
   // Один день в периоде (напр. единственный актив открыт сегодня) — график из
   // одной точки нарисовать нельзя и он просто исчезал. Дублируем значение:
@@ -1972,19 +2005,34 @@ export function goalsProgress(data: AppData, now: Date = new Date()): GoalProgre
   // Дневной ряд НАЧИСЛЕННОГО дохода всего портфеля (в основной валюте) —
   // та же техника посегментного прохода, что в capitalHistorySeries, только
   // берём accrued (доход), а не currentValue (тело+доход).
-  const dailyIncome: number[] = [];
-  let prevAccrued = 0;
+  // Дни считаем по КАЖДОМУ активу разом (accrualSeries), а не вызовом
+  // calculate на каждый день: тот проходит всю жизнь актива от открытия, и на
+  // длинной цели получался квадрат по дням — на ежедневной капитализации это
+  // десятки секунд на каждое изменение данных.
+  const days: Date[] = [];
   for (let k = 0; k <= totalDays; k++) {
     const day = new Date(seriesStart);
     day.setDate(day.getDate() + k);
-    let totalAccrued = 0;
-    for (const { asset, instrument, openDate, closedAt } of items) {
-      const end = closedAt && closedAt < day ? closedAt : day;
-      if (openDate > end) continue;
-      totalAccrued += convert(calculate(asset, instrument, data.params, end, 0).accrued, asset.currency, data);
+    days.push(day);
+  }
+
+  const totals = new Array<number>(days.length).fill(0);
+  for (const { asset, instrument, openDate, closedAt } of items) {
+    // После закрытия актив «замирает»: доход по нему больше не растёт, но и
+    // не пропадает из накопленного — поэтому дату зажимаем, а не выкидываем.
+    const samples = days.map((day) => (closedAt && closedAt < day ? closedAt : day));
+    const series = accrualSeries(asset, instrument, samples);
+    for (let k = 0; k < days.length; k++) {
+      if (openDate > samples[k]) continue;
+      totals[k] += convert(series[k].accrued, asset.currency, data);
     }
-    dailyIncome.push(k === 0 ? 0 : totalAccrued - prevAccrued);
-    prevAccrued = totalAccrued;
+  }
+
+  const dailyIncome: number[] = [];
+  let prevAccrued = 0;
+  for (let k = 0; k < days.length; k++) {
+    dailyIncome.push(k === 0 ? 0 : totals[k] - prevAccrued);
+    prevAccrued = totals[k];
   }
 
   const targets = new Map<string, number>(allAmount.map((g) => [g.id, convert(g.targetAmount, g.currency, data)]));

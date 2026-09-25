@@ -7,7 +7,7 @@ import type {
   PayoutPeriod,
 } from '@/domain/types';
 import { calcAssetTax } from './tax';
-import { addDays, clamp, daysInMonth, daysInYear, diffDays, parseLocal } from './dayCount';
+import { addDays, clamp, dayIndex, daysInMonth, daysInYear, diffDays, parseLocal } from './dayCount';
 
 /** Версия движка — пишется в Snapshot, чтобы история не «плыла» при смене формул. */
 export const ENGINE_VERSION = '1.1.0';
@@ -60,6 +60,16 @@ function rateTimeline(asset: Asset): RatePoint[] {
 }
 
 /** Ставка, действующая на дату `at` (последняя точка ставки не позже `at`). */
+/** То же, что rateAt, но по индексам дней — для горячего прохода walkAccrual. */
+function rateAtIdx(timeline: { idx: number; rate: number }[], at: number): number {
+  let cur = timeline[0].rate;
+  for (const p of timeline) {
+    if (p.idx <= at) cur = p.rate;
+    else break;
+  }
+  return cur;
+}
+
 function rateAt(timeline: RatePoint[], at: string | Date): number {
   let cur = timeline[0].rate;
   for (const p of timeline) {
@@ -97,53 +107,79 @@ function rateAt(timeline: RatePoint[], at: string | Date): number {
  * на стартовом теле периода) и сворачиваются в тело ровно на границе периода —
  * так же, как это делает банк.
  */
-function walkAccrual(
+/**
+ * Тот же проход, но с ВЫБОРКОЙ в нескольких точках сразу (даты по возрастанию).
+ *
+ * Нужен там, где раньше считали «с нуля на каждый день»: история капитала и
+ * прогресс целей звали calculate на каждый день периода, а каждый такой вызов
+ * сам проходит всю жизнь актива от открытия — получается квадрат по дням. При
+ * ежедневной капитализации на трёхлетнем счёте это десятки секунд.
+ *
+ * Разрезать сегмент лишней точкой безопасно: внутри сегмента ставка и тело
+ * постоянны, доход копится линейно, а сворачивание в тело происходит только на
+ * границах периодов капитализации — их набор от выборки не зависит.
+ */
+function walkAccrualAt(
   balance: BalancePoint[],
   rates: RatePoint[],
   mode: CapitalizationMode,
   payout: PayoutPeriod | undefined,
-  now: string | Date,
-): { balanceNow: number; accrued: number } {
-  const balanceAt = new Map(balance.map((p) => [p.date, p.amount]));
-  const correctionAt = new Set(balance.filter((p) => p.isCorrection).map((p) => p.date));
+  samples: number[],
+): { balanceNow: number; accrued: number }[] {
+  const lastIdx = samples[samples.length - 1];
+  const bal = balance.map((p) => ({ idx: dayIndex(p.date), amount: p.amount, isCorrection: p.isCorrection }));
+  const rts = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
 
-  const periodBoundaries: string[] = [];
+  const balanceAt = new Map(bal.map((p) => [p.idx, p.amount]));
+  const correctionAt = new Set(bal.filter((p) => p.isCorrection).map((p) => p.idx));
+
+  const boundarySet = new Set<number>();
   if (mode === 'capitalize') {
-    const ppy = periodsPerYear(payout);
-    const periodDays = 365 / ppy;
-    const openDate = balance[0].date;
+    const periodDays = 365 / periodsPerYear(payout);
+    const openIdx = bal[0].idx;
     for (let k = 1; ; k++) {
-      const d = addDays(openDate, Math.round(k * periodDays));
-      if (diffDays(d, now) < 0) break; // граница за пределами «сейчас» — дальше не нужны
-      periodBoundaries.push(d);
+      const d = openIdx + Math.round(k * periodDays);
+      if (d > lastIdx) break; // граница за пределами последней выборки — дальше не нужны
+      boundarySet.add(d);
       if (k > 100_000) break; // защита от зацикливания на аномальных данных
     }
   }
-  const periodBoundarySet = new Set(periodBoundaries);
 
   const checkpoints = [
-    ...new Set([...balance.map((p) => p.date), ...rates.map((p) => p.date), ...periodBoundaries]),
-  ].sort((a, b) => a.localeCompare(b));
+    ...new Set([...bal.map((p) => p.idx), ...rts.map((p) => p.idx), ...boundarySet, ...samples]),
+  ].sort((a, b) => a - b);
 
-  let principal = balance[0].amount;
+  let principal = bal[0].amount;
   let pending = 0; // накоплено внутри текущего периода капитализации, ещё не в теле
   let accrued = 0;
 
+  const out: { balanceNow: number; accrued: number }[] = [];
+  let sampleAt = 0;
+  const flushSamples = (upTo: number) => {
+    while (sampleAt < samples.length && samples[sampleAt] <= upTo) {
+      out.push({ balanceNow: principal + pending, accrued });
+      sampleAt++;
+    }
+  };
+
   for (let i = 0; i < checkpoints.length; i++) {
     const date = checkpoints[i];
-    if (diffDays(date, now) < 0) continue; // граница ещё не наступила — не учитываем вовсе
+    if (date > lastIdx) continue; // граница ещё не наступила — не учитываем вовсе
     const explicitAmount = balanceAt.get(date);
     if (explicitAmount !== undefined) {
       // Факт из банка перекрывает и не свёрнутые в тело проценты модели.
       principal = explicitAmount;
       pending = 0;
     }
+    // Состояние на саму точку фиксируем ДО начисления за следующий отрезок:
+    // на дату X доход накоплен по X, а не по X включительно вперёд.
+    flushSamples(date);
 
-    const daysToNow = diffDays(date, now);
-    if (daysToNow <= 0) continue; // граница ровно «сегодня» — сегмент нулевой длины
+    const daysToLast = lastIdx - date;
+    if (daysToLast <= 0) continue; // граница ровно на последней выборке — сегмент нулевой длины
     const next = checkpoints[i + 1];
-    const daysToNext = next ? diffDays(date, next) : Infinity;
-    const segmentDays = Math.min(daysToNow, daysToNext);
+    const daysToNext = next !== undefined ? next - date : Infinity;
+    const segmentDays = Math.min(daysToLast, daysToNext);
     if (segmentDays <= 0) continue;
     const segmentEndsAtNext = segmentDays === daysToNext && next !== undefined;
 
@@ -157,13 +193,13 @@ function walkAccrual(
       continue;
     }
 
-    const r = rateAt(rates, date);
+    const r = rateAtIdx(rts, date);
     if (mode === 'capitalize') {
       const growth = principal * (r / 100) * (segmentDays / 365);
       pending += growth;
       accrued += growth;
       // Отрезок ровно упирается в границу периода капитализации — сворачиваем.
-      if (segmentEndsAtNext && periodBoundarySet.has(next)) {
+      if (segmentEndsAtNext && boundarySet.has(next)) {
         principal += pending;
         pending = 0;
       }
@@ -172,10 +208,66 @@ function walkAccrual(
     }
   }
 
-  return { balanceNow: principal + pending, accrued };
+  flushSamples(lastIdx);
+  return out;
+}
+
+function walkAccrual(
+  balance: BalancePoint[],
+  rates: RatePoint[],
+  mode: CapitalizationMode,
+  payout: PayoutPeriod | undefined,
+  now: string | Date,
+): { balanceNow: number; accrued: number } {
+  return walkAccrualAt(balance, rates, mode, payout, [dayIndex(now)])[0];
+}
+
+/** Точка истории актива: то же, что даёт calculate, но только «деньги». */
+export interface AccrualPoint {
+  balanceNow: number;
+  accrued: number;
+  currentValue: number;
 }
 
 /**
+ * Значения актива СРАЗУ на список дат (по возрастанию) — за один-два прохода
+ * вместо вызова calculate на каждую дату.
+ *
+ * Считает ровно то же, что calculate: у срочного актива начисление
+ * останавливается на дате окончания, у бессрочного идёт дальше; currentValue
+ * при капитализации это тело, без неё — тело плюс начисленное рядом.
+ *
+ * Даты РАНЬШЕ открытия допустимы и дают нулевой доход с телом на открытии —
+ * вызывающий код такие дни обычно отбрасывает сам.
+ */
+export function accrualSeries(
+  asset: Asset,
+  instrument: FinancialInstrument,
+  dates: (string | Date)[],
+): AccrualPoint[] {
+  if (dates.length === 0) return [];
+  const mode: CapitalizationMode = asset.capitalization ?? instrument.capitalization ?? 'none';
+  const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
+  const timeline = balanceTimeline(asset);
+  const rates = rateTimeline(asset);
+
+  const idx = dates.map((d) => dayIndex(d));
+  const balancePts = walkAccrualAt(timeline, rates, mode, payout, idx);
+
+  const endIdx = asset.endDate ? dayIndex(asset.endDate) : undefined;
+  const needsClamp = endIdx !== undefined && idx[idx.length - 1] > endIdx;
+  const accrualPts = needsClamp
+    ? walkAccrualAt(timeline, rates, mode, payout, idx.map((i) => Math.min(i, endIdx)))
+    : balancePts;
+
+  return idx.map((_, k) => {
+    const balanceNow = balancePts[k].balanceNow;
+    const accrued = accrualPts[k].accrued;
+    return { balanceNow, accrued, currentValue: mode === 'capitalize' ? balanceNow : balanceNow + accrued };
+  });
+}
+
+/**
  * Главная функция движка. Возвращает производные значения для актива.
  * `now` — текущий момент (по умолчанию устройство).
  */
