@@ -23,6 +23,7 @@ import { calculate } from '@/calc';
 import { uid } from '@/utils/id';
 import { successBuzz, tapBuzz, warnBuzz } from '@/lib/haptics';
 import { openDatePicker } from '@/lib/datePicker';
+import { openActionSheet, type SheetAction } from '@/lib/actionSheet';
 import { t } from '@/i18n';
 
 function todayIso(): string {
@@ -221,6 +222,48 @@ export default function AssetScreen() {
   // Накопительные счета — всегда живые деньги; срочные — только если явно разрешено пополнение/снятие.
   const canAdjustBalance = !isTerm || instrument.allowTopUp || instrument.allowPartialWithdraw;
 
+  const openActions = () => {
+    tapBuzz();
+    const edit: SheetAction = {
+      key: 'edit', label: 'Редактировать', subtitle: 'Сумма, ставка, даты и условия',
+      icon: 'pencil-outline', onPress: () => router.push(`/asset/form?id=${asset.id}`),
+    };
+    const duplicate: SheetAction = {
+      key: 'duplicate', label: 'Дублировать', subtitle: 'Копия с теми же параметрами',
+      icon: 'content-copy', onPress: onDuplicate,
+    };
+    const remove: SheetAction = {
+      key: 'delete', label: 'Удалить', subtitle: 'Навсегда, без архива',
+      icon: 'trash-can-outline', danger: true, onPress: onDelete,
+    };
+    const actions: SheetAction[] = isClosed
+      ? [
+          edit,
+          {
+            key: 'restore', label: 'Вернуть в работу', subtitle: 'Снова станет активным',
+            icon: 'backup-restore', onPress: onRestore,
+          },
+          duplicate,
+          remove,
+        ]
+      : [
+          edit,
+          ...(isTerm
+            ? [{
+                key: 'extend', label: 'Продлить', subtitle: 'Поменять дату окончания',
+                icon: 'autorenew', onPress: () => router.push(`/asset/form?id=${asset.id}`),
+              }]
+            : []),
+          duplicate,
+          {
+            key: 'close', label: 'Закрыть', subtitle: 'Уйдёт в архив, деньги можно вернуть в свободные',
+            icon: 'check-circle-outline', onPress: onClose,
+          },
+          remove,
+        ];
+    openActionSheet({ title: instrument.name, actions });
+  };
+
   return (
     <ScreenBackground>
       <ScrollView
@@ -235,12 +278,11 @@ export default function AssetScreen() {
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <MaterialIcons name="arrow-back-ios-new" size={20} color={tokens.text.primary} />
           </Pressable>
-          <Pressable
-            style={styles.editBtn}
-            onPress={() => router.push(`/asset/form?id=${asset.id}`)}
-            hitSlop={8}
-          >
-            <MaterialIcons name="edit" size={20} color={tokens.text.secondary} />
+          {/* Все действия с активом — в одном шите за шестерёнкой, а не рядом
+              кнопок внизу экрана: до них надо было доскроллить, и половина
+              подписей не влезала («Дублирова…»). */}
+          <Pressable style={styles.editBtn} onPress={openActions} hitSlop={8}>
+            <MaterialCommunityIcons name="cog-outline" size={22} color={tokens.text.secondary} />
           </Pressable>
         </View>
 
@@ -377,7 +419,7 @@ export default function AssetScreen() {
             {/* «На сегодня» — в заголовке, период — под числом тем же видом, что
                 у закрытого: «откуда → докуда · сколько дней». Отдельная строка
                 над суммой была лишней: заголовок и так говорит, что это. */}
-            <Text style={[styles.bigValue, styles.bigValuePositive]} numberOfLines={1} adjustsFontSizeToFit>
+            <Text style={[styles.incomeValue, styles.bigValuePositive]} numberOfLines={1} adjustsFontSizeToFit>
               {formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
             </Text>
             <Text style={styles.bigCaption}>
@@ -542,25 +584,6 @@ export default function AssetScreen() {
           </Pressable>
         ) : null}
 
-        {/* Действия — в самом низу, иконки одного сета (MCI outline).
-            Баланс/ставка правятся через виджет «История» выше (свайп) или
-            тапом по сумме/ставке в шапке — отдельные кнопки тут избыточны. */}
-        {isClosed ? (
-          <View style={styles.actionsRow}>
-            <ActionItem icon="backup-restore" label="Вернуть" onPress={onRestore} />
-            <ActionItem icon="content-copy" label="Дублировать" onPress={onDuplicate} />
-            <ActionItem icon="trash-can-outline" label="Удалить" danger onPress={onDelete} />
-          </View>
-        ) : (
-          <View style={styles.actionsRow}>
-            <ActionItem icon="content-copy" label="Дублировать" onPress={onDuplicate} />
-            {isTerm ? (
-              <ActionItem icon="autorenew" label="Продлить" onPress={() => router.push(`/asset/form?id=${asset.id}`)} />
-            ) : null}
-            <ActionItem icon="check-circle-outline" label="Закрыть" onPress={onClose} />
-            <ActionItem icon="trash-can-outline" label="Удалить" danger onPress={onDelete} />
-          </View>
-        )}
       </ScrollView>
     </ScreenBackground>
   );
@@ -729,30 +752,6 @@ function TimelineRow({
   );
 }
 
-function ActionItem({
-  icon,
-  label,
-  onPress,
-  danger,
-}: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  label: string;
-  onPress: () => void;
-  danger?: boolean;
-}) {
-  const color = danger ? tokens.semantic.negative : tokens.accent.base;
-  return (
-    <Pressable style={({ pressed }) => [styles.actionItem, pressed && { opacity: 0.6 }]} onPress={onPress}>
-      <View style={[styles.actionIcon, danger && styles.actionIconDanger]}>
-        <MaterialCommunityIcons name={icon} size={20} color={color} />
-      </View>
-      <Text style={[styles.actionItemLabel, danger && { color: tokens.semantic.negative }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const SOFT_SHADOW = tokens.shadow.subtle;
 
 const styles = StyleSheet.create({
@@ -837,6 +836,9 @@ const styles = StyleSheet.create({
   },
   dayChipText: { fontSize: 12, lineHeight: 14, fontWeight: '600', color: tokens.value.earned },
   bigValue: { fontSize: 30, lineHeight: 34, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.6 },
+  // Доход — ниже по весу, чем сумма на счёте в карточке выше (32/600): на 30/700
+  // зелёное число перетягивало на себя экран, хотя главное тут — сколько денег.
+  incomeValue: { fontSize: 26, lineHeight: 30, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.5 },
   bigValuePositive: { color: tokens.value.earned },
   bigCaption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 4 },
   tilesRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
@@ -905,17 +907,4 @@ const styles = StyleSheet.create({
   bankHint: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: 4 },
   bankOpen: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   bankOpenText: { fontSize: 14, fontWeight: '600', color: tokens.accent.base },
-  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: tokens.spacing.xl, paddingHorizontal: 4 },
-  actionItem: { flex: 1, alignItems: 'center', gap: 6 },
-  actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 17,
-    backgroundColor: tokens.surface.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...boxShadow(SOFT_SHADOW),
-  },
-  actionIconDanger: { backgroundColor: hexToRgba(tokens.semantic.negative, 0.12) },
-  actionItemLabel: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 });
