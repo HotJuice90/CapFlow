@@ -114,7 +114,7 @@ export default function CapitalScreen() {
             {formatMoney(balance, { currency: cur, kopecks: 'hide' })}
           </Text>
           {share > 0 ? (
-            <Text style={styles.heroSub}>{Math.round(share * 100)}% всего капитала · без ставки</Text>
+            <Text style={styles.heroSub}>{Math.round(share * 100)}% всего капитала</Text>
           ) : null}
         </View>
 
@@ -286,16 +286,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: tokens.surface.hairline,
   },
-  amountSign: { fontFamily: font.semibold, fontSize: 30, color: tokens.semantic.positive, marginRight: 4 },
+  // Сумма ввода заметно мельче баланса (40): это поле, а не главное число —
+  // на 30 они спорили друг с другом.
+  amountSign: { fontFamily: font.semibold, fontSize: 22, color: tokens.semantic.positive, marginRight: 4 },
   amountSignOut: { color: tokens.semantic.negative },
   amountInput: {
     flex: 1,
     fontFamily: font.semibold,
-    fontSize: 30,
+    fontSize: 22,
     color: tokens.text.primary,
     paddingVertical: 0,
   },
-  amountCur: { fontFamily: font.medium, fontSize: 22, color: tokens.text.tertiary },
+  amountCur: { fontFamily: font.medium, fontSize: 18, color: tokens.text.tertiary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: tokens.spacing.md },
   dateChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
