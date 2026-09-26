@@ -1091,9 +1091,11 @@ export function payoutEventsForMonth(data: AppData, year: number, month: number,
 }
 
 export interface NearestEvent {
-  /** `maturity` — кончается срок, деньги освобождаются и требуют решения.
+  /** `overdue` — срок УЖЕ вышел, а актив не закрыт: деньги лежат без ставки,
+   *  и это единственное состояние, где промедление стоит денег.
+   *  `maturity` — срок кончается, деньги освободятся и потребуют решения.
    *  `payout` — плановое начисление процентов, делать ничего не нужно. */
-  kind: 'maturity' | 'payout';
+  kind: 'overdue' | 'maturity' | 'payout';
   date: string; // YYYY-MM-DD
   assetId: string;
   /** Пользовательское название актива, если задано, иначе имя инструмента. */
@@ -1101,9 +1103,10 @@ export interface NearestEvent {
   /** Для maturity — сколько освободится, для payout — размер начисления. */
   amount: number;
   currency: CurrencyCode;
+  /** Дней до события. Для `overdue` ОТРИЦАТЕЛЬНОЕ — столько дней назад срок вышел. */
   daysRemaining: number;
   /** 0..1 — сколько уже прошло: срока для maturity, периода начисления для
-   *  payout. Для кольца обратного отсчёта на главной. */
+   *  payout. Для кольца обратного отсчёта на главной; у `overdue` всегда 1. */
   progress: number;
 }
 
@@ -1116,6 +1119,10 @@ export interface NearestEvent {
  *
  * Выплаты смотрим на два месяца вперёд: одного мало — 31-го числа ближайшая
  * ежемесячная выплата уже в следующем месяце.
+ *
+ * Просроченное перебивает всё остальное, даже если завтра выплата: пока вклад
+ * с вышедшим сроком не закрыт, деньги лежат под 0%, и никакое будущее событие
+ * не важнее этого. Из нескольких просроченных берём самый давний.
  */
 export function nearestEvent(data: AppData, now: Date = new Date()): NearestEvent | null {
   const today = isoDate(now);
@@ -1147,6 +1154,25 @@ export function nearestEvent(data: AppData, now: Date = new Date()): NearestEven
     if (e.date < today) return;
     if (!best || e.date < best.date) best = e;
   };
+
+  // Просроченные — отдельным проходом и с приоритетом: обычный `take`
+  // отбрасывает всё, что раньше сегодня, а тут прошедшая дата и есть суть.
+  let overdue: NearestEvent | null = null;
+  for (const e of calendarEvents(data, now)) {
+    if (e.date >= today) continue;
+    const candidate: NearestEvent = {
+      kind: 'overdue',
+      date: e.date,
+      assetId: e.assetId,
+      name: e.title || e.instrumentName,
+      amount: e.amount,
+      currency: e.currency,
+      daysRemaining: -diffDays(parseLocal(e.date), now),
+      progress: 1,
+    };
+    if (!overdue || candidate.date < overdue.date) overdue = candidate;
+  }
+  if (overdue) return overdue;
 
   for (const e of calendarEvents(data, now)) {
     take({
@@ -1220,8 +1246,19 @@ export function monthlyIncomeForecast(data: AppData, year: number, month: number
   const prevIncome = new Map<string, number>(); // incomePerDay актива на предыдущий валидный день
   const out: ForecastDay[] = [];
 
+  // Дни месяца считаем по каждому активу одним проходом (см. accrualSeries):
+  // calculate на каждый день месяца — тот же квадрат, что был в целях.
+  const monthDays: Date[] = [];
+  for (let d = 1; d <= daysInMonth; d++) monthDays.push(new Date(year, month, d));
+  const seriesByAsset = new Map<string, ReturnType<typeof accrualSeries>>();
+  for (const asset of assets) {
+    const instrument = instrById.get(asset.instrumentId);
+    if (!instrument) continue;
+    seriesByAsset.set(asset.id, accrualSeries(asset, instrument, monthDays));
+  }
+
   for (let d = 1; d <= daysInMonth; d++) {
-    const day = new Date(year, month, d);
+    const day = monthDays[d - 1];
     let total = 0;
     const changes: ForecastDayChange[] = [];
 
@@ -1236,17 +1273,19 @@ export function monthlyIncomeForecast(data: AppData, year: number, month: number
         continue;
       }
 
-      const derived = calculate(asset, instrument, data.params, day);
-      total += convert(derived.incomePerDay, asset.currency, data);
+      // finalAmount нужен ровно один раз — в день окончания срока; ради него
+      // одного гонять полный calculate на каждый день месяца незачем.
+      const incomePerDay = seriesByAsset.get(asset.id)![d - 1].incomePerDay;
+      total += convert(incomePerDay, asset.currency, data);
 
       const org = orgById.get(instrument.organizationId);
       const color = org?.color ?? tokens.accent.base;
       const isEndDay = end !== null && day.getTime() === end.getTime();
       const prev = prevIncome.get(asset.id);
-      const capStepped = prev !== undefined && Math.abs(derived.incomePerDay - prev) > 1e-9;
+      const capStepped = prev !== undefined && Math.abs(incomePerDay - prev) > 1e-9;
 
       if (isEndDay) {
-        const amount = derived.finalAmount ?? asset.amount;
+        const amount = calculate(asset, instrument, data.params, day).finalAmount ?? asset.amount;
         changes.push({
           assetId: asset.id, instrumentName: instrument.name, title: asset.title,
           typeId: instrument.typeId, color, currency: asset.currency, kind: 'end',
@@ -1256,11 +1295,11 @@ export function monthlyIncomeForecast(data: AppData, year: number, month: number
         changes.push({
           assetId: asset.id, instrumentName: instrument.name, title: asset.title,
           typeId: instrument.typeId, color, currency: asset.currency, kind: 'capStep',
-          amount: derived.incomePerDay, amountBase: convert(derived.incomePerDay, asset.currency, data),
+          amount: incomePerDay, amountBase: convert(incomePerDay, asset.currency, data),
         });
       }
 
-      prevIncome.set(asset.id, derived.incomePerDay);
+      prevIncome.set(asset.id, incomePerDay);
     }
 
     out.push({ date: isoDate(day), total, changes });
@@ -1827,11 +1866,30 @@ function incomeRunRateOn(data: AppData, day: Date): number {
 
 /** История текущего дневного дохода: учитывает пополнения/снятия и изменения ставок. */
 export function incomeRunRateSeries(data: AppData, days = 30, now: Date = new Date()): number[] {
-  const series: number[] = [];
+  const dayList: Date[] = [];
   for (let k = days - 1; k >= 0; k--) {
     const day = new Date(now);
     day.setDate(day.getDate() - k);
-    series.push(incomeRunRateOn(data, day));
+    dayList.push(day);
+  }
+
+  // Один проход на актив вместо calculate на каждый день (см. accrualSeries).
+  const instrById = new Map(data.instruments.map((i) => [i.id, i]));
+  const series = new Array<number>(dayList.length).fill(0);
+  for (const a of data.assets) {
+    if (a.status !== 'active') continue;
+    const instrument = instrById.get(a.instrumentId);
+    if (!instrument) continue;
+    const points = accrualSeries(a, instrument, dayList);
+    for (let k = 0; k < dayList.length; k++) {
+      const day = dayList[k];
+      // Те же границы, что и раньше: до открытия и после окончания актив в
+      // темп не входит, а активы, просроченные с прошлого года, — вообще.
+      if (isPastYearMatured(a, instrument, day)) continue;
+      if (parseLocal(a.openDate) > day) continue;
+      if (a.endDate && parseLocal(a.endDate) < day) continue;
+      series[k] += convert(points[k].incomePerDay, a.currency, data);
+    }
   }
   return series;
 }

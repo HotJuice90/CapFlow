@@ -368,6 +368,7 @@ describe('accrualSeries', () => {
       expect(series[i].accrued).toBeCloseTo(one.accrued, 6);
       expect(series[i].balanceNow).toBeCloseTo(one.balanceNow, 6);
       expect(series[i].currentValue).toBeCloseTo(one.currentValue, 6);
+      expect(series[i].incomePerDay).toBeCloseTo(one.incomePerDay, 6);
     });
   });
 

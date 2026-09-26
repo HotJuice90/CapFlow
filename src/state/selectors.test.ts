@@ -676,10 +676,26 @@ describe('nearestEvent', () => {
     expect(e!.progress).toBeLessThanOrEqual(1);
   });
 
-  it('прошедшие даты не берём', () => {
+  it('вышедший срок — это событие «просрочено», а не пустота', () => {
     const past = { ...deposit, endDate: '2026-03-01' };
     const e = nearestEvent({ ...base, assets: [past] }, now);
-    expect(e).toBeNull();
+    expect(e!.kind).toBe('overdue');
+    expect(e!.date).toBe('2026-03-01');
+    expect(e!.daysRemaining).toBe(-9);
+    expect(e!.progress).toBe(1);
+  });
+
+  it('просроченное важнее будущей выплаты', () => {
+    const past = { ...deposit, endDate: '2026-03-01' };
+    const e = nearestEvent({ ...base, assets: [savings, past] }, now);
+    expect(e!.kind).toBe('overdue');
+  });
+
+  it('из нескольких просроченных берём самый давний', () => {
+    const older = { ...deposit, id: 'ad2', endDate: '2026-01-10' };
+    const past = { ...deposit, endDate: '2026-03-01' };
+    const e = nearestEvent({ ...base, assets: [past, older] }, now);
+    expect(e!.date).toBe('2026-01-10');
   });
 
   it('в конце месяца заглядывает в следующий', () => {

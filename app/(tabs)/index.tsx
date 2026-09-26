@@ -264,6 +264,9 @@ export default function HomeScreen() {
    * тоже событие, просто за ним не следует обязательного действия.
    */
   const nearestEvent = useMemo(() => nearestEventOf(data), [data]);
+  // Просроченное — единственное, что требует действия, поэтому и цветом
+  // отличается от спокойных «скоро выплата» / «скоро конец срока».
+  const eventTone = nearestEvent?.kind === 'overdue' ? tokens.semantic.warning : tokens.accent.base;
 
   const sort = SORTS[sortIdx];
   const sortedViews = useMemo(() => sortViews(views, sort.key), [views, sort.key]);
@@ -461,7 +464,7 @@ export default function HomeScreen() {
                 никакого обязательного действия не следует. */}
             {nearestEvent ? (
               <Pressable
-                style={styles.heroEventPill}
+                style={[styles.heroEventPill, nearestEvent.kind === 'overdue' && styles.heroEventPillAlert]}
                 onPress={() => router.push(`/asset/${nearestEvent.assetId}`)}
               >
                 {/* Кольцо обратного отсчёта — как в списке событий: для срока
@@ -471,7 +474,7 @@ export default function HomeScreen() {
                 <View style={styles.heroEventRing}>
                   <Donut
                     segments={[
-                      { value: nearestEvent.progress, color: tokens.accent.base },
+                      { value: nearestEvent.progress, color: eventTone },
                       { value: 1 - nearestEvent.progress, color: tokens.surface.neutral },
                     ]}
                     size={40}
@@ -479,24 +482,38 @@ export default function HomeScreen() {
                   />
                   <View style={styles.heroEventRingIcon} pointerEvents="none">
                     <MaterialCommunityIcons
-                      name={nearestEvent.kind === 'maturity' ? 'flag-outline' : 'cash'}
+                      name={
+                        nearestEvent.kind === 'overdue'
+                          ? 'alert-circle-outline'
+                          : nearestEvent.kind === 'maturity'
+                            ? 'flag-outline'
+                            : 'cash'
+                      }
                       size={15}
-                      color={tokens.accent.base}
+                      color={eventTone}
                     />
                   </View>
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.heroEventLabel}>
-                    {nearestEvent.kind === 'maturity' ? 'Окончание срока' : 'Выплата процентов'}
+                  <Text style={[styles.heroEventLabel, nearestEvent.kind === 'overdue' && { color: eventTone }]}>
+                    {nearestEvent.kind === 'overdue'
+                      ? 'Срок истёк — деньги не работают'
+                      : nearestEvent.kind === 'maturity'
+                        ? 'Окончание срока'
+                        : 'Выплата процентов'}
                   </Text>
                   <Text style={styles.heroEventName} numberOfLines={1}>{nearestEvent.name}</Text>
                 </View>
                 <View style={styles.heroEventWhen}>
-                  <Text style={styles.heroEventDate}>{formatDateShort(nearestEvent.date)}</Text>
+                  <Text style={[styles.heroEventDate, { color: eventTone }]}>
+                    {formatDateShort(nearestEvent.date)}
+                  </Text>
                   <Text style={styles.heroEventDays}>
                     {nearestEvent.daysRemaining === 0
                       ? 'сегодня'
-                      : `${nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)}`}
+                      : nearestEvent.daysRemaining < 0
+                        ? `${-nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)} назад`
+                        : `${nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)}`}
                   </Text>
                 </View>
               </Pressable>
@@ -960,6 +977,7 @@ const styles = StyleSheet.create({
   // Тонирована акцентом, в отличие от белых плиток фактов над ней: плитки
   // сообщают состояние, а эта строка — единственное, что может потребовать
   // действия, и должна отличаться от них не только содержанием.
+  heroEventPillAlert: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.12) },
   heroEventPill: {
     flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md,
     backgroundColor: hexToRgba(tokens.accent.base, 0.07),

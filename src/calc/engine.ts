@@ -227,6 +227,8 @@ export interface AccrualPoint {
   balanceNow: number;
   accrued: number;
   currentValue: number;
+  /** Доход за день на эту дату. До дня открытия — 0, как и в calculate. */
+  incomePerDay: number;
 }
 
 /**
@@ -252,6 +254,7 @@ export function accrualSeries(
   const rates = rateTimeline(asset);
 
   const idx = dates.map((d) => dayIndex(d));
+  const rateIdx = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
   const balancePts = walkAccrualAt(timeline, rates, mode, payout, idx);
 
   const endIdx = asset.endDate ? dayIndex(asset.endDate) : undefined;
@@ -260,10 +263,18 @@ export function accrualSeries(
     ? walkAccrualAt(timeline, rates, mode, payout, idx.map((i) => Math.min(i, endIdx)))
     : balancePts;
 
-  return idx.map((_, k) => {
+  const openIdx = dayIndex(asset.openDate);
+  return idx.map((sampleIdx, k) => {
     const balanceNow = balancePts[k].balanceNow;
     const accrued = accrualPts[k].accrued;
-    return { balanceNow, accrued, currentValue: mode === 'capitalize' ? balanceNow : balanceNow + accrued };
+    const rate = rateAtIdx(rateIdx, sampleIdx);
+    const started = sampleIdx >= openIdx;
+    return {
+      balanceNow,
+      accrued,
+      currentValue: mode === 'capitalize' ? balanceNow : balanceNow + accrued,
+      incomePerDay: started ? (balanceNow * (rate / 100)) / daysInYear(dates[k]) : 0,
+    };
   });
 }
 
