@@ -366,89 +366,108 @@ export default function AssetScreen() {
         ) : null}
 
         {outcome && !isClosed ? (
-          // «Доход» — живой актив: сколько уже, сколько в день, чем кончится.
-          // Прогнозы — со знаком «≈», налог — одной строкой с тем, КТО платит.
+          // «Доход» — живой актив. Одно крупное число как акцент (сколько уже
+          // заработано), дневной доход — чипом у заголовка, прогнозы плитками.
+          // Строки «подпись — значение» одинакового веса читались как отчёт
+          // из бухгалтерии: всё важно одинаково, значит не важно ничего.
           <Card style={styles.finCard}>
-            <Text style={styles.finTitle}>Доход</Text>
-            <OutcomeRow
-              label="Уже заработано"
-              value={formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
-              sub={`с ${formatDateShort(asset.openDate)} · ${outcome.days} ${pluralDays(outcome.days)}`}
-              tone="positive"
-            />
-            {derived.incomePerDay > 0 ? (
-              <OutcomeRow
-                label="Сейчас в день"
-                value={`+${formatMoney(derived.incomePerDay, { currency: cur })}`}
-                tone="positive"
-              />
-            ) : null}
-            <View style={styles.outcomeDivider} />
+            <View style={styles.blockHead}>
+              <Text style={[styles.finTitle, { marginBottom: 0 }]}>Доход</Text>
+              {derived.incomePerDay > 0 ? (
+                <View style={styles.dayChip}>
+                  <Text style={styles.dayChipText}>+{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })} в день</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={[styles.bigValue, styles.bigValuePositive]} numberOfLines={1} adjustsFontSizeToFit>
+              {formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
+            </Text>
+            <Text style={styles.bigCaption}>
+              заработано с {formatDateShort(asset.openDate)} · {outcome.days} {pluralDays(outcome.days)}
+            </Text>
+
             {isTerm && outcome.termIncome !== undefined && outcome.atMaturity !== undefined ? (
-              <>
-                <OutcomeRow
-                  label="За весь срок"
+              <View style={styles.tilesRow}>
+                <MiniTile
+                  label="за весь срок"
                   value={`+${formatMoney(outcome.termIncome, { currency: cur, kopecks: 'hide' })}`}
                   tone="positive"
                 />
-                <OutcomeRow
-                  label={asset.endDate ? `Придёт ${formatDateShort(asset.endDate)}` : 'Придёт в конце срока'}
+                <MiniTile
+                  label={asset.endDate ? `придёт ${formatDateShort(asset.endDate)}` : 'придёт в конце'}
                   value={formatMoney(outcome.atMaturity, { currency: cur, kopecks: 'hide' })}
-                  strong
+                  accent
                 />
-                <Text style={styles.taxNote}>
-                  Налог ≈ {formatMoney(outcome.termTax ?? 0, { currency: cur, kopecks: 'hide' })} —{' '}
-                  {outcome.withheld ? 'удержит площадка' : 'заплатить по уведомлению ФНС'}
-                </Text>
-              </>
+              </View>
             ) : (
-              <>
-                <OutcomeRow
-                  label="За месяц"
-                  value={`≈ +${formatMoney(derived.forecastNextMonth ?? 0, { currency: cur, kopecks: 'hide' })}`}
+              <View style={styles.tilesRow}>
+                <MiniTile
+                  label="≈ за месяц"
+                  value={`+${formatMoney(derived.forecastNextMonth ?? 0, { currency: cur, kopecks: 'hide' })}`}
                   tone="positive"
                 />
-                <OutcomeRow
-                  label="За год"
-                  value={`≈ +${formatMoney(derived.forecastNextYear ?? 0, { currency: cur, kopecks: 'hide' })}`}
+                <MiniTile
+                  label="≈ за год"
+                  value={`+${formatMoney(derived.forecastNextYear ?? 0, { currency: cur, kopecks: 'hide' })}`}
                   tone="positive"
                 />
-                <Text style={styles.taxNote}>
-                  Налог с заработанного ≈ {formatMoney(Math.max(0, outcome.tax - outcome.taxPaid), { currency: cur, kopecks: 'hide' })} —{' '}
-                  {outcome.withheld ? 'удержит площадка' : 'заплатить по уведомлению ФНС'}
-                  {outcome.taxPaid > 0 ? ` · уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : ''}
-                </Text>
-              </>
+              </View>
             )}
+
+            <TaxLine
+              amount={formatMoney(
+                isTerm && outcome.termTax !== undefined ? outcome.termTax : Math.max(0, outcome.tax - outcome.taxPaid),
+                { currency: cur, kopecks: 'hide' },
+              )}
+              approx
+              who={outcome.withheld ? 'удержит площадка' : 'по уведомлению ФНС'}
+              extra={outcome.taxPaid > 0 ? `уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : undefined}
+            />
           </Card>
         ) : null}
 
         {outcome && isClosed ? (
-          // «Итог» — закрытый актив: ни ставки к КС, ни дохода в день, ни
-          // прогнозов. Только то, что уже произошло с деньгами.
+          // «Итог» — закрытый актив. Акцент — сколько вернулось, под ним из
+          // чего сложилось, внизу срок и ставка чипами. Ни ставки к КС, ни
+          // дохода в день, ни прогнозов — только то, что уже произошло.
           <Card style={styles.finCard}>
             <Text style={styles.finTitle}>Итог</Text>
-            <OutcomeRow label="Вложено" value={formatMoney(outcome.invested, { currency: cur, kopecks: 'hide' })} />
-            <OutcomeRow
-              label="Заработано"
-              value={`+${formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}`}
-              tone="positive"
-            />
-            <OutcomeRow
-              label="Вернулось на счёт"
-              value={formatMoney(outcome.payout, { currency: cur, kopecks: 'hide' })}
-              strong
-            />
-            <Text style={styles.taxNote}>
-              {outcome.withheld
-                ? `Налог ${formatMoney(outcome.tax, { currency: cur, kopecks: 'hide' })} удержан площадкой`
-                : `Налог ${formatMoney(outcome.tax, { currency: cur, kopecks: 'hide' })} — по уведомлению ФНС`}
+            <Text style={styles.bigValue} numberOfLines={1} adjustsFontSizeToFit>
+              {formatMoney(outcome.payout, { currency: cur, kopecks: 'hide' })}
             </Text>
-            <View style={styles.outcomeDivider} />
-            <Text style={styles.outcomeMeta}>
-              {formatDateShort(asset.openDate)}
-              {closedIso ? ` → ${formatDateShort(closedIso)}` : ''} · {outcome.days} {pluralDays(outcome.days)} · {formatPercent(derived.currentRate)}
+            <Text style={styles.bigCaption}>
+              вернулось на счёт{closedIso ? ` ${formatDateShort(closedIso)}` : ''}
             </Text>
+
+            <View style={styles.tilesRow}>
+              <MiniTile label="вложено" value={formatMoney(outcome.invested, { currency: cur, kopecks: 'hide' })} />
+              <MiniTile
+                label="заработано"
+                value={`+${formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}`}
+                tone="positive"
+                accent
+              />
+            </View>
+
+            <TaxLine
+              amount={formatMoney(outcome.tax, { currency: cur, kopecks: 'hide' })}
+              who={outcome.withheld ? 'удержан площадкой' : 'по уведомлению ФНС'}
+            />
+
+            <View style={styles.metaChips}>
+              <View style={styles.metaChip}>
+                <MaterialCommunityIcons name="calendar-range" size={13} color={tokens.text.secondary} />
+                <Text style={styles.metaChipText}>
+                  {formatDateShort(asset.openDate)}{closedIso ? ` → ${formatDateShort(closedIso)}` : ''}
+                </Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{outcome.days} {pluralDays(outcome.days)}</Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Text style={styles.metaChipText}>{formatPercent(derived.currentRate)}</Text>
+              </View>
+            </View>
           </Card>
         ) : null}
 
@@ -540,36 +559,44 @@ export default function AssetScreen() {
   );
 }
 
-/** Строка «подпись — значение»: читается сверху вниз, без трёх колонок с
- *  обрезанными подписями («Доход за …», «если ничего не …»). */
-function OutcomeRow({
+/** Плитка прогноза/составляющей. `accent` — мягкая зелёная подложка для того
+ *  числа, ради которого человек сюда пришёл («придёт», «заработано»). */
+function MiniTile({
   label,
   value,
-  sub,
   tone,
-  strong,
+  accent,
 }: {
   label: string;
   value: string;
-  sub?: string;
   tone?: 'positive';
-  strong?: boolean;
+  accent?: boolean;
 }) {
   return (
-    <View style={styles.outcomeRow}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[styles.outcomeLabel, strong && styles.outcomeLabelStrong]}>{label}</Text>
-        {sub ? <Text style={styles.outcomeSub}>{sub}</Text> : null}
-      </View>
+    <View style={[styles.tile, accent && styles.tileAccent]}>
+      <Text style={styles.tileLabel} numberOfLines={1}>{label}</Text>
       <Text
-        style={[
-          styles.outcomeValue,
-          tone === 'positive' && styles.outcomeValuePositive,
-          strong && styles.outcomeValueStrong,
-        ]}
+        style={[styles.tileValue, tone === 'positive' && styles.tileValuePositive]}
         numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
       >
         {value}
+      </Text>
+    </View>
+  );
+}
+
+/** Налог — строкой с иконкой: сумма и КТО платит, а не предложением оранжевым текстом. */
+function TaxLine({ amount, who, approx, extra }: { amount: string; who: string; approx?: boolean; extra?: string }) {
+  return (
+    <View style={styles.taxLine}>
+      <View style={styles.taxIcon}>
+        <MaterialCommunityIcons name="percent" size={13} color={tokens.semantic.warning} />
+      </View>
+      <Text style={styles.taxText}>
+        Налог <Text style={styles.taxAmount}>{approx ? '≈ ' : ''}{amount}</Text> · {who}
+        {extra ? ` · ${extra}` : ''}
       </Text>
     </View>
   );
@@ -774,16 +801,49 @@ const styles = StyleSheet.create({
   finCard: { marginBottom: tokens.spacing.lg, ...boxShadow(SOFT_SHADOW) },
   finTitle: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36, marginBottom: tokens.spacing.lg },
 
-  outcomeRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 7 },
-  outcomeLabel: { fontSize: 14, lineHeight: 16, color: tokens.text.secondary },
-  outcomeLabelStrong: { color: tokens.text.primary, fontWeight: '600' },
-  outcomeSub: { fontSize: tokens.typography.hint, lineHeight: 14, color: tokens.text.tertiary, marginTop: 2 },
-  outcomeValue: { fontSize: 16, lineHeight: 18, fontWeight: '600', color: tokens.text.primary },
-  outcomeValuePositive: { color: tokens.semantic.positive },
-  outcomeValueStrong: { fontSize: 18, lineHeight: 20, fontWeight: '700' },
-  outcomeDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sm },
-  outcomeMeta: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
-  taxNote: { fontSize: tokens.typography.hint, lineHeight: 16, color: tokens.semantic.warning, marginTop: tokens.spacing.sm },
+  blockHead: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: tokens.spacing.md,
+  },
+  dayChip: {
+    backgroundColor: hexToRgba(tokens.semantic.positive, 0.12),
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.tight,
+    paddingVertical: 5,
+  },
+  dayChipText: { fontSize: 12, lineHeight: 14, fontWeight: '600', color: tokens.semantic.positive },
+  bigValue: { fontSize: 30, lineHeight: 34, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.6 },
+  bigValuePositive: { color: tokens.semantic.positive },
+  bigCaption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 4 },
+  tilesRow: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.lg },
+  tile: {
+    flex: 1, minWidth: 0,
+    backgroundColor: '#F9FAFF',
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.md,
+  },
+  tileAccent: { backgroundColor: hexToRgba(tokens.semantic.positive, 0.1) },
+  tileLabel: { fontSize: tokens.typography.hint, lineHeight: 14, color: tokens.text.secondary },
+  tileValue: { fontSize: 17, lineHeight: 20, fontWeight: '600', color: tokens.text.primary, marginTop: 6 },
+  tileValuePositive: { color: tokens.semantic.positive },
+  taxLine: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: tokens.spacing.md },
+  taxIcon: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: hexToRgba(tokens.semantic.warning, 0.14),
+    alignItems: 'center', justifyContent: 'center',
+  },
+  taxText: { flex: 1, fontSize: 12, lineHeight: 16, color: tokens.text.secondary },
+  taxAmount: { fontWeight: '700', color: tokens.semantic.warning },
+  metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: tokens.spacing.md },
+  metaChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: tokens.surface.neutral,
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.tight,
+    paddingVertical: 5,
+  },
+  metaChipText: { fontSize: 12, lineHeight: 14, color: tokens.text.secondary },
 
   historyCard: { paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   historyHeader: { paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
