@@ -367,35 +367,33 @@ export default function AssetScreen() {
           // из бухгалтерии: всё важно одинаково, значит не важно ничего.
           <Card style={styles.finCard}>
             <View style={styles.blockHead}>
-              <Text style={[styles.finTitle, { marginBottom: 0 }]}>Доход</Text>
+              <Text style={[styles.finTitle, { marginBottom: 0 }]}>Доход на сегодня</Text>
               {derived.incomePerDay > 0 ? (
                 <View style={styles.dayChip}>
                   <Text style={styles.dayChipText}>+{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })} в день</Text>
                 </View>
               ) : null}
             </View>
-            {/* За что эта сумма — подписью НАД числом, как «На счёте» в карточке
-                выше. Мелким текстом под ним период терялся, и крупное зелёное
-                число читалось как «доход вообще» непонятно за какой срок. */}
-            <Text style={styles.bigLabel}>
-              Заработано за {outcome.days} {pluralDays(outcome.days)}
-            </Text>
+            {/* «На сегодня» — в заголовке, период — под числом тем же видом, что
+                у закрытого: «откуда → докуда · сколько дней». Отдельная строка
+                над суммой была лишней: заголовок и так говорит, что это. */}
             <Text style={[styles.bigValue, styles.bigValuePositive]} numberOfLines={1} adjustsFontSizeToFit>
               {formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
             </Text>
-            <Text style={styles.bigCaption}>с {formatDateShort(asset.openDate)}</Text>
+            <Text style={styles.bigCaption}>
+              {formatDateShort(asset.openDate)} → сегодня · {outcome.days} {pluralDays(outcome.days)}
+            </Text>
 
             {isTerm && outcome.termIncome !== undefined && outcome.atMaturity !== undefined ? (
               <View style={styles.tilesRow}>
                 <MiniTile
                   label="за весь срок"
                   value={`+${formatMoney(outcome.termIncome, { currency: cur, kopecks: 'hide' })}`}
-                  tone="positive"
                 />
                 <MiniTile
                   label={asset.endDate ? `придёт ${formatDateShort(asset.endDate)}` : 'придёт в конце'}
                   value={formatMoney(outcome.atMaturity, { currency: cur, kopecks: 'hide' })}
-                  accent
+                  tone="brand"
                 />
               </View>
             ) : (
@@ -403,12 +401,10 @@ export default function AssetScreen() {
                 <MiniTile
                   label="≈ за месяц"
                   value={`+${formatMoney(derived.forecastNextMonth ?? 0, { currency: cur, kopecks: 'hide' })}`}
-                  tone="positive"
                 />
                 <MiniTile
                   label="≈ за год"
                   value={`+${formatMoney(derived.forecastNextYear ?? 0, { currency: cur, kopecks: 'hide' })}`}
-                  tone="positive"
                 />
               </View>
             )}
@@ -570,8 +566,12 @@ export default function AssetScreen() {
   );
 }
 
-/** Плитка прогноза/составляющей. `accent` — мягкая зелёная подложка для того
- *  числа, ради которого человек сюда пришёл («придёт», «заработано»). */
+/**
+ * Плитка прогноза/составляющей. Цвета — по правилу, уже принятому в аналитике:
+ * зелёным только ФАКТ (заработанное), прогноз — нейтральным. `brand` — синий
+ * акцент для ключевой прогнозной суммы («придёт»), `accent` + positive —
+ * зелёная подложка для фактического заработка у закрытого актива.
+ */
 function MiniTile({
   label,
   value,
@@ -580,14 +580,14 @@ function MiniTile({
 }: {
   label: string;
   value: string;
-  tone?: 'positive';
+  tone?: 'positive' | 'brand';
   accent?: boolean;
 }) {
   return (
-    <View style={[styles.tile, accent && styles.tileAccent]}>
+    <View style={[styles.tile, accent && styles.tileAccent, tone === 'brand' && styles.tileBrand]}>
       <Text style={styles.tileLabel} numberOfLines={1}>{label}</Text>
       <Text
-        style={[styles.tileValue, tone === 'positive' && styles.tileValuePositive]}
+        style={[styles.tileValue, tone === 'positive' && styles.tileValuePositive, tone === 'brand' && styles.tileValueBrand]}
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.75}
@@ -836,7 +836,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   dayChipText: { fontSize: 12, lineHeight: 14, fontWeight: '600', color: tokens.semantic.positive },
-  bigLabel: { fontSize: 13, lineHeight: 15, color: tokens.text.secondary, marginBottom: 4 },
   bigValue: { fontSize: 30, lineHeight: 34, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.6 },
   bigValuePositive: { color: tokens.semantic.positive },
   bigCaption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 4 },
@@ -852,6 +851,8 @@ const styles = StyleSheet.create({
   tileLabel: { fontSize: tokens.typography.hint, lineHeight: 14, color: tokens.text.secondary },
   tileValue: { fontSize: 17, lineHeight: 20, fontWeight: '600', color: tokens.text.primary, marginTop: 6 },
   tileValuePositive: { color: tokens.semantic.positive },
+  tileBrand: { backgroundColor: tokens.accent.soft },
+  tileValueBrand: { color: tokens.accent.base },
   taxLine: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: tokens.spacing.md },
   taxIcon: {
     width: 24, height: 24, borderRadius: 12,
