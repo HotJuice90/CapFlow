@@ -244,10 +244,9 @@ export default function AssetScreen() {
           </Pressable>
         </View>
 
-        {/* Название с иконкой банка. У закрытого лого приглушено — экран с
-            первого взгляда должен читаться как «это уже история». */}
+        {/* Название с иконкой банка. Закрытость читается по замку у названия
+            и по «Итогу» ниже — лого остаётся полноцветным, это всё ещё банк. */}
         <View style={styles.titleRow}>
-          <View style={isClosed ? styles.logoMuted : undefined}>
           <OrgLogo
             color={organization.color}
             logo={organization.logo}
@@ -257,9 +256,13 @@ export default function AssetScreen() {
             variant="solid"
             fallbackIcon={ICON_BY_TYPE[instrument.typeId]}
           />
-          </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.name} numberOfLines={1}>{instrument.name}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.name} numberOfLines={1}>{instrument.name}</Text>
+              {isClosed ? (
+                <MaterialCommunityIcons name="lock-outline" size={20} color={tokens.text.tertiary} />
+              ) : null}
+            </View>
             <Text style={styles.subtitle} numberOfLines={1}>
               {organization.name}{asset.title ? ` · ${asset.title}` : ''}
             </Text>
@@ -267,14 +270,6 @@ export default function AssetScreen() {
         </View>
 
         <View style={styles.pillRow}>
-          {isClosed ? (
-            <View style={[styles.pill, styles.pillClosed]}>
-              <MaterialCommunityIcons name="check" size={12} color={tokens.text.secondary} />
-              <Text style={[styles.pillText, styles.pillClosedText]}>
-                Закрыт{closedIso ? ` ${formatDateShort(closedIso)}` : ''}
-              </Text>
-            </View>
-          ) : null}
           <View style={styles.pill}><Text style={styles.pillText}>{TYPE_LABEL[instrument.typeId] ?? instrument.typeId}</Text></View>
           {payout ? (
             <View style={styles.pill}><Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text></View>
@@ -432,12 +427,23 @@ export default function AssetScreen() {
           // дохода в день, ни прогнозов — только то, что уже произошло.
           <Card style={styles.finCard}>
             <Text style={styles.finTitle}>Итог</Text>
-            <Text style={styles.bigValue} numberOfLines={1} adjustsFontSizeToFit>
-              {formatMoney(outcome.payout, { currency: cur, kopecks: 'hide' })}
-            </Text>
-            <Text style={styles.bigCaption}>
-              вернулось на счёт{closedIso ? ` ${formatDateShort(closedIso)}` : ''}
-            </Text>
+            {/* Ставка — своим шильдиком справа, как у активного актива: так её
+                находишь глазом там же, где привык. Без сравнения с КС — для
+                закрытого оно про сегодняшний день, а не про его жизнь. */}
+            <View style={styles.heroTop}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.bigValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoney(outcome.payout, { currency: cur, kopecks: 'hide' })}
+                </Text>
+                <Text style={styles.bigCaption}>
+                  вернулось на счёт{closedIso ? ` ${formatDateShort(closedIso)}` : ''}
+                </Text>
+              </View>
+              <View style={styles.rateBadge}>
+                <Text style={styles.rateValue}>{formatPercent(derived.currentRate)}</Text>
+                <Text style={styles.rateCaption}>ставка</Text>
+              </View>
+            </View>
 
             <View style={styles.tilesRow}>
               <MiniTile label="вложено" value={formatMoney(outcome.invested, { currency: cur, kopecks: 'hide' })} />
@@ -463,9 +469,6 @@ export default function AssetScreen() {
               </View>
               <View style={styles.metaChip}>
                 <Text style={styles.metaChipText}>{outcome.days} {pluralDays(outcome.days)}</Text>
-              </View>
-              <View style={styles.metaChip}>
-                <Text style={styles.metaChipText}>{formatPercent(derived.currentRate)}</Text>
               </View>
             </View>
           </Card>
@@ -747,15 +750,14 @@ const styles = StyleSheet.create({
   },
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  name: { fontSize: tokens.typography.header, lineHeight: 26, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.48 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  name: { flexShrink: 1, fontSize: tokens.typography.header, lineHeight: 26, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.48 },
   subtitle: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: tokens.spacing.chip, letterSpacing: -0.28 },
 
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 12, marginBottom: tokens.spacing.lg },
   pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
   pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
-  pillClosed: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: hexToRgba(tokens.text.primary, 0.08) },
-  pillClosedText: { color: tokens.text.secondary, fontWeight: '600' },
-  logoMuted: { opacity: 0.55 },
+
 
   softShadow: boxShadow(SOFT_SHADOW),
 
@@ -766,6 +768,7 @@ const styles = StyleSheet.create({
   rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
   rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: tokens.accent.base },
   ratePremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
+  rateCaption: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 4 },
   ratePremium: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4) },
 
   progressWrap: { marginTop: tokens.spacing.lg },
