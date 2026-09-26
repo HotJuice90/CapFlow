@@ -1273,7 +1273,7 @@ const styles = StyleSheet.create({
   taxTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden' },
   taxFill: { height: '100%', borderRadius: tokens.radius.pill },
   taxBarCaption: { fontSize: tokens.typography.hint, lineHeight: 16, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 8 },
-  taxBarCaptionValue: { fontFamily: font.semibold, color: tokens.text.secondary },
+  taxBarCaptionValue: { fontFamily: font.semibold, color: tokens.value.forecast },
   taxMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 16 },
   taxMetaBigValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
   taxMetaSmallLabel: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12 },
