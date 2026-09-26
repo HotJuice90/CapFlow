@@ -389,3 +389,34 @@ describe('accrualSeries', () => {
     expect(series[0].accrued).toBeCloseTo(series[1].accrued, 9);
   });
 });
+
+describe('вклад с вышедшим сроком', () => {
+  const matured: Asset = {
+    id: 'am',
+    instrumentId: 'i0',
+    amount: 1_000_000,
+    currency: 'RUB',
+    rate: 18,
+    openDate: '2026-01-01',
+    endDate: '2026-08-26',
+    status: 'active',
+  };
+
+  test('после окончания срока не приносит ни рубля в день', () => {
+    const d = calculate(matured, depositInstrument, params, '2026-09-26');
+    expect(d.incomePerDay).toBe(0);
+    expect(d.incomePerMonth).toBe(0);
+  });
+
+  test('накопленное при этом не пропадает и не растёт', () => {
+    const atEnd = calculate(matured, depositInstrument, params, '2026-08-26');
+    const later = calculate(matured, depositInstrument, params, '2026-09-26');
+    expect(later.accrued).toBeCloseTo(atEnd.accrued, 6);
+    expect(later.accrued).toBeGreaterThan(0);
+  });
+
+  test('в последний день срока доход ещё идёт', () => {
+    const d = calculate(matured, depositInstrument, params, '2026-08-26');
+    expect(d.incomePerDay).toBeGreaterThan(0);
+  });
+});

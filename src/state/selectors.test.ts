@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent } from './selectors';
+import { idleCapital, computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -705,5 +705,72 @@ describe('nearestEvent', () => {
 
   it('без активов — null', () => {
     expect(nearestEvent(base, now)).toBeNull();
+  });
+});
+
+describe('idleCapital', () => {
+  const now = new Date(2026, 8, 26); // 26 сентября 2026
+  const org: Organization = { id: 'o1', name: 'Тест-Банк', type: 'Банк', color: '#000000' };
+  const base = {
+    ...emptyAppData(),
+    organizations: [org],
+    instruments: [depositInstrument, savingsInstrument],
+    keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
+  };
+
+  const working: Asset = {
+    id: 'aw', instrumentId: 'i1', amount: 1_000_000, currency: 'RUB',
+    rate: 12, openDate: '2026-01-01', status: 'active',
+  };
+  const expired: Asset = {
+    id: 'ae', instrumentId: 'i0', amount: 500_000, currency: 'RUB',
+    rate: 18, openDate: '2026-01-01', endDate: '2026-08-26', status: 'active',
+  };
+
+  it('пустой портфель — простоя нет', () => {
+    expect(idleCapital({ ...base, assets: [working] }, now).total).toBe(0);
+  });
+
+  it('вклад с вышедшим сроком простаивает целиком, вместе с накопленным', () => {
+    const idle = idleCapital({ ...base, assets: [working, expired] }, now);
+    expect(idle.maturedCount).toBe(1);
+    expect(idle.matured).toBeGreaterThan(500_000); // тело + то, что успело накапать
+    expect(idle.longestDays).toBe(31);
+    expect(idle.longestAssetId).toBe('ae');
+  });
+
+  it('кошелёк тоже простаивает', () => {
+    const withFree = {
+      ...base,
+      assets: [working],
+      freeCapitalEntries: [
+        { id: 'f1', date: '2026-09-01', amount: 200_000, currency: 'RUB' as const, createdAt: '2026-09-01T00:00:00.000Z' },
+      ],
+    };
+    const idle = idleCapital(withFree, now);
+    expect(idle.free).toBe(200_000);
+    expect(idle.total).toBe(200_000);
+  });
+
+  it('упущенное считается по ставке РАБОТАЮЩЕЙ части портфеля', () => {
+    const withFree = {
+      ...base,
+      assets: [working], // 12% годовых
+      freeCapitalEntries: [
+        { id: 'f1', date: '2026-09-01', amount: 365_000, currency: 'RUB' as const, createdAt: '2026-09-01T00:00:00.000Z' },
+      ],
+    };
+    const idle = idleCapital(withFree, now);
+    expect(idle.atRate).toBeCloseTo(12, 1);
+    expect(idle.lostPerDay).toBeCloseTo((365_000 * 0.12) / 365, 0);
+  });
+
+  it('когда не работает ничего, цена простоя считается по ключевой', () => {
+    const allIdle = {
+      ...base,
+      assets: [expired],
+      params: { ...base.params, keyRate: 14 },
+    };
+    expect(idleCapital(allIdle, now).atRate).toBe(14);
   });
 });

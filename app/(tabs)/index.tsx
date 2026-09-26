@@ -42,6 +42,7 @@ import {
   analyticsSummary,
   liquidity,
   goalsProgress,
+  idleCapital,
   nearestEvent as nearestEventOf,
   standaloneGoalsProgress,
   type GoalProgress,
@@ -49,7 +50,7 @@ import {
 } from '@/state/selectors';
 import type { AssetView, Goal } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatMoney } from '@/format';
+import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
@@ -264,6 +265,7 @@ export default function HomeScreen() {
    * тоже событие, просто за ним не следует обязательного действия.
    */
   const nearestEvent = useMemo(() => nearestEventOf(data), [data]);
+  const idle = useMemo(() => idleCapital(data), [data]);
   // Просроченное — единственное, что требует действия, поэтому и цветом
   // отличается от спокойных «скоро выплата» / «скоро конец срока».
   const eventTone = nearestEvent?.kind === 'overdue' ? tokens.semantic.warning : tokens.accent.base;
@@ -428,6 +430,51 @@ export default function HomeScreen() {
                 <View style={styles.heroStatusRow}>
                   <View style={[styles.heroStatusDot, { backgroundColor: hero.tone }]} />
                   <Text style={styles.heroStatus}>{hero.label}</Text>
+                </View>
+              </Pressable>
+            ) : null}
+
+            {/* Простой. Блока нет, когда простаивать нечему — это не постоянная
+                строка отчёта, а повод что-то сделать. Смысл не в сумме, а в
+                цене бездействия: деньги без ставки видно и так, а вот сколько
+                это стоит в день — нет. */}
+            {idle.total > 0 ? (
+              <Pressable
+                style={styles.idleCard}
+                onPress={() => router.push(idle.longestAssetId ? `/asset/${idle.longestAssetId}` : '/settings/capital')}
+              >
+                <View style={styles.idleHead}>
+                  <View style={styles.idleIcon}>
+                    <MaterialCommunityIcons name="sleep" size={16} color={tokens.semantic.warning} />
+                  </View>
+                  <Text style={styles.idleLabel}>Простаивает</Text>
+                  <MaterialIcons name="chevron-right" size={20} color={hexToRgba(tokens.text.primary, 0.35)} />
+                </View>
+
+                <Text style={styles.idleValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {formatMoney(idle.total, { currency: cur, kopecks: 'hide' })}
+                </Text>
+                <Text style={styles.idleCost}>
+                  теряете ~{formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })} в день
+                  {' '}при ставке {formatPercent(idle.atRate)}
+                </Text>
+
+                <View style={styles.idleChips}>
+                  {idle.matured > 0 ? (
+                    <View style={styles.idleChip}>
+                      <Text style={styles.idleChipText}>
+                        {formatMoney(idle.matured, { currency: cur, kopecks: 'hide' })} в истёкших
+                        {idle.longestDays > 0 ? ` · ${idle.longestDays} ${pluralDays(idle.longestDays)}` : ''}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {idle.free > 0 ? (
+                    <View style={styles.idleChip}>
+                      <Text style={styles.idleChipText}>
+                        {formatMoney(idle.free, { currency: cur, kopecks: 'hide' })} в кошельке
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               </Pressable>
             ) : null}
@@ -977,6 +1024,55 @@ const styles = StyleSheet.create({
   // Тонирована акцентом, в отличие от белых плиток фактов над ней: плитки
   // сообщают состояние, а эта строка — единственное, что может потребовать
   // действия, и должна отличаться от них не только содержанием.
+  idleCard: {
+    marginTop: tokens.spacing.sm,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.68),
+    borderRadius: tokens.radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    boxShadow: tokens.shadow.subtle,
+  },
+  idleHead: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.tight },
+  idleIcon: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: hexToRgba(tokens.semantic.warning, 0.14),
+    alignItems: 'center', justifyContent: 'center',
+  },
+  idleLabel: {
+    flex: 1,
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 2,
+    fontFamily: font.medium,
+    color: tokens.text.secondary,
+  },
+  idleValue: {
+    fontSize: 21,
+    lineHeight: 26,
+    fontFamily: font.bold,
+    color: tokens.text.primary,
+    letterSpacing: -0.3,
+    marginTop: tokens.spacing.tight,
+  },
+  idleCost: {
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 3,
+    fontFamily: font.regular,
+    color: tokens.semantic.warning,
+    marginTop: 3,
+  },
+  idleChips: { flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing.chip, marginTop: tokens.spacing.md },
+  idleChip: {
+    backgroundColor: tokens.surface.rowTint,
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.tight,
+    paddingVertical: 5,
+  },
+  idleChipText: {
+    fontSize: tokens.typography.micro,
+    lineHeight: tokens.typography.micro + 2,
+    fontFamily: font.medium,
+    color: tokens.text.secondary,
+  },
   heroEventPillAlert: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.12) },
   heroEventPill: {
     flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md,

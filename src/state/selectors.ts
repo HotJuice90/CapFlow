@@ -1090,6 +1090,86 @@ export function payoutEventsForMonth(data: AppData, year: number, month: number,
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface IdleCapital {
+  /** Всё простаивающее в основной валюте. */
+  total: number;
+  /** Деньги во вкладах с вышедшим сроком — формально в активе, по факту под 0%. */
+  matured: number;
+  maturedCount: number;
+  /** Лента свободных денег (кошелёк). */
+  free: number;
+  /** Сколько эти деньги приносили бы в день по ставке, под которую реально
+   *  работает остальной портфель. Это и есть цена бездействия. */
+  lostPerDay: number;
+  /** Ставка, по которой считаем упущенное, % годовых. */
+  atRate: number;
+  /** Самый давний простой в днях (по вкладам; кошелёк не в счёт — он осознанный). */
+  longestDays: number;
+  /** Актив, который простаивает дольше всех — туда и ведёт тап: решение
+   *  («продлить / в архив / закрыть») принимается в его карточке. */
+  longestAssetId?: string;
+}
+
+/**
+ * Простаивающие деньги — те, что не приносят ничего.
+ *
+ * Два источника: вклад с вышедшим сроком (человек мог про него забыть, а банк
+ * уже перестал платить) и лента свободных денег. Смысл блока не в самой сумме,
+ * а в цене бездействия, поэтому считаем и упущенный доход — по ставке, под
+ * которую работает ОСТАЛЬНОЙ портфель, а не по ключевой: сравнивать надо с
+ * тем, что человек реально умеет получать. Если не работает вообще ничего,
+ * берём ключевую — иначе цена простоя обнулилась бы ровно там, где она
+ * максимальна.
+ */
+export function idleCapital(data: AppData, now: Date = new Date()): IdleCapital {
+  const views = buildAssetViews(data, now);
+  const today = isoDate(now);
+
+  let matured = 0;
+  let maturedCount = 0;
+  let longestDays = 0;
+  let longestAssetId: string | undefined;
+  let earningCapital = 0;
+  let earningWeightedRate = 0;
+
+  for (const v of views) {
+    const cap = convert(v.derived.currentValue, v.asset.currency, data);
+    const isMatured = v.instrument.behavior === 'term' && !!v.asset.endDate && v.asset.endDate <= today;
+    if (isMatured) {
+      matured += cap;
+      maturedCount++;
+      const idleDays = diffDays(parseLocal(v.asset.endDate as string), now);
+      if (idleDays >= longestDays) {
+        longestDays = idleDays;
+        longestAssetId = v.asset.id;
+      }
+      continue;
+    }
+    if (v.derived.incomePerDay > 0) {
+      // Взвешиваем НОМИНАЛЬНУЮ ставку, а не «доход / текущая стоимость»:
+      // накопленные проценты раздувают знаменатель и занижают её, а
+      // простаивающие деньги разместят именно под номинальную.
+      earningCapital += cap;
+      earningWeightedRate += v.derived.currentRate * cap;
+    }
+  }
+
+  const free = freeCapitalBalance(data);
+  const total = matured + free;
+  const atRate = earningCapital > 0 ? earningWeightedRate / earningCapital : data.params.keyRate;
+
+  return {
+    total,
+    matured,
+    maturedCount,
+    free,
+    lostPerDay: (total * (atRate / 100)) / daysInYear(now),
+    atRate,
+    longestDays,
+    longestAssetId,
+  };
+}
+
 export interface NearestEvent {
   /** `overdue` — срок УЖЕ вышел, а актив не закрыт: деньги лежат без ставки,
    *  и это единственное состояние, где промедление стоит денег.

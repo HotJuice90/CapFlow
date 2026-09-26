@@ -307,10 +307,17 @@ export function calculate(
   // incomeRunRateOn такие активы пропускает, и «сегодня» со «средним»
   // начинали считаться по разным наборам активов.
   const started = diffDays(asset.openDate, now) >= 0;
-  const incomePerDay = started ? (balanceNow * effectiveRate) / daysInYear(now) : 0;
+  // Срок вышел — деньги ЛЕЖАТ. Накопленное замирает на дате окончания (см.
+  // accrualNow ниже), а дневной доход раньше продолжал капать как ни в чём не
+  // бывало: вклад, закончившийся месяц назад, исправно добавлял себя в
+  // «Сегодня принесёт». Это та же дыра, что и с ещё не открытым активом,
+  // только на другом конце жизни.
+  const ended = asset.endDate !== undefined && diffDays(now, asset.endDate) < 0;
+  const earning = started && !ended;
+  const incomePerDay = earning ? (balanceNow * effectiveRate) / daysInYear(now) : 0;
   // Прогноз вперёд (месяц/год) — от ТЕКУЩЕГО баланса, а не от суммы открытия:
   // при капитализации проценты уже легли на баланс и сами приносят доход.
-  const annualRunRate = started ? balanceNow * effectiveRate : 0;
+  const annualRunRate = earning ? balanceNow * effectiveRate : 0;
   // Месяц — по факту дней в ТЕКУЩЕМ календарном месяце (как считают банки:
   // прогноз «за июль» = дневной доход × 31, а не среднемесячное /12).
   const incomePerMonth = incomePerDay * daysInMonth(now);
