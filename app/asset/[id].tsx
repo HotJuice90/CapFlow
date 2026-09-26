@@ -12,16 +12,16 @@ import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { SkylineBars } from '@/components/SkylineBars';
 import { useData } from '@/state/DataContext';
-import { assetValueSeries, assetTimeline, findAssetView, type AssetTimelineEntry } from '@/state/selectors';
+import { assetClosedDate, assetOutcome, assetValueSeries, assetTimeline, findAssetView, type AssetTimelineEntry } from '@/state/selectors';
 import { findBank } from '@/domain/banks';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
-import { calculate, diffDays } from '@/calc';
+import { calculate } from '@/calc';
 import { uid } from '@/utils/id';
-import { tapBuzz, warnBuzz } from '@/lib/haptics';
+import { successBuzz, tapBuzz, warnBuzz } from '@/lib/haptics';
 import { openDatePicker } from '@/lib/datePicker';
 import { t } from '@/i18n';
 
@@ -40,24 +40,6 @@ const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap>
 
 const HERO_GRAPH_WIDTH = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
 
-/**
- * Налог на карточке актива — ПЛОСКИЙ: ставка × доход, без необлагаемого лимита.
- *
- * Лимит (ст. 214.2) — величина портфельная и годовая, одна на все активы. Делить
- * её между карточками нельзя: любой порядок дележа делает цифру артефактом
- * сортировки, а не свойством актива (было по дате открытия, а при совпадении дат
- * — по сравнению id, из-за чего два счёта, открытых одним днём, показывали 0% и
- * 6,23% в зависимости от сгенерированного id). Лимит живёт в своём виджете на
- * главной, где копится фактически и прогнозно.
- *
- * На карточке остаётся ровно одно осмысленное разграничение — КТО платит: банк
- * удерживает сам или ждать уведомления ФНС и платить самому. Та же «грязная»
- * методика, что и в налоговой карточке аналитики, — цифры между экранами сходятся.
- */
-function flatTax(income: number, params: { taxRate: number }): number {
-  return Math.max(0, income) * (params.taxRate / 100);
-}
-
 export default function AssetScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -73,21 +55,29 @@ export default function AssetScreen() {
   const valueSeries = useMemo(() => assetValueSeries(data, id, 18), [data, id]);
   // instrument+params обязательны: без них дельты в истории считаются наивно и
   // впитывают набежавшие проценты (см. balanceMovement в selectors).
-  const timeline = useMemo(
+  const baseTimeline = useMemo(
     () => (view ? assetTimeline(view.asset, view.instrument, data.params) : []),
     [view, data.params],
   );
-  // Реально удержанный банком налог при снятиях — факт, не оценка (см. BalanceAdjustment.taxWithheld).
-  const taxPaidTotal = useMemo(
-    () => (view?.asset.balanceAdjustments ?? []).reduce((sum, a) => sum + (a.taxWithheld ?? 0), 0),
-    [view],
+  // Закрытый и активный — два разных экрана по смыслу: у закрытого итог, у
+  // активного — жизнь. «Архивный» статус из старых данных показываем как
+  // закрытый: для человека это одно и то же действие.
+  const isClosed = view ? view.asset.status !== 'active' : false;
+  const closedIso = view ? assetClosedDate(data, view.asset) : undefined;
+  // Все деньги по активу — из одного места (см. assetOutcome): раньше деталка,
+  // архив и диалог закрытия считали их каждый по-своему и расходились.
+  const outcome = useMemo(
+    () => (view ? assetOutcome(view, data.params, closedIso ?? todayIso()) : undefined),
+    [view, data.params, closedIso],
   );
-  // Прогноз «сколько ещё отдать, если снять всё сейчас» — derived.tax уже честно
-  // считает: активы с taxWithheldByBank не делят лимит с остальными (см. calcAssetTax
-  // и buildAssetViews), поэтому тут просто вычитаем то, что уже реально уплачено.
-  const projectedTaxRemaining = useMemo(
-    () => (view ? Math.max(0, flatTax(view.derived.accrued, data.params) - taxPaidTotal) : 0),
-    [view, taxPaidTotal, data.params],
+  // Закрытие — такое же событие жизни актива, как открытие, и в истории его
+  // не хватало. Сумма — та, что вернулась на счёт (см. assetOutcome).
+  const timeline = useMemo<AssetTimelineEntry[]>(
+    () =>
+      isClosed && closedIso && outcome
+        ? [{ type: 'close', date: closedIso, amount: outcome.payout }, ...baseTimeline]
+        : baseTimeline,
+    [isClosed, closedIso, outcome, baseTimeline],
   );
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
@@ -104,16 +94,16 @@ export default function AssetScreen() {
    * все дни между. Дефолт умный — у срочного вклада с прошедшим сроком это
    * дата окончания, иначе сегодня.
    */
-  const askClosedDate = (title: string, status: 'closed' | 'archived') => {
+  const askClosedDate = () => {
     if (!id || !view) return;
     const today = todayIso();
     const matured = view.asset.endDate && view.asset.endDate <= today ? view.asset.endDate : undefined;
     openDatePicker({
-      title,
+      title: 'Дата закрытия',
       value: matured ?? today,
       minDate: view.asset.openDate,
       maxDate: today,
-      onPick: async (iso) => { await askReturnToFree(iso, status); },
+      onPick: async (iso) => { await askReturnToFree(iso); },
     });
   };
   /**
@@ -123,19 +113,17 @@ export default function AssetScreen() {
    * закрытия (не «сейчас»), и если налог держит банк — сразу за вычетом него,
    * потому что на руки пришло именно столько.
    */
-  const askReturnToFree = async (closedIso: string, status: 'closed' | 'archived') => {
+  const askReturnToFree = async (closeIso: string) => {
     if (!id || !view) return;
-    const atClose = calculate(view.asset, view.instrument, data.params, closedIso, 0);
-    const payout = Math.max(
-      0,
-      view.asset.taxWithheldByBank ? atClose.currentValue - Math.max(0, atClose.tax - taxPaidTotal) : atClose.currentValue,
-    );
+    // Та же арифметика, что покажет потом «Итог» закрытого актива.
+    const atClose = { ...view, derived: calculate(view.asset, view.instrument, data.params, closeIso, 0) };
+    const payout = assetOutcome(atClose, data.params, closeIso).payout;
     const finish = async (toFree: boolean) => {
-      await setAssetStatus(id, status, closedIso);
+      await setAssetStatus(id, 'closed', closeIso);
       if (toFree && payout > 0) {
         await addFreeCapitalEntry({
           id: uid('fce-'),
-          date: closedIso,
+          date: closeIso,
           amount: payout,
           currency: view.asset.currency,
           comment: `Закрытие: ${view.asset.title || view.instrument.name}`,
@@ -147,26 +135,32 @@ export default function AssetScreen() {
     if (payout <= 0) { await finish(false); return; }
     appAlert(
       'Вернуть деньги в свободные?',
-      `${formatMoney(payout, { currency: view.asset.currency })} добавим в ленту свободных денег на ${formatDateShort(closedIso)}. Если вывел не себе, а сразу переложил — выбери «Не возвращать» и заведи новый актив.`,
+      `${formatMoney(payout, { currency: view.asset.currency })} добавим в ленту свободных денег на ${formatDateShort(closeIso)}. Если вывел не себе, а сразу переложил — выбери «Не возвращать» и заведи новый актив.`,
       [
         { text: 'Не возвращать', onPress: () => { void finish(false); } },
         { text: 'Вернуть', onPress: () => { void finish(true); } },
       ],
     );
   };
+  // «Закрыть» и «В архив» раньше были двумя кнопками, но для человека это
+  // одно действие: всё закрытое и так уходит в архив. Остался один путь.
   const onClose = () => {
     if (!id) return;
-    appAlert('Закрыть актив?', 'Перейдёт в историю и перестанет участвовать в текущем капитале.', [
+    appAlert('Закрыть актив?', 'Уйдёт в архив и перестанет участвовать в текущем капитале.', [
       { text: 'Отмена', style: 'cancel' },
-      { text: 'Закрыть', onPress: () => askClosedDate('Дата закрытия', 'closed') },
+      { text: 'Закрыть', onPress: askClosedDate },
     ]);
   };
-  const onArchive = () => {
+  const onRestore = () => {
     if (!id) return;
-    appAlert('В архив?', 'Архивные записи не участвуют в расчётах.', [
-      { text: 'Отмена', style: 'cancel' },
-      { text: 'В архив', onPress: () => askClosedDate('Дата закрытия', 'archived') },
-    ]);
+    appAlert(
+      'Вернуть в работу?',
+      'Актив снова станет активным. Если при закрытии деньги ушли в свободные — ту запись в ленте удали вручную, иначе они посчитаются дважды.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Вернуть', onPress: async () => { await setAssetStatus(id, 'active'); successBuzz(); } },
+      ],
+    );
   };
   const onDelete = () => {
     if (!id) return;
@@ -250,8 +244,10 @@ export default function AssetScreen() {
           </Pressable>
         </View>
 
-        {/* Название с иконкой банка */}
+        {/* Название с иконкой банка. У закрытого лого приглушено — экран с
+            первого взгляда должен читаться как «это уже история». */}
         <View style={styles.titleRow}>
+          <View style={isClosed ? styles.logoMuted : undefined}>
           <OrgLogo
             color={organization.color}
             logo={organization.logo}
@@ -261,6 +257,7 @@ export default function AssetScreen() {
             variant="solid"
             fallbackIcon={ICON_BY_TYPE[instrument.typeId]}
           />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name} numberOfLines={1}>{instrument.name}</Text>
             <Text style={styles.subtitle} numberOfLines={1}>
@@ -270,6 +267,14 @@ export default function AssetScreen() {
         </View>
 
         <View style={styles.pillRow}>
+          {isClosed ? (
+            <View style={[styles.pill, styles.pillClosed]}>
+              <MaterialCommunityIcons name="check" size={12} color={tokens.text.secondary} />
+              <Text style={[styles.pillText, styles.pillClosedText]}>
+                Закрыт{closedIso ? ` ${formatDateShort(closedIso)}` : ''}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.pill}><Text style={styles.pillText}>{TYPE_LABEL[instrument.typeId] ?? instrument.typeId}</Text></View>
           {payout ? (
             <View style={styles.pill}><Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text></View>
@@ -280,95 +285,68 @@ export default function AssetScreen() {
         </View>
 
         {/* Hero: сумма + ставка, прогресс срока — здесь же */}
-        <Card style={styles.hero}>
-          <View style={styles.heroTop}>
-            <Pressable
-              style={{ flex: 1 }}
-              disabled={!canAdjustBalance}
-              onPress={() => router.push(`/asset/balance-adjust?id=${asset.id}`)}
-            >
-              <Text style={styles.heroLabel}>{isTerm ? 'Сумма вклада' : 'На счёте'}</Text>
-              <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(isTerm ? asset.amount : derived.currentValue, { currency: cur, kopecks: 'hide' })}
-              </Text>
-            </Pressable>
-            <Pressable style={styles.rateBadge} onPress={() => router.push(`/asset/rate-adjust?id=${asset.id}`)}>
-              <Text style={styles.rateValue}>{formatPercent(derived.currentRate)}</Text>
-              <View style={styles.ratePremiumRow}>
-                <MaterialCommunityIcons
-                  name={derived.premiumToKeyRate >= 0 ? 'arrow-up' : 'arrow-down'}
-                  size={11}
-                  color={derived.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
-                />
-                <Text style={styles.ratePremium}>
-                  {formatPercentSigned(derived.premiumToKeyRate)} {t.asset.toKeyRate}
+        {!isClosed ? (
+          <Card style={styles.hero}>
+            <View style={styles.heroTop}>
+              <Pressable
+                style={{ flex: 1 }}
+                disabled={!canAdjustBalance}
+                onPress={() => router.push(`/asset/balance-adjust?id=${asset.id}`)}
+              >
+                <Text style={styles.heroLabel}>{isTerm ? 'Сумма вклада' : 'На счёте'}</Text>
+                <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoney(isTerm ? asset.amount : derived.currentValue, { currency: cur, kopecks: 'hide' })}
                 </Text>
+              </Pressable>
+              <Pressable style={styles.rateBadge} onPress={() => router.push(`/asset/rate-adjust?id=${asset.id}`)}>
+                <Text style={styles.rateValue}>{formatPercent(derived.currentRate)}</Text>
+                <View style={styles.ratePremiumRow}>
+                  <MaterialCommunityIcons
+                    name={derived.premiumToKeyRate >= 0 ? 'arrow-up' : 'arrow-down'}
+                    size={11}
+                    color={derived.premiumToKeyRate >= 0 ? tokens.semantic.positive : tokens.semantic.negative}
+                  />
+                  <Text style={styles.ratePremium}>
+                    {formatPercentSigned(derived.premiumToKeyRate)} {t.asset.toKeyRate}
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+
+            {isTerm && asset.endDate ? (
+              <View style={styles.progressWrap}>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: organization.color }]} />
+                </View>
+                <View style={styles.progressMeta}>
+                  <Text style={styles.progressMetaText}>
+                    {/* «Осталось 0 дней» у вышедшего срока звучало как «сегодня последний день». */}
+                    {progress >= 100
+                      ? `Срок истёк ${formatDateShort(asset.endDate)}`
+                      : derived.daysRemaining !== undefined
+                        ? `Осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)} · до ${formatDateShort(asset.endDate)}`
+                        : `До ${formatDateShort(asset.endDate)}`}
+                  </Text>
+                  <Text style={styles.progressMetaPct}>{progress}%</Text>
+                </View>
               </View>
-            </Pressable>
-          </View>
+            ) : null}
 
-          {isTerm && asset.endDate ? (
-            <View style={styles.progressWrap}>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: organization.color }]} />
+            {valueSeries.length >= 2 ? (
+              <View style={styles.heroGraphWrap}>
+                {/* minSpanRatio: чтобы заполнить график, нужно изменение хотя бы
+                    на 2% от баланса. Иначе счёт, выросший на 699 ₽ из миллиона,
+                    рисовался лестницей до неба — ровно как счёт, с которого сняли
+                    100 000, и рядом два актива читались наоборот. */}
+                <SkylineBars data={valueSeries} width={HERO_GRAPH_WIDTH} height={56} color={tokens.accent.base} gap={0} minSpanRatio={0.02} />
               </View>
-              <View style={styles.progressMeta}>
-                <Text style={styles.progressMetaText}>
-                  {derived.daysRemaining !== undefined
-                    ? `Осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)} · до ${formatDateShort(asset.endDate)}`
-                    : `До ${formatDateShort(asset.endDate)}`}
-                </Text>
-                <Text style={styles.progressMetaPct}>{progress}%</Text>
-              </View>
-            </View>
-          ) : null}
+            ) : null}
+          </Card>
+        ) : null}
 
-          <View style={styles.heroIncomeRow}>
-            <Text style={styles.heroIncomeLabel}>{t.asset.incomePerDay}</Text>
-            <Text style={styles.heroIncomeValue}>
-              +{formatMoney(derived.incomePerDay, { currency: cur })}
-            </Text>
-          </View>
-
-          {valueSeries.length >= 2 ? (
-            <View style={styles.heroGraphWrap}>
-              {/* minSpanRatio: чтобы заполнить график, нужно изменение хотя бы
-                  на 2% от баланса. Иначе счёт, выросший на 699 ₽ из миллиона,
-                  рисовался лестницей до неба — ровно как счёт, с которого сняли
-                  100 000, и рядом два актива читались наоборот. */}
-              <SkylineBars data={valueSeries} width={HERO_GRAPH_WIDTH} height={56} color={tokens.accent.base} gap={0} minSpanRatio={0.02} />
-            </View>
-          ) : null}
-        </Card>
-
-        {/* Доход за всё время — с даты открытия по сегодня (или до закрытия срочного) */}
-        <Card style={styles.finCard}>
-          <Text style={styles.finTitle}>Доход за всё время</Text>
-          <Text style={styles.lifetimeValue} numberOfLines={1} adjustsFontSizeToFit>
-            {formatMoney(derived.earnedSoFar, { currency: cur, kopecks: 'hide' })}
-          </Text>
-          <Text style={styles.lifetimeMeta}>
-            с {formatDateShort(asset.openDate)} · {Math.max(0, diffDays(asset.openDate, new Date()))} {pluralDays(Math.max(0, diffDays(asset.openDate, new Date())))}
-          </Text>
-
-          <View style={styles.taxLifetimeDivider} />
-          <View style={styles.taxLifetimeRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.taxLifetimeLabel}>Уже выплатил</Text>
-              <Text style={styles.taxLifetimeValue}>{formatMoney(taxPaidTotal, { currency: cur, kopecks: 'hide' })}</Text>
-            </View>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              {/* Разграничение, которое тут единственное осмысленное: банк
-                  удержит сам или ждать уведомления ФНС и платить самому. */}
-              <Text style={styles.taxLifetimeLabel}>
-                {asset.taxWithheldByBank ? 'Удержит банк' : 'Заплатить по ФНС'}
-              </Text>
-              <Text style={[styles.taxLifetimeValue, styles.taxLifetimeValueWarn]}>{formatMoney(projectedTaxRemaining, { currency: cur, kopecks: 'hide' })}</Text>
-            </View>
-          </View>
-        </Card>
-
-        {isTerm && progress >= 100 ? (
+        {/* Плашка решения — только у ЖИВОГО актива с вышедшим сроком. У
+            закрытого решение уже принято, спрашивать «что дальше» нечего. */}
+        {!isClosed && isTerm && progress >= 100 ? (
           <View style={styles.maturedBanner}>
             <View style={styles.maturedBannerTop}>
               <MaterialCommunityIcons name="alert-circle-outline" size={18} color={tokens.semantic.warning} />
@@ -379,69 +357,100 @@ export default function AssetScreen() {
                 <MaterialCommunityIcons name="autorenew" size={16} color={tokens.accent.base} />
                 <Text style={styles.maturedActionText}>Продлить</Text>
               </Pressable>
-              <Pressable style={styles.maturedActionBtn} onPress={onArchive}>
-                <MaterialCommunityIcons name="archive-outline" size={16} color={tokens.text.secondary} />
-                <Text style={[styles.maturedActionText, { color: tokens.text.secondary }]}>В архив</Text>
-              </Pressable>
               <Pressable style={styles.maturedActionBtn} onPress={onClose}>
-                <MaterialCommunityIcons name="check-circle-outline" size={16} color={tokens.text.secondary} />
-                <Text style={[styles.maturedActionText, { color: tokens.text.secondary }]}>Закрыть</Text>
+                <MaterialCommunityIcons name="check-circle-outline" size={16} color={tokens.accent.base} />
+                <Text style={styles.maturedActionText}>Закрыть</Text>
               </Pressable>
             </View>
           </View>
         ) : null}
 
-        {/* Финансовый результат — один собранный блок с иконками */}
-        <Card style={styles.finCard}>
-          <Text style={styles.finTitle}>{t.asset.financialResult}</Text>
-          <View style={styles.finRow}>
-            <FinCol
-              icon="trending-up"
-              iconColor={tokens.accent.base}
-              iconBg={tokens.accent.soft}
-              label={t.asset.accrued}
-              value={formatMoney(derived.incomePerMonth, { currency: cur, kopecks: 'hide' })}
-              sub="если ничего не менять"
+        {outcome && !isClosed ? (
+          // «Доход» — живой актив: сколько уже, сколько в день, чем кончится.
+          // Прогнозы — со знаком «≈», налог — одной строкой с тем, КТО платит.
+          <Card style={styles.finCard}>
+            <Text style={styles.finTitle}>Доход</Text>
+            <OutcomeRow
+              label="Уже заработано"
+              value={formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
+              sub={`с ${formatDateShort(asset.openDate)} · ${outcome.days} ${pluralDays(outcome.days)}`}
+              tone="positive"
             />
-            <View style={styles.finSep} />
-            <FinCol
-              icon="percent"
-              iconColor="#C11818"
-              iconBg={hexToRgba(tokens.semantic.negative, 0.12)}
-              label={t.asset.tax}
-              value={formatMoney(flatTax(derived.incomePerMonth, data.params), { currency: cur, kopecks: 'hide' })}
-              sub={
-                derived.incomePerMonth > 0
-                  ? `${formatPercent(data.params.taxRate)} · ${asset.taxWithheldByBank ? 'удержит банк' : 'платить самому'}`
-                  : 'нет дохода'
-              }
-            />
-            <View style={styles.finSep} />
-            <FinCol
-              icon="account-balance-wallet"
-              iconColor={tokens.semantic.positive}
-              iconBg={hexToRgba(tokens.semantic.positive, 0.12)}
-              label={t.asset.net}
-              value={formatMoney(derived.incomePerMonth - flatTax(derived.incomePerMonth, data.params), { currency: cur, kopecks: 'hide' })}
-              valueColor={tokens.semantic.positive}
-              sub="после налога"
-            />
-          </View>
-
-          {isTerm && derived.finalAmount !== undefined ? (
-            <View style={styles.finTotal}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.finTotalLabel}>Итоговая сумма к получению</Text>
-                <Text style={styles.finTotalValue}>{formatMoney(derived.finalAmount, { currency: cur, kopecks: 'hide' })}</Text>
-              </View>
-              <View style={styles.finTotalChip}>
-                <Text style={styles.finTotalChipText}>
-                  ещё +{formatMoney(derived.remainingToEarn ?? 0, { currency: cur, kopecks: 'hide' })}
+            {derived.incomePerDay > 0 ? (
+              <OutcomeRow
+                label="Сейчас в день"
+                value={`+${formatMoney(derived.incomePerDay, { currency: cur })}`}
+                tone="positive"
+              />
+            ) : null}
+            <View style={styles.outcomeDivider} />
+            {isTerm && outcome.termIncome !== undefined && outcome.atMaturity !== undefined ? (
+              <>
+                <OutcomeRow
+                  label="За весь срок"
+                  value={`+${formatMoney(outcome.termIncome, { currency: cur, kopecks: 'hide' })}`}
+                  tone="positive"
+                />
+                <OutcomeRow
+                  label={asset.endDate ? `Придёт ${formatDateShort(asset.endDate)}` : 'Придёт в конце срока'}
+                  value={formatMoney(outcome.atMaturity, { currency: cur, kopecks: 'hide' })}
+                  strong
+                />
+                <Text style={styles.taxNote}>
+                  Налог ≈ {formatMoney(outcome.termTax ?? 0, { currency: cur, kopecks: 'hide' })} —{' '}
+                  {outcome.withheld ? 'удержит площадка' : 'заплатить по уведомлению ФНС'}
                 </Text>
-              </View>
-            </View>
-          ) : null}
-        </Card>
+              </>
+            ) : (
+              <>
+                <OutcomeRow
+                  label="За месяц"
+                  value={`≈ +${formatMoney(derived.forecastNextMonth ?? 0, { currency: cur, kopecks: 'hide' })}`}
+                  tone="positive"
+                />
+                <OutcomeRow
+                  label="За год"
+                  value={`≈ +${formatMoney(derived.forecastNextYear ?? 0, { currency: cur, kopecks: 'hide' })}`}
+                  tone="positive"
+                />
+                <Text style={styles.taxNote}>
+                  Налог с заработанного ≈ {formatMoney(Math.max(0, outcome.tax - outcome.taxPaid), { currency: cur, kopecks: 'hide' })} —{' '}
+                  {outcome.withheld ? 'удержит площадка' : 'заплатить по уведомлению ФНС'}
+                  {outcome.taxPaid > 0 ? ` · уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : ''}
+                </Text>
+              </>
+            )}
+          </Card>
+        ) : null}
+
+        {outcome && isClosed ? (
+          // «Итог» — закрытый актив: ни ставки к КС, ни дохода в день, ни
+          // прогнозов. Только то, что уже произошло с деньгами.
+          <Card style={styles.finCard}>
+            <Text style={styles.finTitle}>Итог</Text>
+            <OutcomeRow label="Вложено" value={formatMoney(outcome.invested, { currency: cur, kopecks: 'hide' })} />
+            <OutcomeRow
+              label="Заработано"
+              value={`+${formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}`}
+              tone="positive"
+            />
+            <OutcomeRow
+              label="Вернулось на счёт"
+              value={formatMoney(outcome.payout, { currency: cur, kopecks: 'hide' })}
+              strong
+            />
+            <Text style={styles.taxNote}>
+              {outcome.withheld
+                ? `Налог ${formatMoney(outcome.tax, { currency: cur, kopecks: 'hide' })} удержан площадкой`
+                : `Налог ${formatMoney(outcome.tax, { currency: cur, kopecks: 'hide' })} — по уведомлению ФНС`}
+            </Text>
+            <View style={styles.outcomeDivider} />
+            <Text style={styles.outcomeMeta}>
+              {formatDateShort(asset.openDate)}
+              {closedIso ? ` → ${formatDateShort(closedIso)}` : ''} · {outcome.days} {pluralDays(outcome.days)} · {formatPercent(derived.currentRate)}
+            </Text>
+          </Card>
+        ) : null}
 
         {/* История — сумма и ставка меняются независимо, но на карточке
             актива удобнее видеть одной лентой, а не в 2 разных экранах.
@@ -481,21 +490,6 @@ export default function AssetScreen() {
           ) : null}
         </Card>
 
-        {/* Накопительный: сколько будет, если не снимать */}
-        {!isTerm ? (
-          <Card style={styles.finCard}>
-            <Text style={styles.finTitle}>Если ничего не менять</Text>
-            <Text style={styles.forecastHint}>Ваш счёт будет приносить</Text>
-            <View style={styles.finRow}>
-              <ForecastCol label="Ещё 1 месяц" value={derived.forecastNextMonth ?? 0} cur={cur} />
-              <View style={styles.finSep} />
-              <ForecastCol label="Ещё 6 месяцев" value={(derived.forecastNextYear ?? 0) / 2} cur={cur} />
-              <View style={styles.finSep} />
-              <ForecastCol label="Ещё 12 месяцев" value={derived.forecastNextYear ?? 0} cur={cur} />
-            </View>
-          </Card>
-        ) : null}
-
         {/* Переход в приложение/на сайт банка */}
         {bankUrl ? (
           <Pressable onPress={() => Linking.openURL(bankUrl).catch(() => {})} style={({ pressed }) => pressed && { opacity: 0.7 }}>
@@ -525,59 +519,57 @@ export default function AssetScreen() {
         {/* Действия — в самом низу, иконки одного сета (MCI outline).
             Баланс/ставка правятся через виджет «История» выше (свайп) или
             тапом по сумме/ставке в шапке — отдельные кнопки тут избыточны. */}
-        <View style={styles.actionsRow}>
-          <ActionItem icon="content-copy" label="Дублировать" onPress={onDuplicate} />
-          {isTerm ? (
-            <ActionItem icon="autorenew" label="Продлить" onPress={() => router.push(`/asset/form?id=${asset.id}`)} />
-          ) : null}
-          <ActionItem icon="check-circle-outline" label="Закрыть" onPress={onClose} />
-          <ActionItem icon="archive-outline" label="В архив" onPress={onArchive} />
-          <ActionItem icon="trash-can-outline" label="Удалить" danger onPress={onDelete} />
-        </View>
+        {isClosed ? (
+          <View style={styles.actionsRow}>
+            <ActionItem icon="backup-restore" label="Вернуть" onPress={onRestore} />
+            <ActionItem icon="content-copy" label="Дублировать" onPress={onDuplicate} />
+            <ActionItem icon="trash-can-outline" label="Удалить" danger onPress={onDelete} />
+          </View>
+        ) : (
+          <View style={styles.actionsRow}>
+            <ActionItem icon="content-copy" label="Дублировать" onPress={onDuplicate} />
+            {isTerm ? (
+              <ActionItem icon="autorenew" label="Продлить" onPress={() => router.push(`/asset/form?id=${asset.id}`)} />
+            ) : null}
+            <ActionItem icon="check-circle-outline" label="Закрыть" onPress={onClose} />
+            <ActionItem icon="trash-can-outline" label="Удалить" danger onPress={onDelete} />
+          </View>
+        )}
       </ScrollView>
     </ScreenBackground>
   );
 }
 
-function FinCol({
-  icon,
-  iconColor,
-  iconBg,
+/** Строка «подпись — значение»: читается сверху вниз, без трёх колонок с
+ *  обрезанными подписями («Доход за …», «если ничего не …»). */
+function OutcomeRow({
   label,
   value,
-  valueColor,
   sub,
+  tone,
+  strong,
 }: {
-  icon: keyof typeof MaterialIcons.glyphMap;
-  iconColor: string;
-  iconBg: string;
   label: string;
   value: string;
-  valueColor?: string;
-  sub: string;
+  sub?: string;
+  tone?: 'positive';
+  strong?: boolean;
 }) {
   return (
-    <View style={styles.finCol}>
-      <View style={styles.finColHead}>
-        <View style={[styles.finIcon, { backgroundColor: iconBg }]}>
-          <MaterialIcons name={icon} size={13} color={iconColor} />
-        </View>
-        <Text style={styles.finColLabel} numberOfLines={1}>{label}</Text>
+    <View style={styles.outcomeRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.outcomeLabel, strong && styles.outcomeLabelStrong]}>{label}</Text>
+        {sub ? <Text style={styles.outcomeSub}>{sub}</Text> : null}
       </View>
-      <Text style={[styles.finColValue, valueColor ? { color: valueColor } : null]} numberOfLines={1} adjustsFontSizeToFit>
+      <Text
+        style={[
+          styles.outcomeValue,
+          tone === 'positive' && styles.outcomeValuePositive,
+          strong && styles.outcomeValueStrong,
+        ]}
+        numberOfLines={1}
+      >
         {value}
-      </Text>
-      <Text style={styles.finColSub} numberOfLines={1}>{sub}</Text>
-    </View>
-  );
-}
-
-function ForecastCol({ label, value, cur }: { label: string; value: number; cur: CurrencyCode }) {
-  return (
-    <View style={styles.finCol}>
-      <Text style={styles.finColLabel} numberOfLines={1}>{label}</Text>
-      <Text style={styles.forecastValue} numberOfLines={1} adjustsFontSizeToFit>
-        ≈ +{formatMoney(value, { currency: cur, kopecks: 'hide' })}
       </Text>
     </View>
   );
@@ -601,11 +593,14 @@ function TimelineRow({
   const isRate = entry.type === 'rate';
   const isUp = isBalance ? (entry.amountDelta ?? 0) >= 0 : (entry.rateDelta ?? 0) >= 0;
 
-  const icon = entry.type === 'open' ? 'flag-outline' : entry.isCorrection ? 'wrench-outline' : isBalance ? (isUp ? 'arrow-up' : 'arrow-down') : isUp ? 'trending-up' : 'trending-down';
-  const iconStyle = entry.type === 'open' ? styles.histIconOpen : entry.isCorrection ? styles.histIconCorrection : isUp ? styles.histIconUp : styles.histIconDown;
-  const iconColor = entry.type === 'open' ? tokens.accent.base : entry.isCorrection ? tokens.category.dfa : isUp ? tokens.semantic.positive : tokens.semantic.negative;
+  const isClose = entry.type === 'close';
+  const icon = isClose ? 'check-circle-outline' : entry.type === 'open' ? 'flag-outline' : entry.isCorrection ? 'wrench-outline' : isBalance ? (isUp ? 'arrow-up' : 'arrow-down') : isUp ? 'trending-up' : 'trending-down';
+  const iconStyle = isClose || entry.type === 'open' ? styles.histIconOpen : entry.isCorrection ? styles.histIconCorrection : isUp ? styles.histIconUp : styles.histIconDown;
+  const iconColor = isClose || entry.type === 'open' ? tokens.accent.base : entry.isCorrection ? tokens.category.dfa : isUp ? tokens.semantic.positive : tokens.semantic.negative;
 
-  const sub = (entry.type === 'open'
+  const sub = (isClose
+    ? 'Закрытие'
+    : entry.type === 'open'
     ? 'Открытие'
     : entry.isCorrection
       ? (entry.comment || 'Исправление под факт банка')
@@ -622,7 +617,9 @@ function TimelineRow({
         <Text style={styles.histSub} numberOfLines={1}>{sub}</Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        {entry.type === 'open' ? (
+        {isClose ? (
+          <Text style={styles.histBalance}>{formatMoney(entry.amount ?? 0, { currency, kopecks: 'hide' })}</Text>
+        ) : entry.type === 'open' ? (
           <Text style={styles.histBalance}>
             {formatMoney(entry.amount ?? 0, { currency })} · {formatPercent(entry.rate ?? 0)}
           </Text>
@@ -645,7 +642,8 @@ function TimelineRow({
     </View>
   );
 
-  if (entry.type === 'open') return row;
+  // Открытие и закрытие — факты жизни актива, а не операции: не правятся свайпом.
+  if (entry.type === 'open' || isClose) return row;
   return (
     <Swipeable
       ref={swipeRef}
@@ -728,6 +726,9 @@ const styles = StyleSheet.create({
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 12, marginBottom: tokens.spacing.lg },
   pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
   pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
+  pillClosed: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: hexToRgba(tokens.text.primary, 0.08) },
+  pillClosedText: { color: tokens.text.secondary, fontWeight: '600' },
+  logoMuted: { opacity: 0.55 },
 
   softShadow: boxShadow(SOFT_SHADOW),
 
@@ -747,17 +748,6 @@ const styles = StyleSheet.create({
   progressMetaText: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
   progressMetaPct: { fontSize: tokens.typography.hint, fontWeight: '600', color: tokens.accent.base },
 
-  heroIncomeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: tokens.spacing.lg,
-    paddingTop: tokens.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: tokens.surface.hairline,
-  },
-  heroIncomeLabel: { fontSize: 14, color: tokens.text.tertiary, letterSpacing: -0.28 },
-  heroIncomeValue: { fontSize: 17, fontWeight: '600', color: tokens.semantic.positive, letterSpacing: -0.17 },
   heroGraphWrap: { marginTop: tokens.spacing.lg },
 
   maturedBanner: {
@@ -784,37 +774,16 @@ const styles = StyleSheet.create({
   finCard: { marginBottom: tokens.spacing.lg, ...boxShadow(SOFT_SHADOW) },
   finTitle: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36, marginBottom: tokens.spacing.lg },
 
-  lifetimeValue: { fontSize: 26, lineHeight: 28, fontWeight: '700', color: tokens.semantic.positive, letterSpacing: -0.52 },
-  lifetimeMeta: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24, marginTop: 6 },
-
-  taxLifetimeDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginTop: tokens.spacing.lg, marginBottom: tokens.spacing.md },
-  taxLifetimeRow: { flexDirection: 'row' },
-  taxLifetimeLabel: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
-  taxLifetimeValue: { fontSize: 16, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.32, marginTop: 4 },
-  taxLifetimeValueWarn: { color: tokens.semantic.warning },
-  finRow: { flexDirection: 'row', alignItems: 'stretch' },
-  finCol: { flex: 1 },
-  finSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: 10 },
-  finColHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  finIcon: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  finColLabel: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.5), letterSpacing: -0.24, flexShrink: 1 },
-  finColValue: { fontSize: 17, lineHeight: 17, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.34, marginTop: 10 },
-  finColSub: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.22, marginTop: 5 },
-
-  finTotal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: tokens.spacing.md,
-    marginTop: tokens.spacing.lg,
-    backgroundColor: hexToRgba(tokens.semantic.positive, 0.12),
-    borderRadius: tokens.radius.md,
-    paddingHorizontal: tokens.spacing.lg,
-    paddingVertical: tokens.spacing.md,
-  },
-  finTotalLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
-  finTotalValue: { fontSize: 20, lineHeight: 22, fontWeight: '700', color: tokens.semantic.positive, letterSpacing: -0.4, marginTop: 6 },
-  finTotalChip: { backgroundColor: tokens.surface.white, borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
-  finTotalChipText: { fontSize: 11, fontWeight: '500', color: tokens.semantic.positive },
+  outcomeRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: 7 },
+  outcomeLabel: { fontSize: 14, lineHeight: 16, color: tokens.text.secondary },
+  outcomeLabelStrong: { color: tokens.text.primary, fontWeight: '600' },
+  outcomeSub: { fontSize: tokens.typography.hint, lineHeight: 14, color: tokens.text.tertiary, marginTop: 2 },
+  outcomeValue: { fontSize: 16, lineHeight: 18, fontWeight: '600', color: tokens.text.primary },
+  outcomeValuePositive: { color: tokens.semantic.positive },
+  outcomeValueStrong: { fontSize: 18, lineHeight: 20, fontWeight: '700' },
+  outcomeDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sm },
+  outcomeMeta: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
+  taxNote: { fontSize: tokens.typography.hint, lineHeight: 16, color: tokens.semantic.warning, marginTop: tokens.spacing.sm },
 
   historyCard: { paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   historyHeader: { paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
@@ -843,9 +812,6 @@ const styles = StyleSheet.create({
   swipeHint: { width: 64, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.surface.white },
   swipeHintBox: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   historyMoreText: { fontSize: 13, fontWeight: '600', color: tokens.accent.base },
-
-  forecastHint: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24, marginTop: -10, marginBottom: tokens.spacing.lg },
-  forecastValue: { fontSize: 16, lineHeight: 16, fontWeight: '600', color: tokens.semantic.positive, letterSpacing: -0.32, marginTop: 8 },
 
   bankCard: boxShadow(SOFT_SHADOW),
   bankRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },

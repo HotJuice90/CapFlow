@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { idleCapital, computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent } from './selectors';
+import { assetOutcome, findAssetView, idleCapital, computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -784,5 +784,57 @@ describe('idleCapital', () => {
       params: { ...base.params, keyRate: 14 },
     };
     expect(idleCapital(allIdle, now).atRate).toBe(14);
+  });
+});
+
+describe('assetOutcome', () => {
+  // Ровно случай из жизни: «Премиум» в Газпромбанке, 2,5 млн под 11,5% на два
+  // месяца, закрыт в дату окончания. Архив показывал по нему «+0 ₽, налог 0».
+  const org: Organization = { id: 'o1', name: 'Газпромбанк', type: 'Банк', color: '#000000' };
+  const premium: FinancialInstrument = {
+    id: 'ip', organizationId: 'o1', name: 'Премиум', typeId: 'deposit',
+    behavior: 'term', capitalization: 'none', payoutPeriod: 'monthly',
+  };
+  const closed: Asset = {
+    id: 'ap', instrumentId: 'ip', amount: 2_500_000, currency: 'RUB', rate: 11.5,
+    openDate: '2026-06-01', endDate: '2026-08-01', status: 'closed', closedDate: '2026-08-01',
+  };
+  const base = {
+    ...emptyAppData(),
+    organizations: [org],
+    instruments: [premium],
+    params: { taxRate: 13, keyRate: 14, taxFreeLimit: 160_000 },
+  };
+  const now = new Date(2026, 8, 27);
+
+  it('закрытый: доход и налог на дату закрытия, а не на сегодня', () => {
+    const data = { ...base, assets: [closed] };
+    const view = findAssetView(data, 'ap', now)!;
+    const o = assetOutcome(view, data.params, '2026-08-01');
+    expect(Math.round(o.earned)).toBe(48_048);
+    expect(Math.round(o.tax)).toBe(6_246);
+    expect(o.days).toBe(61);
+    expect(o.invested).toBeCloseTo(2_500_000, 0);
+  });
+
+  it('налог платит сам — приходит всё, налог отдельно', () => {
+    const data = { ...base, assets: [closed] };
+    const o = assetOutcome(findAssetView(data, 'ap', now)!, data.params, '2026-08-01');
+    expect(Math.round(o.payout)).toBe(2_548_048);
+  });
+
+  it('налог удерживает площадка — приходит уже за вычетом', () => {
+    const data = { ...base, assets: [{ ...closed, taxWithheldByBank: true }] };
+    const o = assetOutcome(findAssetView(data, 'ap', now)!, data.params, '2026-08-01');
+    expect(Math.round(o.payout)).toBe(2_548_048 - 6_246);
+  });
+
+  it('активный срочный: знает доход за весь срок и что придёт в конце', () => {
+    const active = { ...closed, status: 'active' as const, closedDate: undefined };
+    const data = { ...base, assets: [active] };
+    const o = assetOutcome(findAssetView(data, 'ap', new Date(2026, 6, 1))!, data.params, '2026-07-01');
+    expect(Math.round(o.termIncome!)).toBe(48_048);
+    expect(Math.round(o.atMaturity!)).toBe(2_548_048);
+    expect(o.earned).toBeLessThan(o.termIncome!);
   });
 });

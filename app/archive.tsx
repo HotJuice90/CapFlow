@@ -9,7 +9,7 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { OrgLogo } from '@/components/BankLogo';
 import { useData } from '@/state/DataContext';
 import { appAlert } from '@/lib/dialog';
-import { isPastYearMatured } from '@/state/selectors';
+import { assetClosedDate, assetOutcome, findAssetView, isPastYearMatured, type AssetOutcome } from '@/state/selectors';
 import type { Asset, FinancialInstrument, Organization, Snapshot } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
@@ -35,6 +35,11 @@ interface ArchiveEntry {
   /** формально ещё active, но просрочен и «спрятан» с прошлого года (isPastYearMatured) —
    *  сюда попадает, чтобы не потеряться совсем: только так его можно найти и открыть. */
   isStale?: boolean;
+  /** Деньги по закрытому — тем же расчётом, что «Итог» в карточке актива. */
+  outcome?: AssetOutcome;
+  closedIso?: string;
+  /** Ставка на дату закрытия — если менялась при жизни, тут та, что действовала в конце. */
+  closingRate?: number;
 }
 
 /** Подложка свайпа: не сплошная заливка, а компактная иконка на мягкой цветной плашке. */
@@ -71,11 +76,20 @@ export default function ArchiveScreen() {
         if (asset.status === 'active' && !isStale) return null;
         const organization = orgById.get(instrument.organizationId);
         const snapshot = snapByAsset.get(asset.id);
-        return organization ? { asset, instrument, organization, snapshot, isStale } : null;
+        if (!organization) return null;
+        // Деньги — НЕ из снимка на момент закрытия, а тем же расчётом, что и
+        // «Итог» в карточке актива (assetOutcome). Снимок протухал: закрытый
+        // вклад на 48 048 ₽ дохода показывался тут как «+0 ₽, налог 0», а
+        // налог и вовсе считался другой методикой (с лимитом, а не плоско).
+        if (isStale) return { asset, instrument, organization, snapshot, isStale };
+        const closedIso = assetClosedDate(data, asset);
+        const view = findAssetView(data, asset.id);
+        const outcome = view ? assetOutcome(view, data.params, closedIso ?? asset.openDate) : undefined;
+        return { asset, instrument, organization, snapshot, isStale, outcome, closedIso, closingRate: view?.derived.currentRate };
       })
       .filter((e): e is ArchiveEntry => e !== null)
       .sort((a, b) => b.asset.openDate.localeCompare(a.asset.openDate));
-  }, [data.assets, data.instruments, data.organizations, data.snapshots]);
+  }, [data]);
 
   const onRestore = (id: string, name: string) => {
     appAlert(`Восстановить «${name}»?`, 'Актив вернётся в список и снова будет участвовать в расчётах.', [
@@ -151,16 +165,13 @@ function ArchiveRow({
   onDelete: (id: string, name: string) => void;
   onOpen: () => void;
 }) {
-  const { asset, instrument, organization, snapshot, isStale } = entry;
+  const { asset, instrument, organization, snapshot, isStale, outcome, closedIso, closingRate } = entry;
   const swipeRef = useRef<SwipeableMethods>(null);
-  const statusLabel = isStale ? 'Просрочен, ждёт решения' : asset.status === 'archived' ? 'В архиве' : 'Закрыт';
+  const statusLabel = isStale ? 'Просрочен, ждёт решения' : 'Закрыт';
   // Ставка на момент закрытия (из снимка), а не на момент открытия — если она
   // менялась при жизни актива, тут должна остаться та, что реально действовала.
   // Для «зависших» (ещё active) снимка нет — берём как есть, у них ставка живая.
-  const frozenRate = snapshot?.derived.currentRate ?? asset.rate;
-  // closedDate — новое поле, у записей, закрытых до его появления, откатываемся
-  // на дату снимка (см. closedDateFallback в selectors.ts — тот же принцип).
-  const closedIso = asset.closedDate ?? snapshot?.createdAt.slice(0, 10);
+  const frozenRate = closingRate ?? snapshot?.derived.currentRate ?? asset.rate;
 
   const row = (
     <Pressable style={styles.card} onPress={onOpen}>
@@ -191,14 +202,14 @@ function ArchiveRow({
           пересчитываем на сегодня: деньги ушли, дальше проценты не идут.
           У «зависших» (ещё active, просто просрочен) снимка нет — они ещё
           не закрыты, эта сводка для них не про историю, а про текущее. */}
-      {!isStale && snapshot ? (
+      {!isStale && outcome ? (
         <View style={styles.metaRow}>
           <Text style={styles.metaDates} numberOfLines={1}>
             {formatDateShort(asset.openDate)}{closedIso ? ` → ${formatDateShort(closedIso)}` : ''}
           </Text>
           <View style={styles.metaStats}>
-            <Text style={styles.metaEarned}>+{formatMoney(snapshot.derived.earnedSoFar, { currency: asset.currency, kopecks: 'hide' })}</Text>
-            <Text style={styles.metaTax}>налог {formatMoney(snapshot.derived.tax, { currency: asset.currency, kopecks: 'hide' })}</Text>
+            <Text style={styles.metaEarned}>+{formatMoney(outcome.earned, { currency: asset.currency, kopecks: 'hide' })}</Text>
+            <Text style={styles.metaTax}>налог {formatMoney(outcome.tax, { currency: asset.currency, kopecks: 'hide' })}</Text>
           </View>
         </View>
       ) : null}
@@ -207,7 +218,7 @@ function ArchiveRow({
 
   // «Зависшие» (просрочены, но формально ещё active) — восстанавливать нечего,
   // они и так активны; тут только удалить целиком, решение принимается тапом
-  // по строке (открывает актив с баннером Продлить/Архив/Закрыть).
+  // по строке (открывает актив с баннером Продлить/Закрыть).
   if (isStale) {
     return (
       <Swipeable

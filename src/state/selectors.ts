@@ -149,6 +149,12 @@ export function findAssetView(data: AppData, id: string | undefined, now: Date =
   return { asset, instrument, organization, derived: calculate(asset, instrument, data.params, asOf, 0) };
 }
 
+/** Дата закрытия актива: явное поле, а у старых записей — дата последнего снимка. */
+export function assetClosedDate(data: AppData, asset: Asset): string | undefined {
+  if (asset.status === 'active') return undefined;
+  return asset.closedDate ?? closedDateFallback(data, asset.id);
+}
+
 function closedDateFallback(data: AppData, assetId: string): string | undefined {
   const snaps = data.snapshots.filter((s) => s.assetId === assetId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return snaps[0]?.createdAt.slice(0, 10);
@@ -1090,6 +1096,77 @@ export function payoutEventsForMonth(data: AppData, year: number, month: number,
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface AssetOutcome {
+  /** Своих денег в активе: стоимость без начисленного (то же, что в строке списка). */
+  invested: number;
+  /** Заработано к дате расчёта — у закрытого это дата закрытия, а не сегодня. */
+  earned: number;
+  /** Налог с заработанного — ПЛОСКИЙ (ставка × доход), как на всех карточках актива. */
+  tax: number;
+  /** Реально удержано при снятиях (факт, а не оценка). */
+  taxPaid: number;
+  /** Налог удерживает площадка — тогда он вычитается из того, что приходит. */
+  withheld: boolean;
+  /** Сколько приходит на счёт при закрытии на дату расчёта. */
+  payout: number;
+  /** Дней жизни: от открытия до закрытия, у активного — до сегодня. */
+  days: number;
+  /** Только у срочных: доход за весь срок… */
+  termIncome?: number;
+  /** …и налог с него… */
+  termTax?: number;
+  /** …и сумма, которая придёт в конце срока. */
+  atMaturity?: number;
+}
+
+/**
+ * Деньги по одному активу — ОДНИМ расчётом для всех экранов.
+ *
+ * Раньше их считали трижды и по-разному: деталка пересчитывала на дату
+ * закрытия с плоским налогом, архив брал доход и налог из снимка на момент
+ * закрытия (налог — с лимитом), а диалог закрытия — ещё раз, тоже с лимитом.
+ * Итог: закрытый вклад на 48 048 ₽ дохода в архиве показывал «+0 ₽, налог 0»,
+ * а в деталке — «48 048 ₽, налог 6 246».
+ *
+ * Налог плоский, а не с лимитом, по той же причине, что и везде на карточке:
+ * лимит один на все активы за год, и любая его дележка между карточками —
+ * артефакт порядка, а не свойство актива.
+ *
+ * «Приходит на счёт» — ДО налога, если его платит сам человек: банк по вкладу
+ * налог не удерживает, он придёт уведомлением отдельно. Если удерживает
+ * площадка — за вычетом ещё не удержанного.
+ *
+ * `view.derived` должен быть посчитан на нужную дату: для закрытого это
+ * делает findAssetView (на дату закрытия).
+ */
+export function assetOutcome(view: AssetView, params: AppData['params'], asOf: string): AssetOutcome {
+  const { asset, derived } = view;
+  const rate = params.taxRate / 100;
+  const earned = derived.earnedSoFar ?? derived.accrued;
+  const taxPaid = (asset.balanceAdjustments ?? []).reduce((sum, a) => sum + (a.taxWithheld ?? 0), 0);
+  const tax = Math.max(0, earned) * rate;
+  const withheld = !!asset.taxWithheldByBank;
+  const owedNow = Math.max(0, tax - taxPaid);
+
+  const outcome: AssetOutcome = {
+    invested: derived.currentValue - earned,
+    earned,
+    tax,
+    taxPaid,
+    withheld,
+    payout: Math.max(0, derived.currentValue - (withheld ? owedNow : 0)),
+    days: Math.max(0, diffDays(asset.openDate, asOf)),
+  };
+
+  if (asset.endDate && derived.incomeTotalTerm !== undefined) {
+    const termTax = Math.max(0, derived.incomeTotalTerm) * rate;
+    outcome.termIncome = derived.incomeTotalTerm;
+    outcome.termTax = termTax;
+    outcome.atMaturity = asset.amount + derived.incomeTotalTerm - (withheld ? Math.max(0, termTax - taxPaid) : 0);
+  }
+  return outcome;
+}
+
 export interface IdleCapital {
   /** Деньги во вкладах с вышедшим сроком, в основной валюте. */
   total: number;
@@ -1547,7 +1624,9 @@ export function assetValueSeries(data: AppData, assetId: string, maxPoints = 30)
 }
 
 export interface AssetTimelineEntry {
-  type: 'open' | 'balance' | 'rate';
+  /** 'close' — закрытие актива; в assetTimeline не порождается, его добавляет
+   *  экран: сумма закрытия берётся из assetOutcome, а тот знает про налог. */
+  type: 'open' | 'balance' | 'rate' | 'close';
   /** undefined только у 'open' — это не корректировка, а точка открытия */
   id?: string;
   date: string;
