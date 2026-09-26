@@ -434,41 +434,6 @@ export default function HomeScreen() {
               </Pressable>
             ) : null}
 
-            {/* Простой. Блока нет, когда простаивать нечему — это не постоянная
-                строка отчёта, а повод что-то сделать. Смысл не в сумме, а в
-                цене бездействия: деньги без ставки видно и так, а вот сколько
-                это стоит в день — нет. */}
-            {idle.total > 0 ? (
-              <Pressable
-                style={styles.idleCard}
-                onPress={() => idle.longestAssetId && router.push(`/asset/${idle.longestAssetId}`)}
-              >
-                <View style={styles.idleHead}>
-                  <View style={styles.idleIcon}>
-                    <MaterialCommunityIcons name="sleep" size={16} color={tokens.semantic.warning} />
-                  </View>
-                  <Text style={styles.idleLabel}>Простаивает</Text>
-                  <MaterialIcons name="chevron-right" size={20} color={hexToRgba(tokens.text.primary, 0.35)} />
-                </View>
-
-                <Text style={styles.idleValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                  {formatMoney(idle.total, { currency: cur, kopecks: 'hide' })}
-                </Text>
-                <Text style={styles.idleCost}>
-                  теряете ~{formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })} в день
-                  {' '}при ставке {formatPercent(idle.atRate)}
-                </Text>
-
-                <View style={styles.idleChips}>
-                  <View style={styles.idleChip}>
-                    <Text style={styles.idleChipText}>
-                      {idle.count} {pluralAssets(idle.count)}
-                      {idle.longestDays > 0 ? ` · ${idle.longestDays} ${pluralDays(idle.longestDays)} без ставки` : ''}
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-            ) : null}
           </View>
         </View>
 
@@ -505,55 +470,71 @@ export default function HomeScreen() {
                 style={[styles.heroEventPill, nearestEvent.kind === 'overdue' && styles.heroEventPillAlert]}
                 onPress={() => router.push(`/asset/${nearestEvent.assetId}`)}
               >
-                {/* Кольцо обратного отсчёта — как в списке событий: для срока
-                    это доля пройденного срока, для выплаты — доля периода
-                    начисления. Иконка типа события внутри кольца, чтобы не
-                    занимать ещё одно место в строке. */}
-                <View style={styles.heroEventRing}>
-                  <Donut
-                    segments={[
-                      { value: nearestEvent.progress, color: eventTone },
-                      { value: 1 - nearestEvent.progress, color: tokens.surface.neutral },
-                    ]}
-                    size={40}
-                    strokeWidth={4.5}
-                  />
-                  <View style={styles.heroEventRingIcon} pointerEvents="none">
-                    <MaterialCommunityIcons
-                      name={
-                        nearestEvent.kind === 'overdue'
-                          ? 'alert-circle-outline'
-                          : nearestEvent.kind === 'maturity'
-                            ? 'flag-outline'
-                            : 'cash'
-                      }
-                      size={15}
-                      color={eventTone}
+                <View style={styles.heroEventRow}>
+                  {/* Кольцо обратного отсчёта — как в списке событий: для срока
+                      это доля пройденного срока, для выплаты — доля периода
+                      начисления. Иконка типа события внутри кольца, чтобы не
+                      занимать ещё одно место в строке. */}
+                  <View style={styles.heroEventRing}>
+                    <Donut
+                      segments={[
+                        { value: nearestEvent.progress, color: eventTone },
+                        { value: 1 - nearestEvent.progress, color: tokens.surface.neutral },
+                      ]}
+                      size={40}
+                      strokeWidth={4.5}
                     />
+                    <View style={styles.heroEventRingIcon} pointerEvents="none">
+                      <MaterialCommunityIcons
+                        name={
+                          nearestEvent.kind === 'overdue'
+                            ? 'alert-circle-outline'
+                            : nearestEvent.kind === 'maturity'
+                              ? 'flag-outline'
+                              : 'cash'
+                        }
+                        size={15}
+                        color={eventTone}
+                      />
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.heroEventLabel, nearestEvent.kind === 'overdue' && { color: eventTone }]}>
+                      {nearestEvent.kind === 'overdue'
+                        ? 'Срок истёк — деньги не работают'
+                        : nearestEvent.kind === 'maturity'
+                          ? 'Окончание срока'
+                          : 'Выплата процентов'}
+                    </Text>
+                    <Text style={styles.heroEventName} numberOfLines={1}>{nearestEvent.name}</Text>
+                  </View>
+                  <View style={styles.heroEventWhen}>
+                    <Text style={[styles.heroEventDate, { color: eventTone }]}>
+                      {formatDateShort(nearestEvent.date)}
+                    </Text>
+                    <Text style={styles.heroEventDays}>
+                      {nearestEvent.daysRemaining === 0
+                        ? 'сегодня'
+                        : nearestEvent.daysRemaining < 0
+                          ? `${-nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)} назад`
+                          : `${nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)}`}
+                    </Text>
                   </View>
                 </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[styles.heroEventLabel, nearestEvent.kind === 'overdue' && { color: eventTone }]}>
-                    {nearestEvent.kind === 'overdue'
-                      ? 'Срок истёк — деньги не работают'
-                      : nearestEvent.kind === 'maturity'
-                        ? 'Окончание срока'
-                        : 'Выплата процентов'}
-                  </Text>
-                  <Text style={styles.heroEventName} numberOfLines={1}>{nearestEvent.name}</Text>
-                </View>
-                <View style={styles.heroEventWhen}>
-                  <Text style={[styles.heroEventDate, { color: eventTone }]}>
-                    {formatDateShort(nearestEvent.date)}
-                  </Text>
-                  <Text style={styles.heroEventDays}>
-                    {nearestEvent.daysRemaining === 0
-                      ? 'сегодня'
-                      : nearestEvent.daysRemaining < 0
-                        ? `${-nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)} назад`
-                        : `${nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)}`}
-                  </Text>
-                </View>
+
+                {/* Карточка события ДИНАМИЧЕСКАЯ: в состоянии «срок истёк» она
+                    же говорит, сколько денег стоит без ставки и чего это стоит
+                    в день. Отдельный блок про простой рассказывал бы то же
+                    самое в том же месте экрана. */}
+                {nearestEvent.kind === 'overdue' && idle.total > 0 ? (
+                  <View style={styles.heroEventFoot}>
+                    <Text style={styles.heroEventFootText}>
+                      {idle.count > 1 ? `${idle.count} ${pluralAssets(idle.count)}: ` : ''}
+                      {formatMoney(idle.total, { currency: cur, kopecks: 'hide' })} без ставки
+                      {' · '}теряете ~{formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })} в день
+                    </Text>
+                  </View>
+                ) : null}
               </Pressable>
             ) : null}
 
@@ -1015,62 +996,25 @@ const styles = StyleSheet.create({
   // Тонирована акцентом, в отличие от белых плиток фактов над ней: плитки
   // сообщают состояние, а эта строка — единственное, что может потребовать
   // действия, и должна отличаться от них не только содержанием.
-  idleCard: {
-    marginTop: tokens.spacing.sm,
-    backgroundColor: hexToRgba(tokens.surface.white, 0.68),
-    borderRadius: tokens.radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    boxShadow: tokens.shadow.subtle,
-  },
-  idleHead: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.tight },
-  idleIcon: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: hexToRgba(tokens.semantic.warning, 0.14),
-    alignItems: 'center', justifyContent: 'center',
-  },
-  idleLabel: {
-    flex: 1,
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 2,
-    fontFamily: font.medium,
-    color: tokens.text.secondary,
-  },
-  idleValue: {
-    fontSize: 21,
-    lineHeight: 26,
-    fontFamily: font.bold,
-    color: tokens.text.primary,
-    letterSpacing: -0.3,
-    marginTop: tokens.spacing.tight,
-  },
-  idleCost: {
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 3,
-    fontFamily: font.regular,
-    color: tokens.semantic.warning,
-    marginTop: 3,
-  },
-  idleChips: { flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing.chip, marginTop: tokens.spacing.md },
-  idleChip: {
-    backgroundColor: tokens.surface.rowTint,
-    borderRadius: tokens.radius.pill,
-    paddingHorizontal: tokens.spacing.tight,
-    paddingVertical: 5,
-  },
-  idleChipText: {
-    fontSize: tokens.typography.micro,
-    lineHeight: tokens.typography.micro + 2,
-    fontFamily: font.medium,
-    color: tokens.text.secondary,
-  },
   heroEventPillAlert: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.12) },
   heroEventPill: {
-    flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md,
     backgroundColor: hexToRgba(tokens.accent.base, 0.07),
     borderRadius: tokens.radius.md,
     paddingHorizontal: 14, paddingVertical: 14,
     marginTop: tokens.spacing.sm,
+  },
+  heroEventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  heroEventFoot: {
+    marginTop: tokens.spacing.md,
+    paddingTop: tokens.spacing.tight,
+    borderTopWidth: 1,
+    borderTopColor: hexToRgba(tokens.semantic.warning, 0.22),
+  },
+  heroEventFootText: {
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 3,
+    fontFamily: font.medium,
+    color: tokens.semantic.warning,
   },
   heroEventRing: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   heroEventRingIcon: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
