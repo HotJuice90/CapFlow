@@ -64,7 +64,7 @@ export function TextField({
 // ---------- NumberField ----------
 /** Живая группировка тысяч прямо во время ввода (целую часть — по 3 цифры),
  *  дробную часть после запятой/точки не трогаем. */
-function groupWhileTyping(text: string): string {
+export function groupWhileTyping(text: string): string {
   const sepIdx = text.search(/[.,]/);
   const intPart = (sepIdx === -1 ? text : text.slice(0, sepIdx)).replace(/\s/g, '');
   const rest = sepIdx === -1 ? '' : text.slice(sepIdx);

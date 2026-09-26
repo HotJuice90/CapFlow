@@ -1,15 +1,15 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { openedSide } from '@/lib/swipe';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { ScreenBackground } from '@/components/ScreenBackground';
-import { TextField, NumberField, DateField, Segmented } from '@/components/form/fields';
-import { boxShadow } from '@/theme/shadow';
+import { Segmented, groupWhileTyping } from '@/components/form/fields';
+import { openDatePicker } from '@/lib/datePicker';
 import { useData } from '@/state/DataContext';
-import { freeCapitalBalance } from '@/state/selectors';
+import { freeCapitalBalance, portfolioSummary } from '@/state/selectors';
 import { appAlert } from '@/lib/dialog';
 import { tapBuzz, successBuzz, warnBuzz } from '@/lib/haptics';
 import { uid } from '@/utils/id';
@@ -42,11 +42,23 @@ export default function CapitalScreen() {
     [data.freeCapitalEntries],
   );
 
+  // Доля в общем капитале — единственная полезная подпись к балансу: сама
+  // сумма и так на виду, а вот «много это или мало» без неё не понять.
+  const working = useMemo(() => portfolioSummary(data).workingCapital, [data]);
+  const share = balance > 0 && working + balance > 0 ? balance / (working + balance) : 0;
+
   const [direction, setDirection] = useState<Direction>('in');
-  const [amount, setAmount] = useState<number | undefined>(undefined);
+  // Текст суммы живёт ЗДЕСЬ, а не внутри поля: у общего NumberField своя
+  // строка, и после «Добавить» число в состоянии сбрасывалось, а в поле
+  // оставалось старое — кнопка гасла, а сумма продолжала висеть на экране.
+  const [amountText, setAmountText] = useState('');
   const [date, setDate] = useState<string>(todayIso());
   const [comment, setComment] = useState('');
 
+  const amount = useMemo(() => {
+    const n = parseFloat(amountText.replace(/\s/g, '').replace(',', '.'));
+    return Number.isFinite(n) ? n : undefined;
+  }, [amountText]);
   const canSave = amount !== undefined && amount > 0 && !!date;
 
   const onAdd = async () => {
@@ -61,7 +73,7 @@ export default function CapitalScreen() {
     };
     await addFreeCapitalEntry(entry);
     successBuzz();
-    setAmount(undefined);
+    setAmountText('');
     setComment('');
   };
 
@@ -93,39 +105,68 @@ export default function CapitalScreen() {
           <Text style={styles.headerTitle}>Свободные деньги</Text>
         </View>
 
-        <View style={styles.balanceBox}>
-          <Text style={styles.balanceLabel}>Баланс</Text>
-          <Text style={styles.balanceValue}>{formatMoney(balance, { currency: cur, kopecks: 'hide' })}</Text>
+        {/* Баланс — главное число экрана, поэтому без рамки: карточка вокруг
+            одной цифры делала её «ещё одним полем», и экран разваливался на
+            равнозначные коробки. */}
+        <View style={styles.hero}>
+          <Text style={styles.heroLabel}>Свободно</Text>
+          <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {formatMoney(balance, { currency: cur, kopecks: 'hide' })}
+          </Text>
+          {share > 0 ? (
+            <Text style={styles.heroSub}>{Math.round(share * 100)}% всего капитала · без ставки</Text>
+          ) : null}
         </View>
 
-        <Segmented
-          label="Операция"
-          value={direction}
-          options={[
-            { label: 'Пополнение', value: 'in' },
-            { label: 'Списание', value: 'out' },
-          ]}
-          onChange={(v) => { tapBuzz(); setDirection(v); }}
-        />
-        <NumberField
-          label={direction === 'in' ? 'Сумма пополнения' : 'Сумма списания'}
-          value={amount}
-          onChange={setAmount}
-          placeholder="0"
-          suffix={CURRENCY_SYMBOL[cur]}
-          grouped
-        />
-        <DateField label="Дата" value={date} onChange={setDate} />
-        <TextField
-          label="Комментарий (необязательно)"
-          value={comment}
-          onChangeText={setComment}
-          placeholder="Например: зарплата"
-        />
-        <Pressable style={[styles.addBtn, !canSave && styles.addBtnDisabled]} disabled={!canSave} onPress={onAdd}>
-          <MaterialIcons name="add" size={18} color={tokens.text.inverse} />
-          <Text style={styles.addBtnText}>Добавить</Text>
-        </Pressable>
+        {/* Операция — одним блоком: тип, сумма, дата с комментарием и кнопка
+            читаются как одно действие, а не как пять полей вразброс. */}
+        <View style={styles.opCard}>
+          <Segmented
+            value={direction}
+            options={[
+              { label: 'Пополнение', value: 'in' },
+              { label: 'Списание', value: 'out' },
+            ]}
+            onChange={(v) => { tapBuzz(); setDirection(v); }}
+          />
+
+          <View style={styles.amountRow}>
+            <Text style={[styles.amountSign, direction === 'out' && styles.amountSignOut]}>
+              {direction === 'in' ? '+' : '−'}
+            </Text>
+            <TextInput
+              style={styles.amountInput}
+              value={amountText}
+              onChangeText={(t) => setAmountText(groupWhileTyping(t.replace(',', '.').replace(/[^0-9.]/g, '')))}
+              placeholder="0"
+              placeholderTextColor={hexToRgba(tokens.text.primary, 0.25)}
+              keyboardType="numeric"
+            />
+            <Text style={styles.amountCur}>{CURRENCY_SYMBOL[cur]}</Text>
+          </View>
+
+          <View style={styles.metaRow}>
+            <Pressable
+              style={styles.dateChip}
+              onPress={() => openDatePicker({ title: 'Дата', value: date, maxDate: todayIso(), onPick: setDate })}
+            >
+              <MaterialIcons name="calendar-today" size={15} color={tokens.accent.base} />
+              <Text style={styles.dateChipText}>{date === todayIso() ? 'Сегодня' : formatDateShort(date)}</Text>
+            </Pressable>
+            <TextInput
+              style={styles.commentInput}
+              value={comment}
+              onChangeText={setComment}
+              placeholder="Комментарий"
+              placeholderTextColor={tokens.text.tertiary}
+            />
+          </View>
+
+          <Pressable style={[styles.addBtn, !canSave && styles.addBtnDisabled]} disabled={!canSave} onPress={onAdd}>
+            <MaterialIcons name="add" size={18} color={tokens.text.inverse} />
+            <Text style={styles.addBtnText}>{direction === 'in' ? 'Пополнить' : 'Списать'}</Text>
+          </Pressable>
+        </View>
 
         {entries.length > 0 ? (
           <>
@@ -208,23 +249,78 @@ const styles = StyleSheet.create({
   backBtn: { width: 24 },
   headerTitle: { flex: 1, fontFamily: font.semibold, fontSize: tokens.typography.header, color: tokens.text.primary, letterSpacing: -0.24 },
 
-  balanceBox: {
-    alignItems: 'center',
-    borderRadius: 20,
-    paddingVertical: tokens.spacing.lg,
-    marginBottom: tokens.spacing.lg,
-    backgroundColor: tokens.surface.rowTint,
-    ...boxShadow(tokens.shadow.subtle),
+  hero: { alignItems: 'center', paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.xxl },
+  heroLabel: {
+    fontFamily: font.medium,
+    fontSize: tokens.typography.label,
+    lineHeight: tokens.typography.label + 2,
+    color: tokens.text.secondary,
   },
-  balanceLabel: { fontFamily: font.medium, fontSize: tokens.typography.caption, color: tokens.text.tertiary },
-  balanceValue: { fontFamily: font.semibold, fontSize: tokens.typography.title, color: tokens.text.primary, marginTop: 4 },
+  heroValue: {
+    fontFamily: font.semibold,
+    fontSize: 40,
+    lineHeight: 48,
+    color: tokens.text.primary,
+    letterSpacing: -0.8,
+    marginTop: 6,
+  },
+  heroSub: {
+    fontFamily: font.regular,
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 2,
+    color: tokens.text.tertiary,
+    marginTop: 6,
+  },
+
+  opCard: {
+    backgroundColor: tokens.surface.white,
+    borderRadius: tokens.radius.lg,
+    padding: tokens.spacing.lg,
+    boxShadow: tokens.shadow.card,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: tokens.spacing.lg,
+    paddingBottom: tokens.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.surface.hairline,
+  },
+  amountSign: { fontFamily: font.semibold, fontSize: 30, color: tokens.semantic.positive, marginRight: 4 },
+  amountSignOut: { color: tokens.semantic.negative },
+  amountInput: {
+    flex: 1,
+    fontFamily: font.semibold,
+    fontSize: 30,
+    color: tokens.text.primary,
+    paddingVertical: 0,
+  },
+  amountCur: { fontFamily: font.medium, fontSize: 22, color: tokens.text.tertiary },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: tokens.spacing.md },
+  dateChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: tokens.accent.soft,
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.md,
+    height: 40,
+  },
+  dateChipText: { fontFamily: font.medium, fontSize: tokens.typography.caption, color: tokens.accent.base },
+  commentInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: tokens.surface.neutral,
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.md,
+    fontSize: tokens.typography.caption,
+    color: tokens.text.primary,
+  },
 
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     backgroundColor: tokens.accent.base, borderRadius: tokens.radius.pill,
-    paddingVertical: tokens.spacing.md, marginTop: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.md, marginTop: tokens.spacing.lg,
   },
-  addBtnDisabled: { backgroundColor: tokens.text.tertiary },
+  addBtnDisabled: { backgroundColor: hexToRgba(tokens.accent.base, 0.35) },
   addBtnText: { color: tokens.text.inverse, fontFamily: font.semibold, fontSize: tokens.typography.label },
 
   section: { fontFamily: font.semibold, fontSize: tokens.typography.title, color: tokens.text.primary, marginTop: 40, marginBottom: 14, paddingLeft: 8 },
