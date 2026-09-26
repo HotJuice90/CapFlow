@@ -1,6 +1,7 @@
 import { type AppData, DEFAULT_RATES, emptyAppData, SCHEMA_VERSION } from './types';
 import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import { currentKeyRate, mergeKeyRateHistory, taxFreeLimitForYear } from '@/rates/keyRate';
+import { DEPOSIT_TAX_EXEMPT_YEARS } from '@/calc/tax';
 
 /** Экспортирована ради тестов: это единственное место, где старые сохранения
  *  приводятся к текущей форме, и ломаться ей нельзя — цена ошибки тут данные. */
@@ -22,6 +23,15 @@ export function migrate(data: AppData): AppData {
   if (!next.ratesHistory) next.ratesHistory = [];
   if (!next.manualRates) next.manualRates = {};
   if (!next.taxYearRecords) next.taxYearRecords = [];
+  // Записи за годы, когда проценты по вкладам не облагались, могли быть
+  // зафиксированы старым кодом с налогом «доплатить самому». Доходы в них
+  // трогать нельзя (запись замораживается один раз), а вот налог — неверный
+  // по закону, а не устаревший по данным, поэтому правим точечно.
+  next.taxYearRecords = next.taxYearRecords.map((r) =>
+    DEPOSIT_TAX_EXEMPT_YEARS.has(r.year) && r.taxToPaySelf > 0
+      ? { ...r, taxToPaySelf: 0, taxDue: r.taxWithheld }
+      : r,
+  );
   if (!next.goals) next.goals = [];
   if (!next.freeCapitalEntries) next.freeCapitalEntries = [];
 

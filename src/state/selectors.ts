@@ -1,5 +1,5 @@
 import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, Snapshot, TaxYearRecord } from '@/domain/types';
-import { accrualSeries, calculate, calcAssetTax, calcTax, daysInYear, diffDays, parseLocal, periodsPerYear } from '@/calc';
+import { accrualSeries, calculate, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
@@ -2073,7 +2073,10 @@ export function computeTaxYearRecord(data: AppData, year: number): TaxYearRecord
   const taxableIncome = withheldIncome + selfIncome;
   // Лимит года — льгота только для «доплатить самому»; «удержит банк» считается
   // отдельно и плоско (свой правовой режим, см. calcAssetTax), не пропорцией.
-  const taxToPaySelf = calcTax(selfIncome, { ...yearParams, taxFreeLimit });
+  // За 2021–2022 проценты по вкладам не облагались вовсе (см. DEPOSIT_TAX_EXEMPT_YEARS).
+  const taxToPaySelf = DEPOSIT_TAX_EXEMPT_YEARS.has(year)
+    ? 0
+    : calcTax(selfIncome, { ...yearParams, taxFreeLimit });
   const taxWithheld = calcAssetTax(withheldIncome, yearParams, 0, true);
   const taxDue = taxToPaySelf + taxWithheld;
 

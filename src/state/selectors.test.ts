@@ -53,6 +53,26 @@ describe('computeTaxYearRecord', () => {
     expect(rec.taxableIncome).toBeCloseTo(expectedIncome, 2);
   });
 
+  test('2022 год: проценты по вкладам не облагались вовсе (67-ФЗ)', () => {
+    const old = { ...asset, openDate: '2022-01-01' };
+    const rec = computeTaxYearRecord({ ...baseData, assets: [old] }, 2022);
+    expect(rec.taxableIncome).toBeGreaterThan(160_000); // доход есть, и больше лимита
+    expect(rec.taxToPaySelf).toBe(0);
+    expect(rec.taxDue).toBe(0);
+  });
+
+  test('2022 год: удержанное площадкой освобождение не затрагивает', () => {
+    const broker = { ...asset, openDate: '2022-01-01', taxWithheldByBank: true };
+    const rec = computeTaxYearRecord({ ...baseData, assets: [broker] }, 2022);
+    expect(rec.taxWithheld).toBeGreaterThan(0);
+  });
+
+  test('2023 год облагается как обычно', () => {
+    const since2023 = { ...asset, openDate: '2023-01-01' };
+    const rec = computeTaxYearRecord({ ...baseData, assets: [since2023] }, 2023);
+    expect(rec.taxToPaySelf).toBeGreaterThan(0);
+  });
+
   test('без флага «удерживает банк» — весь налог сверх лимита нужно доплатить самому', () => {
     const rec = computeTaxYearRecord(baseData, 2025);
     const expectedTax = (expectedIncome - 160_000) * 0.13;

@@ -23,6 +23,9 @@ export default function TaxScreen() {
   );
   const manual = data.params.taxFreeLimitManual === true;
 
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
   const years = useMemo(
     () => [...data.taxYearRecords].sort((a, b) => b.year - a.year),
     [data.taxYearRecords],
@@ -100,6 +103,14 @@ export default function TaxScreen() {
                       <YearStat label="Удержал банк" value={formatMoney(y.taxWithheld, { currency: cur, kopecks: 'hide' })} />
                       <YearStat label="Доплатить самому" value={formatMoney(y.taxToPaySelf, { currency: cur, kopecks: 'hide' })} accent={y.taxToPaySelf > 0} />
                     </View>
+                  ) : null}
+                  {/* Срок — по НК: налог по уведомлению ФНС платится до 1 декабря
+                      следующего года. Показываем, только пока он не прошёл:
+                      для старых лет это уже история, а не напоминание. */}
+                  {y.taxToPaySelf > 0 && todayIso <= `${y.year + 1}-12-01` ? (
+                    <Text style={styles.deadline}>
+                      Уплатить до 1 декабря {y.year + 1} — ФНС пришлёт уведомление
+                    </Text>
                   ) : null}
                 </View>
               ))}
@@ -203,6 +214,13 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.caption,
     lineHeight: tokens.typography.caption + 2,
     color: tokens.accent.base,
+  },
+  deadline: {
+    fontFamily: font.medium,
+    fontSize: tokens.typography.hint,
+    lineHeight: tokens.typography.hint + 3,
+    color: tokens.semantic.warning,
+    marginTop: tokens.spacing.sm,
   },
   footnote: {
     fontFamily: font.regular,
