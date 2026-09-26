@@ -733,13 +733,13 @@ describe('idleCapital', () => {
 
   it('вклад с вышедшим сроком простаивает целиком, вместе с накопленным', () => {
     const idle = idleCapital({ ...base, assets: [working, expired] }, now);
-    expect(idle.maturedCount).toBe(1);
-    expect(idle.matured).toBeGreaterThan(500_000); // тело + то, что успело накапать
+    expect(idle.count).toBe(1);
+    expect(idle.total).toBeGreaterThan(500_000); // тело + то, что успело накапать
     expect(idle.longestDays).toBe(31);
     expect(idle.longestAssetId).toBe('ae');
   });
 
-  it('кошелёк тоже простаивает', () => {
+  it('кошелёк НЕ простаивает — это осознанная копилка', () => {
     const withFree = {
       ...base,
       assets: [working],
@@ -747,22 +747,14 @@ describe('idleCapital', () => {
         { id: 'f1', date: '2026-09-01', amount: 200_000, currency: 'RUB' as const, createdAt: '2026-09-01T00:00:00.000Z' },
       ],
     };
-    const idle = idleCapital(withFree, now);
-    expect(idle.free).toBe(200_000);
-    expect(idle.total).toBe(200_000);
+    expect(idleCapital(withFree, now).total).toBe(0);
   });
 
   it('упущенное считается по ставке РАБОТАЮЩЕЙ части портфеля', () => {
-    const withFree = {
-      ...base,
-      assets: [working], // 12% годовых
-      freeCapitalEntries: [
-        { id: 'f1', date: '2026-09-01', amount: 365_000, currency: 'RUB' as const, createdAt: '2026-09-01T00:00:00.000Z' },
-      ],
-    };
-    const idle = idleCapital(withFree, now);
+    const idle = idleCapital({ ...base, assets: [working, expired] }, now);
+    // Работает только накопительный под 12% — по нему и меряем упущенное.
     expect(idle.atRate).toBeCloseTo(12, 1);
-    expect(idle.lostPerDay).toBeCloseTo((365_000 * 0.12) / 365, 0);
+    expect(idle.lostPerDay).toBeCloseTo((idle.total * 0.12) / 365, 0);
   });
 
   it('когда не работает ничего, цена простоя считается по ключевой', () => {

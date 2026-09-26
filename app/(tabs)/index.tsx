@@ -441,7 +441,7 @@ export default function HomeScreen() {
             {idle.total > 0 ? (
               <Pressable
                 style={styles.idleCard}
-                onPress={() => router.push(idle.longestAssetId ? `/asset/${idle.longestAssetId}` : '/settings/capital')}
+                onPress={() => idle.longestAssetId && router.push(`/asset/${idle.longestAssetId}`)}
               >
                 <View style={styles.idleHead}>
                   <View style={styles.idleIcon}>
@@ -460,21 +460,12 @@ export default function HomeScreen() {
                 </Text>
 
                 <View style={styles.idleChips}>
-                  {idle.matured > 0 ? (
-                    <View style={styles.idleChip}>
-                      <Text style={styles.idleChipText}>
-                        {formatMoney(idle.matured, { currency: cur, kopecks: 'hide' })} в истёкших
-                        {idle.longestDays > 0 ? ` · ${idle.longestDays} ${pluralDays(idle.longestDays)}` : ''}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {idle.free > 0 ? (
-                    <View style={styles.idleChip}>
-                      <Text style={styles.idleChipText}>
-                        {formatMoney(idle.free, { currency: cur, kopecks: 'hide' })} в кошельке
-                      </Text>
-                    </View>
-                  ) : null}
+                  <View style={styles.idleChip}>
+                    <Text style={styles.idleChipText}>
+                      {idle.count} {pluralAssets(idle.count)}
+                      {idle.longestDays > 0 ? ` · ${idle.longestDays} ${pluralDays(idle.longestDays)} без ставки` : ''}
+                    </Text>
+                  </View>
                 </View>
               </Pressable>
             ) : null}
