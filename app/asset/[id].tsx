@@ -374,12 +374,16 @@ export default function AssetScreen() {
                 </View>
               ) : null}
             </View>
+            {/* За что эта сумма — подписью НАД числом, как «На счёте» в карточке
+                выше. Мелким текстом под ним период терялся, и крупное зелёное
+                число читалось как «доход вообще» непонятно за какой срок. */}
+            <Text style={styles.bigLabel}>
+              Заработано за {outcome.days} {pluralDays(outcome.days)}
+            </Text>
             <Text style={[styles.bigValue, styles.bigValuePositive]} numberOfLines={1} adjustsFontSizeToFit>
               {formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
             </Text>
-            <Text style={styles.bigCaption}>
-              заработано с {formatDateShort(asset.openDate)} · {outcome.days} {pluralDays(outcome.days)}
-            </Text>
+            <Text style={styles.bigCaption}>с {formatDateShort(asset.openDate)}</Text>
 
             {isTerm && outcome.termIncome !== undefined && outcome.atMaturity !== undefined ? (
               <View style={styles.tilesRow}>
@@ -415,6 +419,9 @@ export default function AssetScreen() {
                 { currency: cur, kopecks: 'hide' },
               )}
               approx
+              // За какой срок налог — вслух: у вклада он за весь срок (вместе с
+              // «придёт» ниже по смыслу), у накопительного — с уже заработанного.
+              period={isTerm && outcome.termTax !== undefined ? 'за весь срок' : `за ${outcome.days} ${pluralDays(outcome.days)}`}
               who={outcome.withheld ? 'удержит площадка' : 'по уведомлению ФНС'}
               extra={outcome.taxPaid > 0 ? `уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : undefined}
             />
@@ -457,6 +464,7 @@ export default function AssetScreen() {
 
             <TaxLine
               amount={formatMoney(outcome.tax, { currency: cur, kopecks: 'hide' })}
+              period="за срок"
               who={outcome.withheld ? 'удержан площадкой' : 'по уведомлению ФНС'}
             />
 
@@ -591,14 +599,27 @@ function MiniTile({
 }
 
 /** Налог — строкой с иконкой: сумма и КТО платит, а не предложением оранжевым текстом. */
-function TaxLine({ amount, who, approx, extra }: { amount: string; who: string; approx?: boolean; extra?: string }) {
+function TaxLine({
+  amount,
+  who,
+  approx,
+  period,
+  extra,
+}: {
+  amount: string;
+  who: string;
+  approx?: boolean;
+  period?: string;
+  extra?: string;
+}) {
   return (
     <View style={styles.taxLine}>
       <View style={styles.taxIcon}>
         <MaterialCommunityIcons name="percent" size={13} color={tokens.semantic.warning} />
       </View>
       <Text style={styles.taxText}>
-        Налог <Text style={styles.taxAmount}>{approx ? '≈ ' : ''}{amount}</Text> · {who}
+        Налог <Text style={styles.taxAmount}>{approx ? '≈ ' : ''}{amount}</Text>
+        {period ? ` ${period}` : ''} · {who}
         {extra ? ` · ${extra}` : ''}
       </Text>
     </View>
@@ -815,6 +836,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   dayChipText: { fontSize: 12, lineHeight: 14, fontWeight: '600', color: tokens.semantic.positive },
+  bigLabel: { fontSize: 13, lineHeight: 15, color: tokens.text.secondary, marginBottom: 4 },
   bigValue: { fontSize: 30, lineHeight: 34, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.6 },
   bigValuePositive: { color: tokens.semantic.positive },
   bigCaption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 4 },

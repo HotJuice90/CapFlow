@@ -979,7 +979,11 @@ export default function AssetFormScreen() {
                 <SelectField
                   label={needsPayout ? 'Период выплаты' : 'Период выплаты (необязательно)'}
                   value={payoutPeriod}
-                  options={PAYOUT_OPTIONS}
+                  // «В конце срока» — только там, где срок есть. Накопительному
+                  // счёту его предлагали тоже, и получался бессрочный счёт с
+                  // чипом «в конце срока»: выглядит срочным, а «за весь срок»
+                  // посчитать не от чего — даты окончания нет.
+                  options={isTerm ? PAYOUT_OPTIONS : PAYOUT_OPTIONS.filter((o) => o.value !== 'end')}
                   placeholder="Не указан"
                   onChange={(v) => setPayoutPeriod(v as PayoutPeriod)}
                   hint={needsPayout ? 'Нужен для капитализации — без него не посчитать начисление' : undefined}
