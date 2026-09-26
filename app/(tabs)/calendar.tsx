@@ -189,6 +189,7 @@ export default function CalendarScreen() {
 
   // «Доход за день» = сумма строк ниже.
   const selectedTotal = useMemo(() => dayItems.reduce((s, c) => s + c.incomePerDayBase, 0), [dayItems]);
+  const selectedIsFuture = selected > todayIso;
 
   const prevMonth = () =>
     setView((v) => (v.month === 0 ? { year: v.year - 1, month: 11 } : { year: v.year, month: v.month - 1 }));
@@ -223,9 +224,11 @@ export default function CalendarScreen() {
             {/* Компактная сводка месяца — в стиле нижней таблички дня */}
             <Card style={styles.statsCard} padded={false}>
               <View style={styles.statsRow}>
-                <Stat label="Прогноз за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.positive} />
+                {/* Обе цифры месяца — прогноз, поэтому со «≈» и цветом прогноза
+                    (см. tokens.value), а не зелёным «уже заработано». */}
+                <Stat label="Прогноз за месяц" value={`≈ +${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.value.forecast} />
                 <View style={styles.statSep} />
-                <Stat label="Налог" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.semantic.warning} />
+                <Stat label="Налог" value={`≈ −${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.value.tax} />
                 <View style={styles.statSep} />
                 {/* «Дней осталось» — только про текущий месяц; в прошлом/будущем счётчик
                     показывает длину месяца, и такая подпись врала бы. */}
@@ -281,8 +284,16 @@ export default function CalendarScreen() {
                   <Text style={styles.dayHeaderCount}>{pluralInstruments(dayItems.length)}</Text>
                 </View>
                 <View style={styles.dayHeaderRight}>
-                  <Text style={[styles.dayHeaderAmount, selectedTotal < 0 && styles.negative]}>
-                    {selectedTotal >= 0 ? '+' : ''}{formatMoney(selectedTotal, { currency: cur })}
+                  {/* Прошедший день — это уже факт, будущий — прогноз. Цвет и
+                      «≈» зависят от даты, а не от того, что это «доход». */}
+                  <Text
+                    style={[
+                      styles.dayHeaderAmount,
+                      { color: selectedIsFuture ? tokens.value.forecast : tokens.value.earned },
+                      selectedTotal < 0 && styles.negative,
+                    ]}
+                  >
+                    {selectedIsFuture ? '≈ ' : ''}{selectedTotal >= 0 ? '+' : ''}{formatMoney(selectedTotal, { currency: cur })}
                   </Text>
                   <Text style={styles.dayHeaderSub}>Доход за день</Text>
                 </View>
@@ -296,6 +307,7 @@ export default function CalendarScreen() {
                       c={c}
                       view={viewsById.get(c.assetId)}
                       isLast={i === dayItems.length - 1}
+                      isFuture={selectedIsFuture}
                       onPress={() => router.push(`/asset/${c.assetId}`)}
                     />
                   ))}
@@ -324,11 +336,13 @@ function InstrumentRow({
   c,
   view,
   isLast,
+  isFuture,
   onPress,
 }: {
   c: DayContribution;
   view: ReturnType<typeof buildAssetViews>[number] | undefined;
   isLast: boolean;
+  isFuture: boolean;
   onPress: () => void;
 }) {
   const org = view?.organization;
@@ -367,13 +381,13 @@ function InstrumentRow({
         </View>
       </View>
 
-      {isEvent ? <EarnedStripe amount={c.accrued} currency={c.currency} /> : null}
+      {isEvent ? <EarnedStripe amount={c.accrued} currency={c.currency} isFuture={isFuture} /> : null}
     </Pressable>
   );
 }
 
 /** Полоска «Доход за период» с бликом, бегущим по контуру (SVG-обводка + strokeDashoffset). */
-function EarnedStripe({ amount, currency }: { amount: number; currency: CurrencyCode }) {
+function EarnedStripe({ amount, currency, isFuture }: { amount: number; currency: CurrencyCode; isFuture: boolean }) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -455,8 +469,8 @@ function EarnedStripe({ amount, currency }: { amount: number; currency: Currency
           <MaterialCommunityIcons name="flag-checkered" size={14} color={tokens.semantic.positive} />
           <Text style={styles.earnedStripeText}>Доход за период</Text>
         </View>
-        <Text style={styles.earnedStripeAmount}>
-          +{formatMoney(amount, { currency })}
+        <Text style={[styles.earnedStripeAmount, { color: isFuture ? tokens.value.forecast : tokens.value.earned }]}>
+          {isFuture ? '≈ ' : ''}+{formatMoney(amount, { currency })}
         </Text>
       </View>
     </View>
@@ -504,7 +518,7 @@ const styles = StyleSheet.create({
   dayHeaderDate: { fontSize: tokens.typography.header, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.24 },
   dayHeaderCount: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.3), marginTop: 4, letterSpacing: -0.24 },
   dayHeaderRight: { alignItems: 'flex-end', alignSelf: 'stretch', justifyContent: 'space-between' },
-  dayHeaderAmount: { fontSize: 20, fontWeight: '700', color: tokens.semantic.positive },
+  dayHeaderAmount: { fontSize: 20, fontWeight: '700', color: tokens.value.earned },
   dayHeaderSub: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   negative: { color: tokens.semantic.negative },
 
@@ -546,7 +560,7 @@ const styles = StyleSheet.create({
   },
   earnedStripeLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   earnedStripeText: { fontSize: tokens.typography.hint, fontWeight: '500', color: tokens.text.secondary, letterSpacing: -0.12 },
-  earnedStripeAmount: { fontSize: 13, fontWeight: '700', letterSpacing: -0.13, color: tokens.semantic.positive },
+  earnedStripeAmount: { fontSize: 13, fontWeight: '700', letterSpacing: -0.13, color: tokens.value.earned },
 
 
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
