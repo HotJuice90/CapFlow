@@ -7,6 +7,7 @@ import { appAlert } from '@/lib/dialog';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
@@ -356,25 +357,6 @@ export default function AssetScreen() {
               </Pressable>
             </View>
 
-            {isTerm && asset.endDate ? (
-              <View style={styles.progressWrap}>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: organization.color }]} />
-                </View>
-                <View style={styles.progressMeta}>
-                  <Text style={styles.progressMetaText}>
-                    {/* «Осталось 0 дней» у вышедшего срока звучало как «сегодня последний день». */}
-                    {progress >= 100
-                      ? `Срок истёк ${formatDateShort(asset.endDate)}`
-                      : derived.daysRemaining !== undefined
-                        ? `Осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)} · до ${formatDateShort(asset.endDate)}`
-                        : `До ${formatDateShort(asset.endDate)}`}
-                  </Text>
-                  <Text style={styles.progressMetaPct}>{progress}%</Text>
-                </View>
-              </View>
-            ) : null}
-
             {valueSeries.length >= 2 ? (
               <View style={styles.heroGraphWrap}>
                 {/* minSpanRatio: чтобы заполнить график, нужно изменение хотя бы
@@ -430,9 +412,24 @@ export default function AssetScreen() {
             <Text style={[styles.incomeValue, styles.bigValuePositive]} numberOfLines={1} adjustsFontSizeToFit>
               {formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
             </Text>
-            <Text style={styles.bigCaption}>
-              {formatDateShort(asset.openDate)} → сегодня · {outcome.days} {pluralDays(outcome.days)}
-            </Text>
+            {/* Дата открытия теперь на полосе ниже — тут только длительность. */}
+            <Text style={styles.bigCaption}>за {outcome.days} {pluralDays(outcome.days)}</Text>
+
+            <LifeBar
+              color={organization.color}
+              openDate={asset.openDate}
+              endLabel={isTerm && asset.endDate ? formatDateShort(asset.endDate) : undefined}
+              progress={isTerm && asset.endDate ? (derived.termProgress ?? 0) : undefined}
+              center={
+                isTerm && asset.endDate
+                  ? progress >= 100
+                    ? 'срок истёк'
+                    : derived.daysRemaining !== undefined
+                      ? `осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)}`
+                      : undefined
+                  : undefined
+              }
+            />
 
             {isTerm && outcome.termIncome !== undefined && outcome.atMaturity !== undefined ? (
               <View style={styles.tilesRow}>
@@ -498,6 +495,16 @@ export default function AssetScreen() {
               </View>
             </View>
 
+            {/* Та же полоса, что у живого актива, только прожитая целиком: от
+                открытия до закрытия, посередине — сколько он проработал. */}
+            <LifeBar
+              color={organization.color}
+              openDate={asset.openDate}
+              endLabel={formatDateShort(closedIso ?? asset.endDate ?? asset.openDate)}
+              progress={1}
+              center={`${outcome.days} ${pluralDays(outcome.days)}`}
+            />
+
             <View style={styles.tilesRow}>
               <MiniTile label="вложено" value={formatMoney(outcome.invested, { currency: cur, kopecks: 'hide' })} />
               <MiniTile
@@ -514,17 +521,6 @@ export default function AssetScreen() {
               who={outcome.withheld ? 'удержан площадкой' : 'по уведомлению ФНС'}
             />
 
-            <View style={styles.metaChips}>
-              <View style={styles.metaChip}>
-                <MaterialCommunityIcons name="calendar-range" size={13} color={tokens.text.secondary} />
-                <Text style={styles.metaChipText}>
-                  {formatDateShort(asset.openDate)}{closedIso ? ` → ${formatDateShort(closedIso)}` : ''}
-                </Text>
-              </View>
-              <View style={styles.metaChip}>
-                <Text style={styles.metaChipText}>{outcome.days} {pluralDays(outcome.days)}</Text>
-              </View>
-            </View>
           </Card>
         ) : null}
 
@@ -625,6 +621,55 @@ function MiniTile({
       >
         {value}
       </Text>
+    </View>
+  );
+}
+
+/**
+ * Полоса жизни актива — один язык для всех состояний. Слева всегда дата
+ * открытия. Срочный: полоса заполняется по сроку, справа дата окончания,
+ * посередине — сколько осталось. Бессрочный: полоса статичная, гаснет в
+ * прозрачность к «∞» — конца нет, и счётчик ему не нужен. Закрытый: прожита
+ * целиком, справа дата закрытия, посередине — сколько проработал.
+ */
+function LifeBar({
+  color,
+  openDate,
+  endLabel,
+  progress,
+  center,
+}: {
+  color: string;
+  openDate: string;
+  /** Правый край: дата окончания/закрытия. Нет — бессрочный, рисуем «∞». */
+  endLabel?: string;
+  /** 0..1 — заполнение. Нет — бессрочный: статичная полоса с затуханием. */
+  progress?: number;
+  center?: string;
+}) {
+  return (
+    <View style={styles.lifeWrap}>
+      {progress !== undefined ? (
+        <View style={[styles.lifeTrack, { backgroundColor: hexToRgba(color, 0.14) }]}>
+          <View style={[styles.lifeFill, { width: `${Math.min(100, Math.max(0, progress * 100))}%`, backgroundColor: color }]} />
+        </View>
+      ) : (
+        <LinearGradient
+          colors={[hexToRgba(color, 0.6), hexToRgba(color, 0)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.lifeTrack}
+        />
+      )}
+      <View style={styles.lifeLabels}>
+        <Text style={styles.lifeEdge}>{formatDateShort(openDate)}</Text>
+        <Text style={styles.lifeCenter} numberOfLines={1}>{center ?? ''}</Text>
+        {endLabel ? (
+          <Text style={[styles.lifeEdge, styles.lifeEdgeRight]}>{endLabel}</Text>
+        ) : (
+          <Text style={styles.lifeInfinity}>∞</Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -811,14 +856,14 @@ const styles = StyleSheet.create({
   rateCaption: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 4 },
   ratePremium: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4) },
 
-  progressWrap: { marginTop: tokens.spacing.lg },
-  // Дорожка на фоне экрана: accent.soft рассчитан на белую карточку и на
-  // градиенте почти сливается — берём акцент с прозрачностью.
-  progressTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.accent.base, 0.14), overflow: 'hidden' },
-  progressFill: { height: 8, borderRadius: 4 },
-  progressMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  progressMetaText: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
-  progressMetaPct: { fontSize: tokens.typography.hint, fontWeight: '600', color: tokens.accent.base },
+  lifeWrap: { marginTop: tokens.spacing.lg },
+  lifeTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  lifeFill: { height: 8, borderRadius: 4 },
+  lifeLabels: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  lifeEdge: { fontSize: tokens.typography.hint, lineHeight: 15, fontWeight: '500', color: tokens.text.secondary },
+  lifeEdgeRight: { textAlign: 'right' },
+  lifeCenter: { flex: 1, textAlign: 'center', fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, paddingHorizontal: 6 },
+  lifeInfinity: { fontSize: 18, lineHeight: 18, fontWeight: '500', color: tokens.text.secondary },
 
   heroGraphWrap: { marginTop: tokens.spacing.xl },
 
@@ -886,16 +931,6 @@ const styles = StyleSheet.create({
   taxText: { fontSize: 12, lineHeight: 16, color: tokens.text.secondary },
   taxExtra: { fontSize: 12, lineHeight: 16, color: tokens.text.tertiary, marginTop: 2 },
   taxAmount: { fontWeight: '700', color: tokens.value.tax },
-  metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: tokens.spacing.md },
-  metaChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: tokens.surface.neutral,
-    borderRadius: tokens.radius.pill,
-    paddingHorizontal: tokens.spacing.tight,
-    paddingVertical: 5,
-  },
-  metaChipText: { fontSize: 12, lineHeight: 14, color: tokens.text.secondary },
-
   historyCard: { paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   historyHeader: { paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: tokens.surface.white },
