@@ -224,11 +224,11 @@ export default function CalendarScreen() {
             {/* Компактная сводка месяца — в стиле нижней таблички дня */}
             <Card style={styles.statsCard} padded={false}>
               <View style={styles.statsRow}>
-                {/* Обе цифры месяца — прогноз, поэтому со «≈» и цветом прогноза
-                    (см. tokens.value), а не зелёным «уже заработано». */}
-                <Stat label="Прогноз за месяц" value={`≈ +${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.value.forecast} />
+                {/* Обе цифры месяца — прогноз: «~» в подписи, число чистое,
+                    цвет прогноза (см. tokens.value), а не зелёный «заработано». */}
+                <Stat label="~ за месяц" value={`+${formatMoney(monthForecastSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.value.forecast} />
                 <View style={styles.statSep} />
-                <Stat label="Налог" value={`≈ −${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.value.tax} />
+                <Stat label="~ налог" value={`−${formatMoney(monthTaxSum, { currency: cur, kopecks: 'hide' })}`} color={tokens.value.tax} />
                 <View style={styles.statSep} />
                 {/* «Дней осталось» — только про текущий месяц; в прошлом/будущем счётчик
                     показывает длину месяца, и такая подпись врала бы. */}
@@ -285,7 +285,7 @@ export default function CalendarScreen() {
                 </View>
                 <View style={styles.dayHeaderRight}>
                   {/* Прошедший день — это уже факт, будущий — прогноз. Цвет и
-                      «≈» зависят от даты, а не от того, что это «доход». */}
+                      «~» в подписи зависят от даты, а не от того, что это «доход». */}
                   <Text
                     style={[
                       styles.dayHeaderAmount,
@@ -293,9 +293,9 @@ export default function CalendarScreen() {
                       selectedTotal < 0 && styles.negative,
                     ]}
                   >
-                    {selectedIsFuture ? '≈ ' : ''}{selectedTotal >= 0 ? '+' : ''}{formatMoney(selectedTotal, { currency: cur })}
+                    {selectedTotal >= 0 ? '+' : ''}{formatMoney(selectedTotal, { currency: cur })}
                   </Text>
-                  <Text style={styles.dayHeaderSub}>Доход за день</Text>
+                  <Text style={styles.dayHeaderSub}>{selectedIsFuture ? '~ доход за день' : 'Доход за день'}</Text>
                 </View>
               </View>
 
@@ -467,10 +467,10 @@ function EarnedStripe({ amount, currency, isFuture }: { amount: number; currency
       <View style={styles.earnedStripeInner}>
         <View style={styles.earnedStripeLeft}>
           <MaterialCommunityIcons name="flag-checkered" size={14} color={tokens.semantic.positive} />
-          <Text style={styles.earnedStripeText}>Доход за период</Text>
+          <Text style={styles.earnedStripeText}>{isFuture ? '~ доход за период' : 'Доход за период'}</Text>
         </View>
         <Text style={[styles.earnedStripeAmount, { color: isFuture ? tokens.value.forecast : tokens.value.earned }]}>
-          {isFuture ? '≈ ' : ''}+{formatMoney(amount, { currency })}
+          +{formatMoney(amount, { currency })}
         </Text>
       </View>
     </View>

@@ -441,11 +441,11 @@ export default function AssetScreen() {
             ) : (
               <View style={styles.tilesRow}>
                 <MiniTile
-                  label="≈ за месяц"
+                  label="~ за месяц"
                   value={`+${formatMoney(derived.forecastNextMonth ?? 0, { currency: cur, kopecks: 'hide' })}`}
                 />
                 <MiniTile
-                  label="≈ за год"
+                  label="~ за год"
                   value={`+${formatMoney(derived.forecastNextYear ?? 0, { currency: cur, kopecks: 'hide' })}`}
                 />
               </View>
@@ -641,7 +641,7 @@ function TaxLine({
         <MaterialCommunityIcons name="percent" size={13} color={tokens.semantic.warning} />
       </View>
       <Text style={styles.taxText}>
-        Налог <Text style={styles.taxAmount}>{approx ? '≈ ' : ''}{amount}</Text>
+        {approx ? '~ налог ' : 'Налог '}<Text style={styles.taxAmount}>{amount}</Text>
         {period ? ` ${period}` : ''} · {who}
         {extra ? ` · ${extra}` : ''}
       </Text>
