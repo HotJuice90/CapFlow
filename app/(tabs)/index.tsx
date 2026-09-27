@@ -384,6 +384,7 @@ export default function HomeScreen() {
   // просто одна часть уйдёт банку автоматически, другая — самому по декларации.
   const taxRecommendedSetAside = taxSummary.taxAccruedSelf + taxWithheldRemaining;
   const taxYear = new Date().getFullYear();
+  const taxOver = taxSummary.selfAccrued > taxLimit;
 
   return (
     <ScreenBackground>
@@ -753,10 +754,16 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
 
-              <Text style={styles.tax2Label}>Доход по вкладам без налога</Text>
-              <Text style={styles.tax2Big} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}
-                <Text style={styles.tax2Of}> из {formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}</Text>
+              {/* Герой меняет смысл вместе с состоянием. Пока доход по вкладам в
+                  лимите — крупно, сколько ещё можно заработать без налога: это
+                  запас, за ним и стоит следить. Лимит пробит — на его место
+                  встаёт сумма к доплате, и она же единственное, что требует от
+                  человека действия (отдельная плашка «отложить» не нужна). */}
+              <Text style={styles.tax2Label}>
+                {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Ещё без налога'}
+              </Text>
+              <Text style={[styles.tax2Big, taxOver && { color: tokens.value.tax }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
               </Text>
               <View style={styles.tax2Track}>
                 <LinearGradient
@@ -767,19 +774,10 @@ export default function HomeScreen() {
                 />
               </View>
               <Text style={styles.tax2Caption}>
-                {taxSummary.selfAccrued > taxLimit
-                  ? `лимит превышен на ${formatMoney(taxSummary.selfAccrued - taxLimit, { currency: cur, kopecks: 'hide' })}`
-                  : `осталось ${formatMoney(taxRemain, { currency: cur, kopecks: 'hide' })} дохода без налога`}
+                {taxOver
+                  ? `лимит ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })} превышен на ${formatMoney(taxSummary.selfAccrued - taxLimit, { currency: cur, kopecks: 'hide' })}`
+                  : `заработано по вкладам ${formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })} из ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}`}
               </Text>
-
-              {taxSummary.taxAccruedSelf > 0.5 ? (
-                <View style={styles.tax2Due}>
-                  <Text style={styles.tax2DueLabel}>Отложить к 1 декабря {taxYear + 1}</Text>
-                  <Text style={styles.tax2DueValue}>
-                    {formatMoney(taxSummary.taxAccruedSelf, { currency: cur, kopecks: 'hide' })}
-                  </Text>
-                </View>
-              ) : null}
 
               {taxSummary.taxAccruedWithheld > 0.5 || taxSummary.taxPaidTotal > 0.5 ? (
                 <>
@@ -987,19 +985,9 @@ const styles = StyleSheet.create({
   tax2RateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
   tax2Label: { fontSize: tokens.typography.caption, lineHeight: 15, color: tokens.text.secondary },
   tax2Big: { fontSize: 26, lineHeight: 30, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.5, marginTop: 4 },
-  tax2Of: { fontSize: 15, fontWeight: '500', color: tokens.text.tertiary, letterSpacing: 0 },
   tax2Track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden', marginTop: tokens.spacing.md },
   tax2Fill: { height: 8, borderRadius: 4 },
   tax2Caption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 8 },
-  tax2Due: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md,
-    marginTop: tokens.spacing.lg,
-    backgroundColor: hexToRgba(tokens.value.tax, 0.1),
-    borderRadius: tokens.radius.md,
-    paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.md,
-  },
-  tax2DueLabel: { flex: 1, fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.text.primary },
-  tax2DueValue: { fontSize: 17, lineHeight: 20, fontWeight: '700', color: tokens.value.tax },
   tax2Row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tax2RowLabel: { fontSize: tokens.typography.label, lineHeight: 17, color: tokens.text.secondary },
   tax2RowValue: { fontSize: 16, lineHeight: 19, fontWeight: '600', color: tokens.text.primary },
