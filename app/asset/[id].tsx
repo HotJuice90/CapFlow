@@ -465,7 +465,7 @@ export default function AssetScreen() {
               // «придёт» ниже по смыслу), у накопительного — с уже заработанного.
               period={isTerm && outcome.termTax !== undefined ? 'за весь срок' : `за ${outcome.days} ${pluralDays(outcome.days)}`}
               who={outcome.withheld ? 'удержит площадка' : 'по уведомлению ФНС'}
-              extra={outcome.taxPaid > 0 ? `уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : undefined}
+              extra={outcome.taxPaid > 0 ? `Уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : undefined}
             />
           </Card>
         ) : null}
@@ -644,11 +644,16 @@ function TaxLine({
       <View style={styles.taxIcon}>
         <MaterialCommunityIcons name="percent" size={13} color={tokens.semantic.warning} />
       </View>
-      <Text style={styles.taxText}>
-        {approx ? '~ налог ' : 'Налог '}<Text style={styles.taxAmount}>{amount}</Text>
-        {period ? ` ${period}` : ''} · {who}
-        {extra ? ` · ${extra}` : ''}
-      </Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {/* Неразрывный пробел перед «·»: иначе на переносе точка повисает в
+            начале второй строки. «Уже удержано» — своей строкой, а не третьим
+            звеном цепочки через точки. */}
+        <Text style={styles.taxText}>
+          {approx ? '~ Налог ' : 'Налог '}<Text style={styles.taxAmount}>{amount}</Text>
+          {period ? ` ${period}` : ''}{'\u00A0'}· {who}
+        </Text>
+        {extra ? <Text style={styles.taxExtra}>{extra}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -785,7 +790,9 @@ const styles = StyleSheet.create({
 
   softShadow: boxShadow(SOFT_SHADOW),
 
-  heroOpen: { marginBottom: tokens.spacing.xl, paddingTop: tokens.spacing.xs },
+  // Без своей карточки герою нужен воздух вокруг — иначе он липнет к чипам
+  // сверху и к первой карточке снизу.
+  heroOpen: { marginBottom: 40, paddingTop: tokens.spacing.lg },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
   // Подпись и сумма — те же размеры, что у «Мой капитал» в аналитике.
   heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontWeight: '500', color: tokens.text.tertiary },
@@ -793,7 +800,7 @@ const styles = StyleSheet.create({
   rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
   // На фоне экрана шильдик — полупрозрачно-белый: '#F9FAFF' рассчитан на белую
   // карточку под ним и на градиенте почти пропадает.
-  rateBadgeOnBg: { backgroundColor: hexToRgba(tokens.surface.white, 0.72) },
+  rateBadgeOnBg: { backgroundColor: hexToRgba(tokens.surface.white, 0.4) },
   rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: tokens.accent.base },
   ratePremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
   rateCaption: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 4 },
@@ -806,7 +813,7 @@ const styles = StyleSheet.create({
   progressMetaText: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
   progressMetaPct: { fontSize: tokens.typography.hint, fontWeight: '600', color: tokens.accent.base },
 
-  heroGraphWrap: { marginTop: tokens.spacing.lg },
+  heroGraphWrap: { marginTop: tokens.spacing.xl },
 
   maturedBanner: {
     borderRadius: tokens.radius.lg,
@@ -869,7 +876,8 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.semantic.warning, 0.14),
     alignItems: 'center', justifyContent: 'center',
   },
-  taxText: { flex: 1, fontSize: 12, lineHeight: 16, color: tokens.text.secondary },
+  taxText: { fontSize: 12, lineHeight: 16, color: tokens.text.secondary },
+  taxExtra: { fontSize: 12, lineHeight: 16, color: tokens.text.tertiary, marginTop: 2 },
   taxAmount: { fontWeight: '700', color: tokens.value.tax },
   metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: tokens.spacing.md },
   metaChip: {
