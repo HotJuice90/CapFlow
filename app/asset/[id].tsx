@@ -39,7 +39,8 @@ const ICON_BY_TYPE: Record<string, keyof typeof MaterialCommunityIcons.glyphMap>
   dfa: 'chart-line',
 };
 
-const HERO_GRAPH_WIDTH = Dimensions.get('window').width - tokens.spacing.screenH * 2 - tokens.spacing.lg * 2;
+// Герой лежит прямо на фоне, без карточки — график на всю ширину контента.
+const HERO_GRAPH_WIDTH = Dimensions.get('window').width - tokens.spacing.screenH * 2;
 
 export default function AssetScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -321,9 +322,12 @@ export default function AssetScreen() {
           ) : null}
         </View>
 
-        {/* Hero: сумма + ставка, прогресс срока — здесь же */}
+        {/* Герой — прямо на фоне экрана, без своей карточки, как «Мой капитал»
+            в аналитике: сумма, ставка, прогресс срока и график. Карточками
+            остаются блоки ниже — так главное число не выглядит «ещё одним
+            блоком» среди прочих. */}
         {!isClosed ? (
-          <Card style={styles.hero}>
+          <View style={styles.heroOpen}>
             <View style={styles.heroTop}>
               <Pressable
                 style={{ flex: 1 }}
@@ -335,7 +339,7 @@ export default function AssetScreen() {
                   {formatMoney(isTerm ? asset.amount : derived.currentValue, { currency: cur, kopecks: 'hide' })}
                 </Text>
               </Pressable>
-              <Pressable style={styles.rateBadge} onPress={() => router.push(`/asset/rate-adjust?id=${asset.id}`)}>
+              <Pressable style={[styles.rateBadge, styles.rateBadgeOnBg]} onPress={() => router.push(`/asset/rate-adjust?id=${asset.id}`)}>
                 <Text style={styles.rateValue}>{formatPercent(derived.currentRate)}</Text>
                 <View style={styles.ratePremiumRow}>
                   <MaterialCommunityIcons
@@ -375,10 +379,10 @@ export default function AssetScreen() {
                     на 2% от баланса. Иначе счёт, выросший на 699 ₽ из миллиона,
                     рисовался лестницей до неба — ровно как счёт, с которого сняли
                     100 000, и рядом два актива читались наоборот. */}
-                <SkylineBars data={valueSeries} width={HERO_GRAPH_WIDTH} height={56} color={tokens.accent.base} gap={0} minSpanRatio={0.02} />
+                <SkylineBars data={valueSeries} width={HERO_GRAPH_WIDTH} height={76} color={tokens.accent.base} gap={0} minSpanRatio={0.02} />
               </View>
             ) : null}
-          </Card>
+          </View>
         ) : null}
 
         {/* Плашка решения — только у ЖИВОГО актива с вышедшим сроком. У
@@ -781,11 +785,15 @@ const styles = StyleSheet.create({
 
   softShadow: boxShadow(SOFT_SHADOW),
 
-  hero: { marginBottom: tokens.spacing.xl, ...boxShadow(SOFT_SHADOW) },
+  heroOpen: { marginBottom: tokens.spacing.xl, paddingTop: tokens.spacing.xs },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
-  heroLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
-  heroAmount: { fontSize: 32, lineHeight: 34, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.64, marginTop: 8 },
+  // Подпись и сумма — те же размеры, что у «Мой капитал» в аналитике.
+  heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontWeight: '500', color: tokens.text.tertiary },
+  heroAmount: { fontSize: tokens.typography.display, lineHeight: tokens.typography.display + 2, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.34, marginTop: 6 },
   rateBadge: { alignItems: 'flex-end', backgroundColor: '#F9FAFF', borderRadius: tokens.radius.md, paddingHorizontal: 12, paddingVertical: 10 },
+  // На фоне экрана шильдик — полупрозрачно-белый: '#F9FAFF' рассчитан на белую
+  // карточку под ним и на градиенте почти пропадает.
+  rateBadgeOnBg: { backgroundColor: hexToRgba(tokens.surface.white, 0.72) },
   rateValue: { fontSize: 20, lineHeight: 20, fontWeight: '700', color: tokens.accent.base },
   ratePremiumRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
   rateCaption: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 4 },
