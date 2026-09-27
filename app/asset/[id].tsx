@@ -312,7 +312,9 @@ export default function AssetScreen() {
           </View>
         </View>
 
-        <View style={styles.pillRow}>
+        {/* У активного под чипами сразу герой на фоне — зазор 10; у закрытого
+            ниже карточка «Итог», ей нужен обычный отступ. */}
+        <View style={[styles.pillRow, !isClosed && styles.pillRowTight]}>
           <View style={styles.pill}><Text style={styles.pillText}>{TYPE_LABEL[instrument.typeId] ?? instrument.typeId}</Text></View>
           {payout ? (
             <View style={styles.pill}><Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text></View>
@@ -413,7 +415,9 @@ export default function AssetScreen() {
           // из бухгалтерии: всё важно одинаково, значит не важно ничего.
           <Card style={styles.finCard}>
             <View style={styles.blockHead}>
-              <Text style={[styles.finTitle, { marginBottom: 0 }]}>Доход на сегодня</Text>
+              {/* «Заработано», а не «Доход на сегодня»: второе читалось как доход
+                  ЗА сегодня. Период — в подписи под числом. */}
+              <Text style={[styles.finTitle, { marginBottom: 0 }]}>Заработано</Text>
               {derived.incomePerDay > 0 ? (
                 <View style={styles.dayChip}>
                   <Text style={styles.dayChipText}>+{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })} в день</Text>
@@ -784,6 +788,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, lineHeight: 14, color: tokens.text.tertiary, marginTop: tokens.spacing.chip, letterSpacing: -0.28 },
 
   pillRow: { flexDirection: 'row', gap: 2, marginTop: 12, marginBottom: tokens.spacing.lg },
+  pillRowTight: { marginBottom: 10 },
   pill: { backgroundColor: '#F9FAFF', borderRadius: tokens.radius.pill, paddingHorizontal: tokens.spacing.tight, paddingVertical: 6 },
   pillText: { fontSize: 11, fontWeight: '500', color: hexToRgba(tokens.text.primary, 0.8) },
 
@@ -792,7 +797,7 @@ const styles = StyleSheet.create({
 
   // Без своей карточки герою нужен воздух вокруг — иначе он липнет к чипам
   // сверху и к первой карточке снизу.
-  heroOpen: { marginBottom: 40, paddingTop: tokens.spacing.lg },
+  heroOpen: { marginBottom: 28 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: tokens.spacing.md },
   // Подпись и сумма — те же размеры, что у «Мой капитал» в аналитике.
   heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontWeight: '500', color: tokens.text.tertiary },
@@ -807,7 +812,9 @@ const styles = StyleSheet.create({
   ratePremium: { fontSize: 11, lineHeight: 11, color: hexToRgba(tokens.text.primary, 0.4) },
 
   progressWrap: { marginTop: tokens.spacing.lg },
-  progressTrack: { height: 8, borderRadius: 4, backgroundColor: tokens.accent.soft, overflow: 'hidden' },
+  // Дорожка на фоне экрана: accent.soft рассчитан на белую карточку и на
+  // градиенте почти сливается — берём акцент с прозрачностью.
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.accent.base, 0.14), overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   progressMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   progressMetaText: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.4), letterSpacing: -0.24 },
