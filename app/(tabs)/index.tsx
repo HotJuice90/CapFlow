@@ -53,8 +53,31 @@ import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
+import { InfoTap } from '@/components/InfoTap';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
 import { t } from '@/i18n';
+
+/** Подпись с (i): тап по ней показывает пояснение (см. InfoTap). */
+function InfoLabel({
+  label,
+  title,
+  message,
+  style,
+}: {
+  label: string;
+  title: string;
+  message: string;
+  style: object;
+}) {
+  return (
+    <InfoTap title={title} message={message}>
+      <View style={styles.infoLabel}>
+        <Text style={style} numberOfLines={2}>{label}</Text>
+        <MaterialCommunityIcons name="information-outline" size={16} color={tokens.text.tertiary} />
+      </View>
+    </InfoTap>
+  );
+}
 
 /**
  * Сортировки списка активов.
@@ -374,17 +397,46 @@ export default function HomeScreen() {
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
   // те, где банк удерживает налог сам, в этом дележе не участвуют вообще.
   const taxLimit = data.params.taxFreeLimit;
-  const taxUsed = Math.min(taxSummary.selfAccrued, taxLimit);
   const taxRemain = Math.max(0, taxLimit - taxSummary.selfAccrued);
-  const taxUsedPct = taxLimit > 0 ? Math.min(100, Math.round((taxUsed / taxLimit) * 100)) : 0;
+  // Бар «утекает»: заполнена ОСТАВШАЯСЯ доля лимита, а не использованная.
+  const taxRemainPct = taxLimit > 0 ? Math.max(0, Math.min(100, Math.round((taxRemain / taxLimit) * 100))) : 0;
   // За вычетом уже уплаченного — та же логика, что и «К доплате при снятии» на
   // карточке актива: не валовый налог на весь доход, а то, что ЕЩЁ спишут.
   const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidTotal);
-  // Итог для планирования: с точки зрения кошелька это один и тот же налог —
-  // просто одна часть уйдёт банку автоматически, другая — самому по декларации.
-  const taxRecommendedSetAside = taxSummary.taxAccruedSelf + taxWithheldRemaining;
   const taxYear = new Date().getFullYear();
   const taxOver = taxSummary.selfAccrued > taxLimit;
+  // Колонки внизу: налог площадки — только если такие активы вообще есть;
+  // «к доплате в ФНС» — только когда лимит пробит.
+  const hasWithheldPath = taxSummary.taxAccruedWithheld > 0.5 || taxSummary.taxPaidTotal > 0.5;
+  const taxCells: { key: string; label: string; info: string; value: number; color: string }[] = [
+    ...(hasWithheldPath
+      ? [
+          {
+            key: 'paid',
+            label: 'Уже удержано',
+            info: 'Налог, который площадки уже удержали при выводе денег.',
+            value: taxSummary.taxPaidTotal,
+            color: tokens.text.primary,
+          },
+          {
+            key: 'withheld',
+            label: taxOver ? 'Удержат автоматически' : 'Ещё удержат автоматически',
+            info: 'Налог с продуктов, где его удерживает сама площадка (например, ЦФА в виде «счёта»). Удержат при выводе — делать ничего не нужно.',
+            value: taxWithheldRemaining,
+            color: tokens.value.tax,
+          },
+        ]
+      : []),
+    ...(taxOver
+      ? [{
+          key: 'due',
+          label: 'К доплате в ФНС',
+          info: `Налог с процентов по вкладам сверх лимита. Придёт уведомлением, заплатить до 1 декабря ${taxYear + 1}.`,
+          value: taxSummary.taxAccruedSelf,
+          color: tokens.value.outflow,
+        }]
+      : []),
+  ];
 
   return (
     <ScreenBackground>
@@ -686,114 +738,77 @@ export default function HomeScreen() {
             <TypeCardsRow groups={grouped.groups} currency={cur} />
 
             <Text style={styles.sectionTitle}>Налог</Text>
+            {/* Герой меняет смысл вместе с состоянием. Пока доход по вкладам в
+                лимите — крупно, сколько ещё можно заработать без налога, и бар
+                УТЕКАЕТ вместе с ним: заполнена оставшаяся часть. Лимит пробит —
+                на место остатка встаёт сумма к доплате в ФНС, красным: это
+                единственное здесь, что требует действия. Налог площадки —
+                справкой в колонках, его удержат сами. Года в заголовке нет:
+                всё приложение и так живёт в текущем времени. */}
             <Card>
-              <Text style={styles.taxLabel}>Доплатить самому — на сегодня</Text>
-              <Text style={styles.taxBig} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(taxSummary.taxAccruedSelf, { currency: cur })}
-              </Text>
-
-              <View style={styles.taxDivider} />
-
-              <View style={styles.taxFooterRow}>
-                <Text style={styles.taxFooterLabel}>Свободный лимит использован</Text>
-                <Text style={styles.taxFooterLabel}>{taxUsedPct}%</Text>
-              </View>
-              <View style={styles.taxBarWrap}>
-                <View style={styles.taxTrack}>
-                  <View style={[styles.taxFill, { width: `${taxUsedPct}%` }]} />
-                </View>
-              </View>
-              <View style={styles.taxFooterRow}>
-                <Text style={styles.taxFooterLabel}>Заработано {formatMoney(taxSummary.selfAccrued, { currency: cur })}</Text>
-                <Text style={styles.taxFooterLabel}>Остаток {formatMoney(taxRemain, { currency: cur })}</Text>
-              </View>
-
-              {taxSummary.taxPaidTotal > 0.5 || taxSummary.taxAccruedWithheld > 0.5 ? (
-                <>
-                  <View style={styles.taxDivider} />
-                  <View style={styles.taxSplitRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.taxFooterLabel}>Уже заплатили</Text>
-                      <Text style={styles.taxSplitValue}>
-                        {formatMoney(taxSummary.taxPaidTotal, { currency: cur })}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                      <Text style={styles.taxFooterLabel}>Ещё удержит банк</Text>
-                      <Text style={styles.taxSplitValue}>
-                        {formatMoney(taxWithheldRemaining, { currency: cur })}
-                      </Text>
-                    </View>
-                  </View>
-                </>
-              ) : null}
-
-              {taxRecommendedSetAside > 0.5 ? (
-                <View style={styles.taxRecommendBox}>
-                  <Text style={styles.taxRecommendLabel}>Рекомендуем отложить — оба способа вместе</Text>
-                  <Text style={styles.taxRecommendValue}>
-                    {formatMoney(taxRecommendedSetAside, { currency: cur, kopecks: 'hide' })}
-                  </Text>
-                </View>
-              ) : null}
-            </Card>
-
-            {/* ВРЕМЕННО: новый вариант под старым — сравнить вживую, потом
-                оставить один. Логика: герой блока — лимит по вкладам (то, что
-                реально меняется и за чем стоит следить); «отложить» появляется
-                ТОЛЬКО когда лимит превышен — единственный случай, где от
-                человека что-то требуется; налог площадки — справкой, без
-                призывов: его удержат сами. */}
-            <Text style={styles.sectionTitle}>Налог — новый вариант</Text>
-            <Card>
-              <View style={styles.tax2Head}>
-                <Text style={styles.tax2Title}>Налог за {taxYear}</Text>
-                <Pressable style={styles.tax2RatePill} onPress={() => router.push('/settings/tax')} hitSlop={8}>
-                  <Text style={styles.tax2RateText}>{formatPercent(data.params.taxRate)}</Text>
+              <View style={styles.txHead}>
+                {taxOver ? (
+                  <InfoLabel
+                    label="К доплате в ФНС"
+                    title="К доплате в ФНС"
+                    message={`Налог с процентов по вкладам сверх необлагаемого лимита. Банк его не удерживает — ФНС пришлёт уведомление, заплатить нужно до 1 декабря ${taxYear + 1}.`}
+                    style={styles.txHeroLabel}
+                  />
+                ) : (
+                  <InfoLabel
+                    label="Осталось без налога"
+                    title="Необлагаемый лимит"
+                    message={`Проценты по вкладам не облагаются, пока их сумма за год не превысит лимит: 1 млн ₽ × максимальная ключевая ставка года. Сейчас лимит — ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}.`}
+                    style={styles.txHeroLabel}
+                  />
+                )}
+                <Pressable style={styles.txRatePill} onPress={() => router.push('/settings/tax')} hitSlop={8}>
+                  <Text style={styles.txRateText}>{formatPercent(data.params.taxRate)}</Text>
                   <MaterialIcons name="chevron-right" size={14} color={tokens.value.tax} />
                 </Pressable>
               </View>
 
-              {/* Герой меняет смысл вместе с состоянием. Пока доход по вкладам в
-                  лимите — крупно, сколько ещё можно заработать без налога: это
-                  запас, за ним и стоит следить. Лимит пробит — на его место
-                  встаёт сумма к доплате, и она же единственное, что требует от
-                  человека действия (отдельная плашка «отложить» не нужна). */}
-              <Text style={styles.tax2Label}>
-                {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Ещё без налога'}
-              </Text>
-              <Text style={[styles.tax2Big, taxOver && { color: tokens.value.tax }]} numberOfLines={1} adjustsFontSizeToFit>
+              <Text style={[styles.txBig, taxOver && { color: tokens.value.outflow }]} numberOfLines={1} adjustsFontSizeToFit>
                 {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
               </Text>
-              <View style={styles.tax2Track}>
-                <LinearGradient
-                  colors={[hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.tax2Fill, { width: `${taxUsedPct}%` }]}
-                />
+
+              <View style={styles.txBarRow}>
+                <View style={styles.txTrack}>
+                  {taxRemainPct > 0 ? (
+                    <LinearGradient
+                      colors={[hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.txFill, { width: `${taxRemainPct}%` }]}
+                    />
+                  ) : null}
+                </View>
+                <View style={styles.txPct}>
+                  <Text style={[styles.txPctValue, taxRemainPct === 0 && { color: tokens.value.outflow }]}>{taxRemainPct}%</Text>
+                  <Text style={styles.txPctLabel}>осталось</Text>
+                </View>
               </View>
-              <Text style={styles.tax2Caption}>
-                {taxOver
-                  ? `лимит ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })} превышен на ${formatMoney(taxSummary.selfAccrued - taxLimit, { currency: cur, kopecks: 'hide' })}`
-                  : `заработано по вкладам ${formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })} из ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}`}
+              <Text style={styles.txCaption}>
+                заработано по вкладам {formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })} из{' '}
+                {formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}
               </Text>
 
-              {taxSummary.taxAccruedWithheld > 0.5 || taxSummary.taxPaidTotal > 0.5 ? (
+              {taxCells.length > 0 ? (
                 <>
-                  <View style={styles.taxDivider} />
-                  <View style={styles.tax2Row}>
-                    <Text style={styles.tax2RowLabel}>Удержит площадка</Text>
-                    <Text style={styles.tax2RowValue}>
-                      {formatMoney(taxWithheldRemaining, { currency: cur, kopecks: 'hide' })}
-                    </Text>
+                  <View style={styles.txDivider} />
+                  <View style={styles.txCells}>
+                    {taxCells.map((c, i) => (
+                      <React.Fragment key={c.key}>
+                        {i > 0 ? <View style={styles.txCellSep} /> : null}
+                        <View style={styles.txCell}>
+                          <InfoLabel label={c.label} title={c.label} message={c.info} style={styles.txCellLabel} />
+                          <Text style={[styles.txCellValue, { color: c.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                            {formatMoney(c.value, { currency: cur, kopecks: 'hide' })}
+                          </Text>
+                        </View>
+                      </React.Fragment>
+                    ))}
                   </View>
-                  <Text style={styles.tax2Hint}>
-                    {taxSummary.taxPaidTotal > 0.5
-                      ? `уже удержано ${formatMoney(taxSummary.taxPaidTotal, { currency: cur, kopecks: 'hide' })} · `
-                      : ''}
-                    делать ничего не нужно
-                  </Text>
                 </>
               ) : null}
             </Card>
@@ -951,47 +966,30 @@ const styles = StyleSheet.create({
   eventName: { fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.primary },
   eventSub: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },
   eventAmount: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
-  taxLabel: { fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  taxBig: { fontSize: tokens.typography.metric, fontWeight: '800', color: tokens.text.primary, marginTop: 2 },
-  taxBarWrap: { marginTop: tokens.spacing.md },
-  taxTrack: { height: 8, borderRadius: 4, backgroundColor: tokens.surface.neutral, overflow: 'hidden' },
-  taxFill: { height: 8, borderRadius: 4, backgroundColor: tokens.category.dfa },
-  taxDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.md },
-  taxFooterRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  taxFooterLabel: { fontSize: tokens.typography.micro, color: tokens.text.tertiary },
-  taxSplitRow: { flexDirection: 'row' },
-  taxSplitValue: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary, marginTop: 2 },
-  taxRecommendBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: tokens.spacing.md,
-    marginTop: tokens.spacing.md,
-    backgroundColor: hexToRgba(tokens.category.dfa, 0.1),
-    borderRadius: tokens.radius.md,
-    paddingHorizontal: tokens.spacing.lg,
-    paddingVertical: tokens.spacing.md,
-  },
-  taxRecommendLabel: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
-  taxRecommendValue: { fontSize: tokens.typography.label, fontWeight: '800', color: tokens.category.dfa },
-  tax2Head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.md },
-  tax2Title: { fontSize: 18, lineHeight: 20, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
-  tax2RatePill: {
+  infoLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  txHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
+  txHeroLabel: { fontSize: tokens.typography.label, lineHeight: 17, color: tokens.text.secondary, flexShrink: 1 },
+  txRatePill: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: hexToRgba(tokens.value.tax, 0.12),
     borderRadius: tokens.radius.pill,
     paddingLeft: tokens.spacing.tight, paddingRight: tokens.spacing.chip, paddingVertical: 6,
   },
-  tax2RateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
-  tax2Label: { fontSize: tokens.typography.caption, lineHeight: 15, color: tokens.text.secondary },
-  tax2Big: { fontSize: 26, lineHeight: 30, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.5, marginTop: 4 },
-  tax2Track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden', marginTop: tokens.spacing.md },
-  tax2Fill: { height: 8, borderRadius: 4 },
-  tax2Caption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 8 },
-  tax2Row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tax2RowLabel: { fontSize: tokens.typography.label, lineHeight: 17, color: tokens.text.secondary },
-  tax2RowValue: { fontSize: 16, lineHeight: 19, fontWeight: '600', color: tokens.text.primary },
-  tax2Hint: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 4 },
+  txRateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
+  txBig: { fontSize: 32, lineHeight: 36, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.64, marginTop: 6 },
+  txBarRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, marginTop: tokens.spacing.md },
+  txTrack: { flex: 1, height: 10, borderRadius: 5, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden' },
+  txFill: { height: 10, borderRadius: 5 },
+  txPct: { alignItems: 'flex-end' },
+  txPctValue: { fontSize: 16, lineHeight: 18, fontWeight: '700', color: tokens.value.tax },
+  txPctLabel: { fontSize: 11, lineHeight: 13, color: tokens.text.tertiary },
+  txCaption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 8 },
+  txDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
+  txCells: { flexDirection: 'row', alignItems: 'stretch' },
+  txCell: { flex: 1, minWidth: 0 },
+  txCellSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: tokens.spacing.md },
+  txCellLabel: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.text.secondary, flexShrink: 1 },
+  txCellValue: { fontSize: 20, lineHeight: 24, fontWeight: '700', marginTop: 6 },
   liqLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
   liqValue: { fontSize: tokens.typography.header, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.24, marginTop: 10 },
   liqBarWrap: { marginTop: tokens.spacing.lg },
