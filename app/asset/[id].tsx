@@ -691,7 +691,7 @@ function TaxLine({
   return (
     <View style={styles.taxLine}>
       <View style={styles.taxIcon}>
-        <MaterialCommunityIcons name="percent" size={13} color={tokens.semantic.warning} />
+        <MaterialCommunityIcons name="percent" size={13} color={tokens.value.tax} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         {/* Неразрывный пробел перед «·»: иначе на переносе точка повисает в
@@ -925,7 +925,7 @@ const styles = StyleSheet.create({
   taxLine: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: tokens.spacing.md },
   taxIcon: {
     width: 24, height: 24, borderRadius: 12,
-    backgroundColor: hexToRgba(tokens.semantic.warning, 0.14),
+    backgroundColor: hexToRgba(tokens.value.tax, 0.14),
     alignItems: 'center', justifyContent: 'center',
   },
   taxText: { fontSize: 12, lineHeight: 16, color: tokens.text.secondary },

@@ -383,6 +383,7 @@ export default function HomeScreen() {
   // Итог для планирования: с точки зрения кошелька это один и тот же налог —
   // просто одна часть уйдёт банку автоматически, другая — самому по декларации.
   const taxRecommendedSetAside = taxSummary.taxAccruedSelf + taxWithheldRemaining;
+  const taxYear = new Date().getFullYear();
 
   return (
     <ScreenBackground>
@@ -736,6 +737,69 @@ export default function HomeScreen() {
               ) : null}
             </Card>
 
+            {/* ВРЕМЕННО: новый вариант под старым — сравнить вживую, потом
+                оставить один. Логика: герой блока — лимит по вкладам (то, что
+                реально меняется и за чем стоит следить); «отложить» появляется
+                ТОЛЬКО когда лимит превышен — единственный случай, где от
+                человека что-то требуется; налог площадки — справкой, без
+                призывов: его удержат сами. */}
+            <Text style={styles.sectionTitle}>Налог — новый вариант</Text>
+            <Card>
+              <View style={styles.tax2Head}>
+                <Text style={styles.tax2Title}>Налог за {taxYear}</Text>
+                <Pressable style={styles.tax2RatePill} onPress={() => router.push('/settings/tax')} hitSlop={8}>
+                  <Text style={styles.tax2RateText}>{formatPercent(data.params.taxRate)}</Text>
+                  <MaterialIcons name="chevron-right" size={14} color={tokens.value.tax} />
+                </Pressable>
+              </View>
+
+              <Text style={styles.tax2Label}>Доход по вкладам без налога</Text>
+              <Text style={styles.tax2Big} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}
+                <Text style={styles.tax2Of}> из {formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}</Text>
+              </Text>
+              <View style={styles.tax2Track}>
+                <LinearGradient
+                  colors={[hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.tax2Fill, { width: `${taxUsedPct}%` }]}
+                />
+              </View>
+              <Text style={styles.tax2Caption}>
+                {taxSummary.selfAccrued > taxLimit
+                  ? `лимит превышен на ${formatMoney(taxSummary.selfAccrued - taxLimit, { currency: cur, kopecks: 'hide' })}`
+                  : `осталось ${formatMoney(taxRemain, { currency: cur, kopecks: 'hide' })} дохода без налога`}
+              </Text>
+
+              {taxSummary.taxAccruedSelf > 0.5 ? (
+                <View style={styles.tax2Due}>
+                  <Text style={styles.tax2DueLabel}>Отложить к 1 декабря {taxYear + 1}</Text>
+                  <Text style={styles.tax2DueValue}>
+                    {formatMoney(taxSummary.taxAccruedSelf, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                </View>
+              ) : null}
+
+              {taxSummary.taxAccruedWithheld > 0.5 || taxSummary.taxPaidTotal > 0.5 ? (
+                <>
+                  <View style={styles.taxDivider} />
+                  <View style={styles.tax2Row}>
+                    <Text style={styles.tax2RowLabel}>Удержит площадка</Text>
+                    <Text style={styles.tax2RowValue}>
+                      {formatMoney(taxWithheldRemaining, { currency: cur, kopecks: 'hide' })}
+                    </Text>
+                  </View>
+                  <Text style={styles.tax2Hint}>
+                    {taxSummary.taxPaidTotal > 0.5
+                      ? `уже удержано ${formatMoney(taxSummary.taxPaidTotal, { currency: cur, kopecks: 'hide' })} · `
+                      : ''}
+                    делать ничего не нужно
+                  </Text>
+                </>
+              ) : null}
+            </Card>
+
             {upcoming.length > 0 ? (
               <>
                 <View style={styles.sectionRow}>
@@ -912,6 +976,34 @@ const styles = StyleSheet.create({
   },
   taxRecommendLabel: { flex: 1, fontSize: tokens.typography.caption, color: tokens.text.secondary },
   taxRecommendValue: { fontSize: tokens.typography.label, fontWeight: '800', color: tokens.category.dfa },
+  tax2Head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.md },
+  tax2Title: { fontSize: 18, lineHeight: 20, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
+  tax2RatePill: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: hexToRgba(tokens.value.tax, 0.12),
+    borderRadius: tokens.radius.pill,
+    paddingLeft: tokens.spacing.tight, paddingRight: tokens.spacing.chip, paddingVertical: 6,
+  },
+  tax2RateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
+  tax2Label: { fontSize: tokens.typography.caption, lineHeight: 15, color: tokens.text.secondary },
+  tax2Big: { fontSize: 26, lineHeight: 30, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.5, marginTop: 4 },
+  tax2Of: { fontSize: 15, fontWeight: '500', color: tokens.text.tertiary, letterSpacing: 0 },
+  tax2Track: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden', marginTop: tokens.spacing.md },
+  tax2Fill: { height: 8, borderRadius: 4 },
+  tax2Caption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 8 },
+  tax2Due: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md,
+    marginTop: tokens.spacing.lg,
+    backgroundColor: hexToRgba(tokens.value.tax, 0.1),
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.md,
+  },
+  tax2DueLabel: { flex: 1, fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.text.primary },
+  tax2DueValue: { fontSize: 17, lineHeight: 20, fontWeight: '700', color: tokens.value.tax },
+  tax2Row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tax2RowLabel: { fontSize: tokens.typography.label, lineHeight: 17, color: tokens.text.secondary },
+  tax2RowValue: { fontSize: 16, lineHeight: 19, fontWeight: '600', color: tokens.text.primary },
+  tax2Hint: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 4 },
   liqLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
   liqValue: { fontSize: tokens.typography.header, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.24, marginTop: 10 },
   liqBarWrap: { marginTop: tokens.spacing.lg },
