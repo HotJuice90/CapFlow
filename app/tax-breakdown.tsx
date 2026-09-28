@@ -24,8 +24,8 @@ export default function TaxBreakdown() {
   const remainNow = Math.max(0, limit - s.selfAccrued);
   const remainEnd = limit - s.selfAnnual;
   const over = s.selfAccrued > limit;
-  const withheldLeft = Math.max(0, s.taxAccruedWithheld - s.taxPaidTotal);
-  const hasWithheld = s.taxAccruedWithheld > 0.5 || s.taxPaidTotal > 0.5;
+  const withheldLeft = Math.max(0, s.taxAccruedWithheld - s.taxPaidYear);
+  const hasWithheld = s.taxAccruedWithheld > 0.5 || s.taxPaidYear > 0.5;
 
   return (
     <View style={st.sheet}>
@@ -55,9 +55,9 @@ export default function TaxBreakdown() {
 
       {hasWithheld ? (
         <>
-          <Text style={st.group}>Удерживают площадки</Text>
-          <Row label="Уже удержано" value={money(s.taxPaidTotal)} />
-          <Row label="Ещё удержат при выводе" value={money(withheldLeft)} color={tokens.value.tax} />
+          <Text style={st.group}>Не входит в лимит — налог удержат автоматически</Text>
+          <Row label="Уже удержано" value={money(s.taxPaidYear)} />
+          <Row label="Ещё удержат" value={money(withheldLeft)} color={tokens.value.tax} />
         </>
       ) : null}
 

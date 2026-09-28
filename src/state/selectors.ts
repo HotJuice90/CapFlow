@@ -389,6 +389,10 @@ export interface AnalyticsSummary {
   /** Реально удержанный банками налог (BalanceAdjustment.taxWithheld) — по ВСЕМ
    *  активам, включая закрытые/архивные: факт, не оценка. */
   taxPaidTotal: number;
+  /** То же, но только удержания с датой в текущем календарном году — в пару к
+   *  taxAccruedWithheld (он тоже за год). Иначе с 1 января прошлогодние
+   *  удержания вычитались бы из налога нового года. */
+  taxPaidYear: number;
   netYear: number;
   avgRate: number;
   keyRate: number;
@@ -682,6 +686,13 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     const paid = (a.balanceAdjustments ?? []).reduce((s, adj) => s + (adj.taxWithheld ?? 0), 0);
     return sum + convert(paid, a.currency, data);
   }, 0);
+  const yearPrefix = String(now.getFullYear());
+  const taxPaidYear = data.assets.reduce((sum, a) => {
+    const paid = (a.balanceAdjustments ?? [])
+      .filter((adj) => adj.date.startsWith(yearPrefix))
+      .reduce((s, adj) => s + (adj.taxWithheld ?? 0), 0);
+    return sum + convert(paid, a.currency, data);
+  }, 0);
   const rate = data.params.taxRate / 100;
   const taxYearSelf = calcTax(selfAnnual, data.params);
   const taxYearWithheld = calcAssetTax(withheldAnnual, data.params, 0, true);
@@ -720,6 +731,7 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     taxYearSelfGross,
     taxAccruedGross,
     taxPaidTotal,
+    taxPaidYear,
     netYear: incomePerYear - taxYear,
     avgRate,
     keyRate: data.params.keyRate,

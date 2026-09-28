@@ -402,14 +402,14 @@ export default function HomeScreen() {
     : 0;
   const taxLimitEta = limitEta(taxRemain, taxSummary.selfIncomePerDay, taxOver);
   // За вычетом уже уплаченного — то, что площадки ЕЩЁ спишут.
-  const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidTotal);
+  const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidYear);
   // Колонки для быстрого считывания — только те, где есть что показать.
   const taxCells: { key: string; label: string; value: number; color: string }[] = [
     ...(taxWithheldRemaining > 0.5
-      ? [{ key: 'withheld', label: 'Удержат площадки', value: taxWithheldRemaining, color: tokens.value.tax }]
+      ? [{ key: 'withheld', label: 'Ещё удержат', value: taxWithheldRemaining, color: tokens.value.tax }]
       : []),
-    ...(taxSummary.taxPaidTotal > 0.5
-      ? [{ key: 'paid', label: 'Уже удержано', value: taxSummary.taxPaidTotal, color: tokens.text.primary }]
+    ...(taxSummary.taxPaidYear > 0.5
+      ? [{ key: 'paid', label: 'Уже удержано', value: taxSummary.taxPaidYear, color: tokens.text.primary }]
       : []),
   ];
 
@@ -712,7 +712,7 @@ export default function HomeScreen() {
             <Text style={styles.sectionTitle}>Капитал по инструментам</Text>
             <TypeCardsRow groups={grouped.groups} currency={cur} />
 
-            <Text style={styles.sectionTitle}>Налог</Text>
+            <Text style={styles.sectionTitle}>Необлагаемый лимит</Text>
             {/* Герой меняет смысл вместе с состоянием: пока доход по вкладам в
                 лимите — крупно, сколько ещё можно заработать без налога; лимит
                 пробит — на его место встаёт сумма к доплате. Колонки внизу — для
@@ -723,7 +723,7 @@ export default function HomeScreen() {
                 <View style={styles.txHead}>
                   <View style={styles.infoLabel}>
                     <Text style={styles.txHeroLabel} numberOfLines={1}>
-                      {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Ещё без налога'}
+                      {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Осталось'}
                     </Text>
                     <MaterialCommunityIcons name="information-outline" size={16} color={tokens.text.tertiary} />
                   </View>
@@ -763,6 +763,9 @@ export default function HomeScreen() {
                 {taxCells.length > 0 ? (
                   <>
                     <View style={styles.txDivider} />
+                    {/* Нижняя часть — отдельный мир: доход, который в лимит не
+                        входит, налог с него площадки закрывают сами. */}
+                    <Text style={styles.txGroupLabel}>Не входит в лимит — налог удержат автоматически</Text>
                     <View style={styles.txCells}>
                       {taxCells.map((c, i) => (
                         <React.Fragment key={c.key}>
@@ -952,6 +955,7 @@ const styles = StyleSheet.create({
   txEndLabel: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
   txEndValue: { fontWeight: '600', color: tokens.text.secondary },
   txDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
+  txGroupLabel: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginBottom: 10 },
   txCells: { flexDirection: 'row', alignItems: 'stretch' },
   txCell: { flex: 1, minWidth: 0 },
   txCellSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: tokens.spacing.md },
