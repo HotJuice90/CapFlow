@@ -356,6 +356,10 @@ export interface AnalyticsSummary {
   /** Из accrued — только активы БЕЗ taxWithheldByBank: именно они делят необлагаемый
    *  лимит (льгота — для тех, кто платит сам, см. calcAssetTax). */
   selfAccrued: number;
+  /** Доход «доплатить самому» за календарный год целиком: факт + ~ прогноз до
+   *  31 декабря (assetYearIncomes). Разница с selfAccrued — сколько лимита ещё
+   *  съест прогнозируемый доход до конца года. */
+  selfAnnual: number;
   taxYear: number;
   /** Налог на уже накопленный (не прогнозный) доход сверх лимита — на сегодня. */
   taxAccrued: number;
@@ -699,6 +703,7 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     incomePerYear,
     accrued,
     selfAccrued,
+    selfAnnual,
     taxYear,
     taxAccrued,
     taxAccruedWithheld,

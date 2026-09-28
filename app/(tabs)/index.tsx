@@ -53,31 +53,8 @@ import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
-import { InfoTap } from '@/components/InfoTap';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
 import { t } from '@/i18n';
-
-/** Подпись с (i): тап по ней показывает пояснение (см. InfoTap). */
-function InfoLabel({
-  label,
-  title,
-  message,
-  style,
-}: {
-  label: string;
-  title: string;
-  message: string;
-  style: object;
-}) {
-  return (
-    <InfoTap title={title} message={message}>
-      <View style={styles.infoLabel}>
-        <Text style={style} numberOfLines={2}>{label}</Text>
-        <MaterialCommunityIcons name="information-outline" size={16} color={tokens.text.tertiary} />
-      </View>
-    </InfoTap>
-  );
-}
 
 /**
  * Сортировки списка активов.
@@ -400,43 +377,14 @@ export default function HomeScreen() {
   const taxRemain = Math.max(0, taxLimit - taxSummary.selfAccrued);
   // Бар «утекает»: заполнена ОСТАВШАЯСЯ доля лимита, а не использованная.
   const taxRemainPct = taxLimit > 0 ? Math.max(0, Math.min(100, Math.round((taxRemain / taxLimit) * 100))) : 0;
-  // За вычетом уже уплаченного — та же логика, что и «К доплате при снятии» на
-  // карточке актива: не валовый налог на весь доход, а то, что ЕЩЁ спишут.
-  const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidTotal);
   const taxYear = new Date().getFullYear();
   const taxOver = taxSummary.selfAccrued > taxLimit;
-  // Колонки внизу: налог площадки — только если такие активы вообще есть;
-  // «к доплате в ФНС» — только когда лимит пробит.
-  const hasWithheldPath = taxSummary.taxAccruedWithheld > 0.5 || taxSummary.taxPaidTotal > 0.5;
-  const taxCells: { key: string; label: string; info: string; value: number; color: string }[] = [
-    ...(hasWithheldPath
-      ? [
-          {
-            key: 'paid',
-            label: 'Уже удержано',
-            info: 'Налог, который площадки уже удержали при выводе денег.',
-            value: taxSummary.taxPaidTotal,
-            color: tokens.text.primary,
-          },
-          {
-            key: 'withheld',
-            label: taxOver ? 'Удержат автоматически' : 'Ещё удержат автоматически',
-            info: 'Налог с продуктов, где его удерживает сама площадка (например, ЦФА в виде «счёта»). Удержат при выводе — делать ничего не нужно.',
-            value: taxWithheldRemaining,
-            color: tokens.value.tax,
-          },
-        ]
-      : []),
-    ...(taxOver
-      ? [{
-          key: 'due',
-          label: 'К доплате в ФНС',
-          info: `Налог с процентов по вкладам сверх лимита. Придёт уведомлением, заплатить до 1 декабря ${taxYear + 1}.`,
-          value: taxSummary.taxAccruedSelf,
-          color: tokens.value.outflow,
-        }]
-      : []),
-  ];
+  // ~ Прогноз до 31 декабря: сколько лимита ещё съест предсказуемый доход.
+  // На баре это бледный хвост оставшейся доли — видно заранее, хватит ли
+  // лимита до конца года, а не постфактум.
+  const taxAhead = Math.max(0, taxSummary.selfAnnual - taxSummary.selfAccrued);
+  const taxRemainEnd = taxLimit - taxSummary.selfAnnual;
+  const taxEndPct = taxLimit > 0 ? Math.max(0, Math.min(taxRemainPct, (taxRemainEnd / taxLimit) * 100)) : 0;
 
   return (
     <ScreenBackground>
@@ -738,80 +686,59 @@ export default function HomeScreen() {
             <TypeCardsRow groups={grouped.groups} currency={cur} />
 
             <Text style={styles.sectionTitle}>Налог</Text>
-            {/* Герой меняет смысл вместе с состоянием. Пока доход по вкладам в
-                лимите — крупно, сколько ещё можно заработать без налога, и бар
-                УТЕКАЕТ вместе с ним: заполнена оставшаяся часть. Лимит пробит —
-                на место остатка встаёт сумма к доплате в ФНС, красным: это
-                единственное здесь, что требует действия. Налог площадки —
-                справкой в колонках, его удержат сами. Года в заголовке нет:
-                всё приложение и так живёт в текущем времени. */}
-            <Card>
-              <View style={styles.txHead}>
-                {taxOver ? (
-                  <InfoLabel
-                    label="К доплате в ФНС"
-                    title="К доплате в ФНС"
-                    message={`Налог с процентов по вкладам сверх необлагаемого лимита. Банк его не удерживает — ФНС пришлёт уведомление, заплатить нужно до 1 декабря ${taxYear + 1}.`}
-                    style={styles.txHeroLabel}
-                  />
-                ) : (
-                  <InfoLabel
-                    label="Осталось без налога"
-                    title="Необлагаемый лимит"
-                    message={`Проценты по вкладам не облагаются, пока их сумма за год не превысит лимит: 1 млн ₽ × максимальная ключевая ставка года. Сейчас лимит — ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}.`}
-                    style={styles.txHeroLabel}
-                  />
-                )}
-                <Pressable style={styles.txRatePill} onPress={() => router.push('/settings/tax')} hitSlop={8}>
-                  <Text style={styles.txRateText}>{formatPercent(data.params.taxRate)}</Text>
-                  <MaterialIcons name="chevron-right" size={14} color={tokens.value.tax} />
-                </Pressable>
-              </View>
+            {/* Герой меняет смысл вместе с состоянием: пока доход по вкладам в
+                лимите — крупно остаток, бар УТЕКАЕТ вместе с ним; лимит пробит —
+                на его место встаёт сумма к доплате в ФНС, красным. Бледный хвост
+                бара — ~ прогноз до конца года. Всё остальное (из чего складывается
+                число, налог площадок) — в шите по тапу, карточка держит одну мысль. */}
+            <Pressable onPress={() => { tapBuzz(); router.push('/tax-breakdown' as never); }}>
+              <Card>
+                <View style={styles.txHead}>
+                  <View style={styles.infoLabel}>
+                    <Text style={styles.txHeroLabel} numberOfLines={1}>
+                      {taxOver ? 'К доплате в ФНС' : 'Осталось без налога'}
+                    </Text>
+                    <MaterialCommunityIcons name="information-outline" size={16} color={tokens.text.tertiary} />
+                  </View>
+                  <Pressable style={styles.txRatePill} onPress={() => router.push('/settings/tax')} hitSlop={8}>
+                    <Text style={styles.txRateText}>{formatPercent(data.params.taxRate)}</Text>
+                    <MaterialIcons name="chevron-right" size={14} color={tokens.value.tax} />
+                  </Pressable>
+                </View>
 
-              <Text style={[styles.txBig, taxOver && { color: tokens.value.outflow }]} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
-              </Text>
+                <Text style={[styles.txBig, taxOver && { color: tokens.value.outflow }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
+                </Text>
 
-              <View style={styles.txBarRow}>
                 <View style={styles.txTrack}>
                   {taxRemainPct > 0 ? (
+                    <View style={[styles.txFill, styles.txFillAhead, { width: `${taxRemainPct}%` }]} />
+                  ) : null}
+                  {taxEndPct > 0 ? (
                     <LinearGradient
                       colors={[hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={[styles.txFill, { width: `${taxRemainPct}%` }]}
+                      style={[styles.txFill, { width: `${taxEndPct}%` }]}
                     />
                   ) : null}
                 </View>
-                <View style={styles.txPct}>
-                  <Text style={[styles.txPctValue, taxRemainPct === 0 && { color: tokens.value.outflow }]}>{taxRemainPct}%</Text>
-                  <Text style={styles.txPctLabel}>осталось</Text>
+                <View style={styles.txEnds}>
+                  <Text style={styles.txForecast} numberOfLines={1}>
+                    {taxOver
+                      ? `лимит превышен на ${formatMoney(taxSummary.selfAccrued - taxLimit, { currency: cur, kopecks: 'hide' })}`
+                      : taxAhead <= 0.5
+                        ? `заработано ${formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}`
+                        : taxRemainEnd >= 0
+                          ? `~ к концу года останется ${formatMoney(taxRemainEnd, { currency: cur, kopecks: 'hide' })}`
+                          : `~ к концу года лимит кончится`}
+                  </Text>
+                  <Text style={styles.txOf} numberOfLines={1}>
+                    из {formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}
+                  </Text>
                 </View>
-              </View>
-              <Text style={styles.txCaption}>
-                заработано по вкладам {formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })} из{' '}
-                {formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}
-              </Text>
-
-              {taxCells.length > 0 ? (
-                <>
-                  <View style={styles.txDivider} />
-                  <View style={styles.txCells}>
-                    {taxCells.map((c, i) => (
-                      <React.Fragment key={c.key}>
-                        {i > 0 ? <View style={styles.txCellSep} /> : null}
-                        <View style={styles.txCell}>
-                          <InfoLabel label={c.label} title={c.label} message={c.info} style={styles.txCellLabel} />
-                          <Text style={[styles.txCellValue, { color: c.color }]} numberOfLines={1} adjustsFontSizeToFit>
-                            {formatMoney(c.value, { currency: cur, kopecks: 'hide' })}
-                          </Text>
-                        </View>
-                      </React.Fragment>
-                    ))}
-                  </View>
-                </>
-              ) : null}
-            </Card>
+              </Card>
+            </Pressable>
 
             {upcoming.length > 0 ? (
               <>
@@ -977,19 +904,12 @@ const styles = StyleSheet.create({
   },
   txRateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
   txBig: { fontSize: 32, lineHeight: 36, fontWeight: '700', color: tokens.text.primary, letterSpacing: -0.64, marginTop: 6 },
-  txBarRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, marginTop: tokens.spacing.md },
-  txTrack: { flex: 1, height: 10, borderRadius: 5, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden' },
-  txFill: { height: 10, borderRadius: 5 },
-  txPct: { alignItems: 'flex-end' },
-  txPctValue: { fontSize: 16, lineHeight: 18, fontWeight: '700', color: tokens.value.tax },
-  txPctLabel: { fontSize: 11, lineHeight: 13, color: tokens.text.tertiary },
-  txCaption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 8 },
-  txDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
-  txCells: { flexDirection: 'row', alignItems: 'stretch' },
-  txCell: { flex: 1, minWidth: 0 },
-  txCellSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: tokens.spacing.md },
-  txCellLabel: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.text.secondary, flexShrink: 1 },
-  txCellValue: { fontSize: 20, lineHeight: 24, fontWeight: '700', marginTop: 6 },
+  txTrack: { height: 10, borderRadius: 5, backgroundColor: hexToRgba(tokens.value.tax, 0.1), overflow: 'hidden', marginTop: tokens.spacing.md },
+  txFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 5 },
+  txFillAhead: { backgroundColor: hexToRgba(tokens.value.tax, 0.28) },
+  txEnds: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: tokens.spacing.md, marginTop: 8 },
+  txForecast: { flexShrink: 1, fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.value.forecast },
+  txOf: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
   liqLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
   liqValue: { fontSize: tokens.typography.header, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.24, marginTop: 10 },
   liqBarWrap: { marginTop: tokens.spacing.lg },
