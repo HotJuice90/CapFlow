@@ -2,15 +2,17 @@ import React, { useMemo } from 'react';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useData } from '@/state/DataContext';
 import { analyticsSummary } from '@/state/selectors';
+import { limitEta, limitEtaWhen } from '@/lib/taxLimit';
 import { tokens, font } from '@/theme';
 import { formatMoney } from '@/format';
 
 /**
- * Разбивка налогового блока главной (по тапу на карточку). Сама карточка
- * держит одно число и бар — всё, из чего они складываются, живёт здесь,
- * столбиком «лимит − заработано − ~ ещё до конца года = остаток», по рефу
- * Robinhood «Available credit». Налог площадок — отдельной группой: он к
- * лимиту отношения не имеет, его удержат сами.
+ * Разбивка блока «Необлагаемый лимит» (тап по карточке на главной). Две
+ * группы, каждая складывается сама по себе: ФАКТ (лимит − заработано =
+ * осталось) и ПРОГНОЗ «если темп сохранится» (когда кончится → на сколько
+ * превысим → сколько налога). Раньше прогнозная строка стояла внутри
+ * фактического столбика, и он не сходился с итогом. Ниже — то, что в лимит
+ * не входит: налог с него удерживают площадки.
  */
 export default function TaxBreakdown() {
   const { data } = useData();
@@ -20,37 +22,43 @@ export default function TaxBreakdown() {
 
   const year = new Date().getFullYear();
   const limit = data.params.taxFreeLimit;
-  const ahead = Math.max(0, s.selfAnnual - s.selfAccrued);
-  const remainNow = Math.max(0, limit - s.selfAccrued);
-  const remainEnd = limit - s.selfAnnual;
   const over = s.selfAccrued > limit;
+  const remainNow = Math.max(0, limit - s.selfAccrued);
+  const eta = limitEta(remainNow, s.selfIncomePerDay, over);
+  const overYear = s.selfAnnual - limit;
   const withheldLeft = Math.max(0, s.taxAccruedWithheld - s.taxPaidYear);
   const hasWithheld = s.taxAccruedWithheld > 0.5 || s.taxPaidYear > 0.5;
+  const hasForecast = !!eta || overYear > 0.5;
 
   return (
     <View style={st.sheet}>
       <StatusBar barStyle="dark-content" />
       <View style={st.grabber} />
-      <Text style={st.title}>Налог за {year}</Text>
+      <Text style={st.title}>Необлагаемый лимит</Text>
 
-      <Row label="Необлагаемый лимит" value={money(limit)} />
+      <Row label={`Лимит на ${year}`} value={money(limit)} />
       <Row label="Заработано по вкладам" value={`−${money(s.selfAccrued)}`} indent />
-      {ahead > 0.5 ? (
-        <Row label="~ ещё до 31 декабря" value={`−${money(ahead)}`} indent color={tokens.value.forecast} />
-      ) : null}
       <View style={st.divider} />
-
       {over ? (
-        <Row label="К доплате в ФНС сейчас" value={money(s.taxAccruedSelf)} strong color={tokens.value.outflow} />
+        <>
+          <Row label="Сверх лимита сейчас" value={money(s.selfAccrued - limit)} strong color={tokens.value.outflow} />
+          <Row label={`Налог в ФНС до 1 дек ${year + 1}`} value={money(s.taxAccruedSelf)} />
+        </>
       ) : (
-        <Row label="Осталось без налога сейчас" value={money(remainNow)} strong />
+        <Row label="Осталось сейчас" value={money(remainNow)} strong />
       )}
-      {ahead > 0.5 ? (
-        remainEnd >= 0 ? (
-          <Row label="~ останется к концу года" value={money(remainEnd)} color={tokens.value.forecast} />
-        ) : (
-          <Row label="~ к доплате за год" value={money(s.taxYearSelf)} color={tokens.value.forecast} />
-        )
+
+      {hasForecast ? (
+        <>
+          <Text style={st.group}>Если темп сохранится</Text>
+          {eta ? <Row label="~ лимит кончится" value={limitEtaWhen(eta)} color={tokens.value.forecast} /> : null}
+          {overYear > 0.5 ? (
+            <>
+              <Row label="~ сверх лимита за год" value={money(overYear)} color={tokens.value.forecast} />
+              <Row label={`~ налог в ФНС до 1 дек ${year + 1}`} value={money(s.taxYearSelf)} color={tokens.value.forecast} />
+            </>
+          ) : null}
+        </>
       ) : null}
 
       {hasWithheld ? (
@@ -62,9 +70,9 @@ export default function TaxBreakdown() {
       ) : null}
 
       <Text style={st.note}>
-        Лимит — 1 млн ₽ × максимальная ключевая ставка года. Налог сверх него с вкладов банк не
-        удерживает: ФНС пришлёт уведомление, заплатить до 1 декабря {year + 1}. С продуктов, где
-        налог удерживает площадка, делать ничего не нужно.
+        Лимит — 1 млн ₽ × максимальная ключевая ставка года, с 1 января считается заново. Налог сверх
+        него с вкладов банк не удерживает — ФНС пришлёт уведомление. С того, что в лимит не входит,
+        налог удерживают при выводе, делать ничего не нужно.
       </Text>
     </View>
   );

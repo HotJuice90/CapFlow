@@ -53,25 +53,9 @@ import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz } from '@/lib/haptics';
+import { limitEta, limitEtaUntil } from '@/lib/taxLimit';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
 import { t } from '@/i18n';
-
-const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-
-/**
- * Когда при текущем темпе кончится необлагаемый лимит. День в день это не
- * угадать (сроки вкладов, смена ставок), поэтому точность — треть месяца:
- * «~ хватит до середины ноября». Дальше 31 декабря не считаем — с 1 января
- * лимит обнуляется. Пробит или дохода нет — строки нет.
- */
-function limitEta(remain: number, perDay: number, over: boolean, now: Date = new Date()): string | null {
-  if (over || perDay <= 0 || remain <= 0) return null;
-  const at = new Date(now.getTime() + (remain / perDay) * 86_400_000);
-  if (at.getFullYear() > now.getFullYear()) return '~ хватит до конца года';
-  const d = at.getDate();
-  const part = d <= 10 ? 'начала' : d <= 20 ? 'середины' : 'конца';
-  return `~ хватит до ${part} ${MONTHS_GEN[at.getMonth()]}`;
-}
 
 /**
  * Сортировки списка активов.
@@ -400,7 +384,8 @@ export default function HomeScreen() {
   const taxBarPct = taxLimit > 0
     ? Math.max(0, Math.min(100, ((taxOver ? taxSummary.selfAccrued - taxLimit : taxRemain) / taxLimit) * 100))
     : 0;
-  const taxLimitEta = limitEta(taxRemain, taxSummary.selfIncomePerDay, taxOver);
+  const taxEta = limitEta(taxRemain, taxSummary.selfIncomePerDay, taxOver);
+  const taxLimitEta = taxEta ? limitEtaUntil(taxEta) : null;
   // За вычетом уже уплаченного — то, что площадки ЕЩЁ спишут.
   const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidYear);
   // Колонки для быстрого считывания — только те, где есть что показать.
