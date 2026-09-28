@@ -708,7 +708,7 @@ export default function HomeScreen() {
                 <View style={styles.txHead}>
                   <View style={styles.infoLabel}>
                     <Text style={styles.txHeroLabel} numberOfLines={1}>
-                      {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Осталось'}
+                      {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Осталось без налога'}
                     </Text>
                     <MaterialCommunityIcons name="information-outline" size={16} color={tokens.text.tertiary} />
                   </View>
@@ -737,20 +737,33 @@ export default function HomeScreen() {
                   ) : null}
                 </View>
                 <View style={styles.txEnds}>
-                  <Text style={styles.txEndLabel} numberOfLines={1}>
-                    заработано <Text style={styles.txEndValue}>{formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}</Text>
-                  </Text>
-                  <Text style={styles.txEndLabel} numberOfLines={1}>
-                    лимит <Text style={styles.txEndValue}>{formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}</Text>
-                  </Text>
+                  <View style={styles.txEnd}>
+                    <Text style={styles.txEndLabel} numberOfLines={1}>Использовано</Text>
+                    <Text style={styles.txEndValue} numberOfLines={1}>
+                      {formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}
+                    </Text>
+                  </View>
+                  <View style={[styles.txEnd, styles.txEndRight]}>
+                    <Text style={styles.txEndLabel} numberOfLines={1}>Лимит на {taxYear} год</Text>
+                    <Text style={styles.txEndValue} numberOfLines={1}>
+                      {formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}
+                    </Text>
+                  </View>
                 </View>
 
                 {taxCells.length > 0 ? (
-                  <>
-                    <View style={styles.txDivider} />
-                    {/* Нижняя часть — отдельный мир: доход, который в лимит не
-                        входит, налог с него площадки закрывают сами. */}
-                    <Text style={[styles.txHeroLabel, styles.txGroupLabel]}>Не входит в лимит</Text>
+                  /* Нижняя часть — отдельный мир: доход, который в лимит не
+                     входит, налог с него удерживают за тебя. Своя плашка с
+                     иконкой, чтобы это не читалось продолжением лимита. */
+                  <View style={styles.txPanel}>
+                    <View style={styles.txPanelHead}>
+                      <View style={styles.txPanelIcon}>
+                        <MaterialCommunityIcons name="bank-outline" size={16} color={tokens.value.tax} />
+                      </View>
+                      <Text style={styles.txPanelTitle} numberOfLines={2}>
+                        Налог удержит банк (не входит в лимит)
+                      </Text>
+                    </View>
                     <View style={styles.txCells}>
                       {taxCells.map((c, i) => (
                         <React.Fragment key={c.key}>
@@ -764,7 +777,7 @@ export default function HomeScreen() {
                         </React.Fragment>
                       ))}
                     </View>
-                  </>
+                  </View>
                 ) : null}
               </Card>
             </Pressable>
@@ -936,14 +949,28 @@ const styles = StyleSheet.create({
   txEta: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.value.forecast, marginTop: 2 },
   txTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden', marginTop: tokens.spacing.md },
   txFill: { height: 8, borderRadius: 4 },
-  txEnds: { flexDirection: 'row', justifyContent: 'space-between', gap: tokens.spacing.md, marginTop: 8 },
+  txEnds: { flexDirection: 'row', justifyContent: 'space-between', gap: tokens.spacing.md, marginTop: 10 },
+  txEnd: { flexShrink: 1, minWidth: 0 },
+  txEndRight: { alignItems: 'flex-end' },
   txEndLabel: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
-  txEndValue: { fontWeight: '600', color: tokens.text.secondary },
-  txDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
-  txGroupLabel: { marginBottom: 10 },
+  txEndValue: { fontSize: 16, lineHeight: 20, fontWeight: '600', color: tokens.text.primary, marginTop: 2 },
+  txPanel: {
+    backgroundColor: hexToRgba(tokens.value.tax, 0.06),
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: 14,
+    marginTop: tokens.spacing.lg,
+  },
+  txPanelHead: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md },
+  txPanelIcon: {
+    width: 28, height: 28, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: hexToRgba(tokens.value.tax, 0.12),
+  },
+  txPanelTitle: { flexShrink: 1, fontSize: tokens.typography.label, lineHeight: 17, fontWeight: '600', color: tokens.text.primary },
   txCells: { flexDirection: 'row', alignItems: 'stretch' },
   txCell: { flex: 1, minWidth: 0 },
-  txCellSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: tokens.spacing.md },
+  txCellSep: { width: 1, backgroundColor: hexToRgba(tokens.value.tax, 0.15), marginHorizontal: tokens.spacing.md },
   txCellLabel: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.text.secondary },
   txCellValue: { fontSize: 18, lineHeight: 22, fontWeight: '600', marginTop: 4 },
   liqLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
