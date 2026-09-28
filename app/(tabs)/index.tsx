@@ -56,6 +56,23 @@ import { tapBuzz } from '@/lib/haptics';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
 import { t } from '@/i18n';
 
+const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+/**
+ * Когда при текущем темпе кончится необлагаемый лимит. День в день это не
+ * угадать (сроки вкладов, смена ставок), поэтому точность — треть месяца:
+ * «~ хватит до середины ноября». Дальше 31 декабря не считаем — с 1 января
+ * лимит обнуляется. Пробит или дохода нет — строки нет.
+ */
+function limitEta(remain: number, perDay: number, over: boolean, now: Date = new Date()): string | null {
+  if (over || perDay <= 0 || remain <= 0) return null;
+  const at = new Date(now.getTime() + (remain / perDay) * 86_400_000);
+  if (at.getFullYear() > now.getFullYear()) return '~ хватит до конца года';
+  const d = at.getDate();
+  const part = d <= 10 ? 'начала' : d <= 20 ? 'середины' : 'конца';
+  return `~ хватит до ${part} ${MONTHS_GEN[at.getMonth()]}`;
+}
+
 /**
  * Сортировки списка активов.
  *
@@ -375,16 +392,19 @@ export default function HomeScreen() {
   // те, где банк удерживает налог сам, в этом дележе не участвуют вообще.
   const taxLimit = data.params.taxFreeLimit;
   const taxRemain = Math.max(0, taxLimit - taxSummary.selfAccrued);
-  const taxUsedPct = taxLimit > 0 ? Math.min(100, (taxSummary.selfAccrued / taxLimit) * 100) : 0;
   const taxYear = new Date().getFullYear();
   const taxOver = taxSummary.selfAccrued > taxLimit;
+  // Бар — обратный отсчёт: пока лимит не выбран, заполнена ОСТАВШАЯСЯ доля и
+  // она утекает; лимит пробит — бар заполняется заново другим цветом, уже
+  // превышением (в масштабе того же лимита).
+  const taxBarPct = taxLimit > 0
+    ? Math.max(0, Math.min(100, ((taxOver ? taxSummary.selfAccrued - taxLimit : taxRemain) / taxLimit) * 100))
+    : 0;
+  const taxLimitEta = limitEta(taxRemain, taxSummary.selfIncomePerDay, taxOver);
   // За вычетом уже уплаченного — то, что площадки ЕЩЁ спишут.
   const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidTotal);
   // Колонки для быстрого считывания — только те, где есть что показать.
   const taxCells: { key: string; label: string; value: number; color: string }[] = [
-    ...(taxSummary.taxYearSelf > 0.5
-      ? [{ key: 'year', label: taxOver ? '~ доплата за год' : '~ налог за год', value: taxSummary.taxYearSelf, color: tokens.value.forecast }]
-      : []),
     ...(taxWithheldRemaining > 0.5
       ? [{ key: 'withheld', label: 'Удержат площадки', value: taxWithheldRemaining, color: tokens.value.tax }]
       : []),
@@ -716,19 +736,29 @@ export default function HomeScreen() {
                 <Text style={[styles.txBig, taxOver && { color: tokens.value.tax }]} numberOfLines={1} adjustsFontSizeToFit>
                   {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
                 </Text>
+                {taxLimitEta ? <Text style={styles.txEta}>{taxLimitEta}</Text> : null}
                 <View style={styles.txTrack}>
-                  <LinearGradient
-                    colors={[hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.txFill, { width: `${taxUsedPct}%` }]}
-                  />
+                  {taxBarPct > 0 ? (
+                    <LinearGradient
+                      colors={
+                        taxOver
+                          ? [hexToRgba(tokens.value.outflow, 0.55), tokens.value.outflow]
+                          : [hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]
+                      }
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.txFill, { width: `${taxBarPct}%` }]}
+                    />
+                  ) : null}
                 </View>
-                <Text style={styles.txCaption}>
-                  {taxOver
-                    ? `лимит ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })} превышен на ${formatMoney(taxSummary.selfAccrued - taxLimit, { currency: cur, kopecks: 'hide' })}`
-                    : `заработано по вкладам ${formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })} из ${formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}`}
-                </Text>
+                <View style={styles.txEnds}>
+                  <Text style={styles.txEndLabel} numberOfLines={1}>
+                    заработано <Text style={styles.txEndValue}>{formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}</Text>
+                  </Text>
+                  <Text style={styles.txEndLabel} numberOfLines={1}>
+                    лимит <Text style={styles.txEndValue}>{formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}</Text>
+                  </Text>
+                </View>
 
                 {taxCells.length > 0 ? (
                   <>
@@ -915,9 +945,12 @@ const styles = StyleSheet.create({
   },
   txRateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
   txBig: { fontSize: 26, lineHeight: 30, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.5, marginTop: 4 },
+  txEta: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.value.forecast, marginTop: 2 },
   txTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden', marginTop: tokens.spacing.md },
   txFill: { height: 8, borderRadius: 4 },
-  txCaption: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginTop: 8 },
+  txEnds: { flexDirection: 'row', justifyContent: 'space-between', gap: tokens.spacing.md, marginTop: 8 },
+  txEndLabel: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
+  txEndValue: { fontWeight: '600', color: tokens.text.secondary },
   txDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
   txCells: { flexDirection: 'row', alignItems: 'stretch' },
   txCell: { flex: 1, minWidth: 0 },

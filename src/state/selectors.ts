@@ -360,6 +360,9 @@ export interface AnalyticsSummary {
    *  31 декабря (assetYearIncomes). Разница с selfAccrued — сколько лимита ещё
    *  съест прогнозируемый доход до конца года. */
   selfAnnual: number;
+  /** Текущий темп дохода в день по активам «доплатить самому» — для оценки,
+   *  когда кончится необлагаемый лимит. */
+  selfIncomePerDay: number;
   taxYear: number;
   /** Налог на уже накопленный (не прогнозный) доход сверх лимита — на сегодня. */
   taxAccrued: number;
@@ -614,6 +617,7 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   let incomePerYear = 0;
   let accrued = 0;
   let weightedRate = 0;
+  let selfIncomePerDay = 0;
   // Доход по группам «удержит банк сам» / «доплатить самому» — это 2 разных
   // правовых режима (см. calcAssetTax), общий необлагаемый лимит делят между
   // собой только активы «доплатить самому»; «удержит банк» считается отдельно,
@@ -629,6 +633,7 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     const incDay = convert(v.derived.incomePerDay, c, data);
     totalCapital += cap;
     incomePerDay += incDay;
+    if (!v.asset.taxWithheldByBank) selfIncomePerDay += incDay;
     incomePerMonth += convert(v.derived.incomePerMonth, c, data);
     weightedRate += v.derived.currentRate * cap;
     if (!topInstrument || incDay > topInstrument.incomePerDay) {
@@ -704,6 +709,7 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
     accrued,
     selfAccrued,
     selfAnnual,
+    selfIncomePerDay,
     taxYear,
     taxAccrued,
     taxAccruedWithheld,
