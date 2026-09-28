@@ -21,14 +21,19 @@ export function limitEta(remain: number, perDay: number, over: boolean, now: Dat
   return { beyondYear: false, third: d <= 10 ? 0 : d <= 20 ? 1 : 2, month: at.getMonth() };
 }
 
-/** Для карточки: «~ хватит до середины ноября». */
+/** Для карточки: «~ хватит до середины ноября». Случай «в этом году вообще
+ *  не кончится» формулируем иначе, чтобы не путать с «до конца декабря». */
 export function limitEtaUntil(eta: LimitEta): string {
-  if (eta.beyondYear) return '~ хватит до конца года';
+  if (eta.beyondYear) return '~ лимита хватит на весь год';
   return `~ хватит до ${['начала', 'середины', 'конца'][eta.third]} ${MONTHS_GEN[eta.month]}`;
 }
 
-/** Для строки шита «~ лимит кончится …»: «в середине ноября». */
-export function limitEtaWhen(eta: LimitEta): string {
-  if (eta.beyondYear) return 'не в этом году';
-  return `в ${['начале', 'середине', 'конце'][eta.third]} ${MONTHS_GEN[eta.month]}`;
+/** Для строки шита — подпись и значение отдельно: «~ лимит кончится» /
+ *  «в середине ноября», либо «~ лимита хватит» / «на весь год». */
+export function limitEtaRow(eta: LimitEta): { label: string; value: string } {
+  if (eta.beyondYear) return { label: '~ лимита хватит', value: 'на весь год' };
+  return {
+    label: '~ лимит кончится',
+    value: `в ${['начале', 'середине', 'конце'][eta.third]} ${MONTHS_GEN[eta.month]}`,
+  };
 }

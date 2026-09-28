@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useData } from '@/state/DataContext';
 import { analyticsSummary } from '@/state/selectors';
-import { limitEta, limitEtaWhen } from '@/lib/taxLimit';
+import { limitEta, limitEtaRow } from '@/lib/taxLimit';
 import { tokens, font } from '@/theme';
 import { formatMoney } from '@/format';
 
@@ -48,25 +48,28 @@ export default function TaxBreakdown() {
         <Row label="Осталось сейчас" value={money(remainNow)} strong />
       )}
 
+      {/* Прогноз и «мимо лимита» — на своих подложках: три смысловых блока
+          видно до того, как начал читать строки. Факт остаётся на белом — он
+          здесь главный. */}
       {hasForecast ? (
-        <>
+        <View style={st.panel}>
           <Text style={st.group}>Если темп сохранится</Text>
-          {eta ? <Row label="~ лимит кончится" value={limitEtaWhen(eta)} color={tokens.value.forecast} /> : null}
+          {eta ? <Row {...limitEtaRow(eta)} color={tokens.value.forecast} /> : null}
           {overYear > 0.5 ? (
             <>
               <Row label="~ сверх лимита за год" value={money(overYear)} color={tokens.value.forecast} />
               <Row label={`~ налог в ФНС до 1 дек ${year + 1}`} value={money(s.taxYearSelf)} color={tokens.value.forecast} />
             </>
           ) : null}
-        </>
+        </View>
       ) : null}
 
       {hasWithheld ? (
-        <>
+        <View style={st.panel}>
           <Text style={st.group}>Не входит в лимит</Text>
           <Row label="Уже удержано" value={money(s.taxPaidYear)} />
           <Row label="Ещё удержат" value={money(withheldLeft)} color={tokens.value.forecast} />
-        </>
+        </View>
       ) : null}
 
       <Text style={st.note}>
@@ -110,6 +113,13 @@ const st = StyleSheet.create({
   value: { fontSize: 15, lineHeight: 17, fontWeight: '500', color: tokens.text.primary },
   valueStrong: { fontSize: 17, lineHeight: 19, fontWeight: '700' },
   divider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 8 },
-  group: { fontFamily: font.semibold, fontSize: 15, lineHeight: 17, color: tokens.text.primary, marginTop: 20, marginBottom: 4 },
+  panel: {
+    backgroundColor: tokens.surface.rowTint,
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: 14,
+    marginTop: tokens.spacing.tight,
+  },
+  group: { fontFamily: font.semibold, fontSize: 15, lineHeight: 17, color: tokens.text.primary, marginBottom: 4 },
   note: { fontSize: 13, lineHeight: 18, color: tokens.text.tertiary, marginTop: 18 },
 });
