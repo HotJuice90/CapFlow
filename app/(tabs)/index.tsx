@@ -409,7 +409,7 @@ export default function HomeScreen() {
       ? [{ key: 'paid', label: 'Уже удержано', value: taxSummary.taxPaidYear, color: tokens.text.primary }]
       : []),
     ...(taxWithheldRemaining > 0.5
-      ? [{ key: 'withheld', label: 'Ещё удержат', value: taxWithheldRemaining, color: tokens.value.tax }]
+      ? [{ key: 'withheld', label: 'Ещё удержат', value: taxWithheldRemaining, color: tokens.value.forecast }]
       : []),
   ];
 
