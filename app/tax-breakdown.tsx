@@ -55,7 +55,7 @@ export default function TaxBreakdown() {
 
       {hasWithheld ? (
         <>
-          <Text style={st.group}>Не входит в лимит — налог удержат автоматически</Text>
+          <Text style={st.group}>Не входит в лимит</Text>
           <Row label="Уже удержано" value={money(s.taxPaidYear)} />
           <Row label="Ещё удержат" value={money(withheldLeft)} color={tokens.value.tax} />
         </>

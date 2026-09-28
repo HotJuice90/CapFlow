@@ -405,11 +405,11 @@ export default function HomeScreen() {
   const taxWithheldRemaining = Math.max(0, taxSummary.taxAccruedWithheld - taxSummary.taxPaidYear);
   // Колонки для быстрого считывания — только те, где есть что показать.
   const taxCells: { key: string; label: string; value: number; color: string }[] = [
-    ...(taxWithheldRemaining > 0.5
-      ? [{ key: 'withheld', label: 'Ещё удержат', value: taxWithheldRemaining, color: tokens.value.tax }]
-      : []),
     ...(taxSummary.taxPaidYear > 0.5
       ? [{ key: 'paid', label: 'Уже удержано', value: taxSummary.taxPaidYear, color: tokens.text.primary }]
+      : []),
+    ...(taxWithheldRemaining > 0.5
+      ? [{ key: 'withheld', label: 'Ещё удержат', value: taxWithheldRemaining, color: tokens.value.tax }]
       : []),
   ];
 
@@ -765,7 +765,7 @@ export default function HomeScreen() {
                     <View style={styles.txDivider} />
                     {/* Нижняя часть — отдельный мир: доход, который в лимит не
                         входит, налог с него площадки закрывают сами. */}
-                    <Text style={styles.txGroupLabel}>Не входит в лимит — налог удержат автоматически</Text>
+                    <Text style={[styles.txHeroLabel, styles.txGroupLabel]}>Не входит в лимит</Text>
                     <View style={styles.txCells}>
                       {taxCells.map((c, i) => (
                         <React.Fragment key={c.key}>
@@ -955,7 +955,7 @@ const styles = StyleSheet.create({
   txEndLabel: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
   txEndValue: { fontWeight: '600', color: tokens.text.secondary },
   txDivider: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
-  txGroupLabel: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, marginBottom: 10 },
+  txGroupLabel: { marginBottom: 10 },
   txCells: { flexDirection: 'row', alignItems: 'stretch' },
   txCell: { flex: 1, minWidth: 0 },
   txCellSep: { width: 1, backgroundColor: tokens.surface.hairline, marginHorizontal: tokens.spacing.md },
