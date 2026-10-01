@@ -20,7 +20,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useData } from '@/state/DataContext';
 import type { CurrencyCode } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
@@ -85,6 +85,9 @@ const DEP_PERIODS: { label: string; days: number }[] = [
   { label: '1 год', days: 365 },
 ];
 const DEP_RATE_PRESETS = [10, 11, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16];
+// Ставки, которые реально приходится считать на ходу: НПД с физлиц и с
+// юрлиц/ИП, НДФЛ и повышенный НДФЛ, УСН «доходы минус расходы» / НДС.
+const TAX_RATE_PRESETS = [4, 6, 13, 15, 20];
 
 /** Компактный процент без лишних нулей, для быстрых чипов ставки. */
 function fmtPct(n: number): string {
@@ -259,7 +262,7 @@ export default function ConverterScreen() {
   const { width: screenW } = useWindowDimensions();
   const { data, refreshRates, backfillRateHistory } = useData();
 
-  const [mode, setMode] = useState<'currency' | 'deposit'>('currency');
+  const [mode, setMode] = useState<'currency' | 'deposit' | 'tax'>('currency');
 
   const [slots, setSlots] = useState<Slots>(() =>
     resolveDuplicates([data.settings.defaultCurrency, DEFAULT_SLOTS[1], DEFAULT_SLOTS[2]], 0),
@@ -282,6 +285,14 @@ export default function ConverterScreen() {
   const [depRateText, setDepRateText] = useState('12');
   const [depDaysText, setDepDaysText] = useState('30');
   const [depMode, setDepMode] = useState<'simple' | 'compound'>('simple');
+
+  // Налог: сумма и ставка. По умолчанию 6% — самый частый случай «прикинуть
+  // быстро». Режим «сверху» отвечает на обратный вопрос: сколько выставить,
+  // чтобы на руки осталась введённая сумма.
+  const [taxAmountText, setTaxAmountText] = useState('');
+  const [taxRateText, setTaxRateText] = useState('6');
+  const [taxOnTop, setTaxOnTop] = useState(false);
+  const [resetTaxSpin, setResetTaxSpin] = useState(0);
 
   const refs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
   const rates = data.rates as Record<CurrencyCode, number>;
@@ -364,6 +375,12 @@ export default function ConverterScreen() {
     tapBuzz();
     setDepAmountText('');
     setResetDepSpin((n) => n + 1);
+  };
+
+  const resetTax = () => {
+    tapBuzz();
+    setTaxAmountText('');
+    setResetTaxSpin((n) => n + 1);
   };
 
   const openPicker = (slotIdx: number) => {
@@ -462,6 +479,15 @@ export default function ConverterScreen() {
     : depAmount * (depRate / 100) * (depDays / 365);
   const depTax = Math.max(0, depGross) * (data.params.taxRate / 100);
 
+  const taxAmount = parseRaw(taxAmountText);
+  const taxRate = Math.min(99.99, Math.max(0, parseRaw(taxRateText)));
+  // «От суммы»: введённое — доход, налог берётся из него. «Сверху»: введённое —
+  // то, что хочется получить чистыми, и налог начисляется поверх.
+  const taxValue = taxOnTop
+    ? taxAmount / (1 - taxRate / 100) - taxAmount
+    : taxAmount * (taxRate / 100);
+  const taxOther = taxOnTop ? taxAmount + taxValue : taxAmount - taxValue;
+
   // Поле ввода (используется и для верхней карточки, и для нижних столбцов)
   const AmountInput = (idx: number, big: boolean) => (
     <TextInput
@@ -500,6 +526,7 @@ export default function ConverterScreen() {
           segments={[
             { key: 'currency' as const, label: 'Валюты' },
             { key: 'deposit' as const, label: 'Вклад' },
+            { key: 'tax' as const, label: 'Налог' },
           ]}
           value={mode}
           onChange={setMode}
@@ -633,7 +660,7 @@ export default function ConverterScreen() {
           </View>
         </View>
         </>
-        ) : (
+        ) : mode === 'deposit' ? (
         <>
         {/* ── Калькулятор вклада ── */}
         <View style={s.cardsBlock}>
@@ -731,6 +758,97 @@ export default function ConverterScreen() {
             <Text style={s.depResultValue}>{formatMoney(Math.max(0, depGross), { currency: base })}</Text>
             <Text style={s.depResultTaxHint}>
               {depTax > 0 ? `Возможный налог: ${formatMoney(depTax, { currency: base })}` : 'Налог: не облагается'}
+            </Text>
+          </View>
+        </View>
+        </>
+        ) : (
+        <>
+        {/* ── Налог: сумма сверху, ставка и вторая величина снизу ── */}
+        <View style={s.cardsBlock}>
+          <View style={s.topCard} onLayout={(e) => setTopCardH(e.nativeEvent.layout.height)}>
+            <View style={s.topLeft}>
+              <Text style={s.topLabel}>{taxOnTop ? 'Нужно на руки' : 'Сумма'}</Text>
+              <TextInput
+                style={s.bigInput}
+                value={taxAmountText}
+                onChangeText={(t) => setTaxAmountText(groupWhileTyping(t.replace(/[^\d.,]/g, '')))}
+                keyboardType="decimal-pad"
+                placeholder="0"
+                placeholderTextColor={D.placeholder}
+                selectionColor={D.resetBg}
+              />
+            </View>
+            <Text style={s.depCurrencyStatic}>{CURRENCY_SYMBOL[base]}</Text>
+          </View>
+
+          <Pressable style={[s.resetBtn, { top: topCardH - 22 }]} onPress={resetTax} hitSlop={8}>
+            <RotateOnTap trigger={resetTaxSpin}>
+              <RotateLeftIcon width={20} height={20} color={tokens.text.inverse} />
+            </RotateOnTap>
+          </Pressable>
+
+          <View style={s.bottomCard}>
+            <View style={s.col}>
+              <Text style={s.depColLabel}>Ставка, %</Text>
+              <View style={s.depColGroup}>
+                <TextInput
+                  style={s.colInput}
+                  value={taxRateText}
+                  onChangeText={(t) => setTaxRateText(t.replace(/[^\d.,]/g, ''))}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={D.placeholder}
+                  selectionColor={D.resetBg}
+                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.depChipsRow}>
+                  {TAX_RATE_PRESETS.map((r) => (
+                    <Pressable key={r} style={s.depChip} onPress={() => { tapBuzz(); setTaxRateText(String(r)); }}>
+                      <Text style={s.depChipText}>{fmtPct(r)}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            <View style={s.divider} />
+
+            {/* Вторая величина — не поле, а ответ: в обычном режиме сколько
+                останется, в режиме «сверху» — сколько выставить. */}
+            <View style={s.col}>
+              <Text style={s.depColLabel}>{taxOnTop ? 'Выставить' : 'Останется'}</Text>
+              <View style={s.depColGroup}>
+                <Text style={s.taxOtherValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoney(Math.max(0, taxOther), { currency: base, kopecks: 'hide' })}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Налог + тумблер «сверху» ── */}
+        <View style={s.depResultHeader}>
+          <Text style={s.depResultTitle}>Налог</Text>
+          <View style={s.depCapRow}>
+            <Text style={s.depCapLabel}>Сверху</Text>
+            <Toggle
+              value={taxOnTop}
+              onChange={(v) => { tapBuzz(); setTaxOnTop(v); }}
+              offColor={tokens.surface.tabOff}
+            />
+          </View>
+        </View>
+
+        <View style={s.depResultCard}>
+          <View style={s.taxResultIcon}>
+            <MaterialCommunityIcons name="percent" size={20} color={tokens.category.dfa} />
+          </View>
+          <View style={s.depResultRight}>
+            <Text style={s.taxResultValue}>{formatMoney(Math.max(0, taxValue), { currency: base })}</Text>
+            <Text style={s.depResultTaxHint}>
+              {taxOnTop
+                ? `Чтобы на руки осталось ${formatMoney(Math.max(0, taxAmount), { currency: base, kopecks: 'hide' })}`
+                : `${fmtPct(taxRate)} от ${formatMoney(Math.max(0, taxAmount), { currency: base, kopecks: 'hide' })}`}
             </Text>
           </View>
         </View>
@@ -894,4 +1012,14 @@ const s = StyleSheet.create({
   depResultRight: { alignItems: 'flex-end', gap: tokens.spacing.chip },
   depResultValue: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep, letterSpacing: -0.24 },
   depResultTaxHint: { fontSize: 13, lineHeight: 15, fontFamily: 'Onest_400Regular', color: tokens.text.tertiary, letterSpacing: -0.26 },
+
+  // Налог: вторая величина в нижней карточке — ответ, а не поле, поэтому
+  // тоном спокойнее ввода. Сам налог фиолетовый, как везде в приложении.
+  taxOtherValue: { fontSize: 26, fontFamily: 'Onest_600SemiBold', color: tokens.text.secondary, letterSpacing: -0.52 },
+  taxResultIcon: {
+    width: 48, height: 48, borderRadius: tokens.radius.md,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: hexToRgba(tokens.category.dfa, 0.08),
+  },
+  taxResultValue: { fontSize: tokens.typography.header, lineHeight: tokens.typography.header + 2, fontFamily: 'Onest_600SemiBold', color: tokens.category.dfa, letterSpacing: -0.24 },
 });
