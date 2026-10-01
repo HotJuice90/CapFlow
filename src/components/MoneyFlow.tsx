@@ -5,82 +5,86 @@ import { useFocusEffect } from 'expo-router';
 import { formatMoney, type MoneyOptions } from '@/format';
 
 /**
- * Денежное число, у которого меняющиеся ЦИФРЫ перекатываются снизу вверх.
+ * Денежное число, которое НАБЕГАЕТ при появлении экрана: стартует с 90%
+ * итоговой суммы, быстро прокручивается и тормозит до медленного переката
+ * последней цифры.
  *
- * Считает и форматирует на JS обычным `formatMoney`, а не в worklet. Reanimated
- * анимирует текст через `TextInput` + `useAnimatedProps`, и тогда форматтер
- * пришлось бы написать заново worklet-версией: разряды неразрывным пробелом,
- * копейки запятой, сокращение до «млн», символ валюты. Это копия правил
- * отображения, которая разъедется с оригиналом на первой же правке.
+ * Это украшение, а не отражение расчёта. Живой счётчик «сколько накапало за
+ * секунду» мы пробовали и выкинули: темп зависит от размера капитала, и у
+ * крупных сумм копейки мельтешили до неприятного. Декоративный разгон
+ * выглядит одинаково у всех и ничего не обещает.
  *
- * `perSecond` — для величин, которые растут В РЕАЛЬНОМ ВРЕМЕНИ (капитал
- * действительно прибавляет копейки каждую секунду). Для фиксированных на день
- * сумм его передавать нельзя: крутить их — враньё.
- *
- * Часы останавливаются на расфокусе экрана — как у hero-поля.
+ * Форматирует обычным `formatMoney`, а не worklet-копией правил отображения:
+ * Reanimated анимирует текст через `TextInput` + `useAnimatedProps`, и тогда
+ * разряды, копейки, «млн» и символ валюты пришлось бы написать заново — копия
+ * разъехалась бы с оригиналом на первой же правке.
  */
 export interface MoneyFlowProps {
   value: number;
-  /** Прирост в секунду; без него число перекатывается только при смене значения. */
-  perSecond?: number;
   /** Приписка перед числом — обычно «+». Не перекатывается: знак не меняется. */
   prefix?: string;
   options?: MoneyOptions;
   style?: StyleProp<TextStyle>;
 }
 
-/**
- * Перекат заметно короче шага живого роста. Пока было наоборот, следующая
- * копейка приходила раньше, чем доезжала предыдущая, и число не замирало
- * никогда — выглядело как сорвавшийся счётчик.
- */
-const ROLL_MS = 200;
-/** Шаг живого роста: одна копейка. Меньше на экране всё равно не видно. */
-const STEP = 0.01;
-/** Границы темпа: быстрее — мельтешит, медленнее — выглядит замершим. */
-const MIN_TICK_MS = 300;
-const MAX_TICK_MS = 3000;
+/** Длительность набега. */
+const INTRO_MS = 1100;
+/** Кадров в секунду у набега: на сильном замедлении больше не нужно. */
+const FPS = 25;
+/** Откуда стартуем — 90% суммы: число на первом кадре почти верное. */
+const START_AT = 0.9;
+/** Перекат цифры: быстрый на разгоне, медленный на последних шагах. */
+const ROLL_FAST = 90;
+const ROLL_SLOW = 380;
 
 const isDigit = (c: string) => c >= '0' && c <= '9';
 
-export function MoneyFlow({ value, perSecond = 0, prefix = '', options, style }: MoneyFlowProps) {
-  // Стартовое значение сразу верное: число на первом кадре не должно быть ни
-  // нулём, ни промежуточным (тот же канон, что у табов и hero-поля).
-  const [shown, setShown] = useState(value);
-  const base = useRef({ value, at: Date.now() });
-  const focused = useRef(true);
+/** Сильное замедление: первые кадры летят, последние еле ползут. */
+function easeOutQuint(t: number): number {
+  return 1 - Math.pow(1 - t, 5);
+}
 
+export function MoneyFlow({ value, prefix = '', options, style }: MoneyFlowProps) {
+  // Стартовое значение сразу верное: пока экран не в фокусе, число не должно
+  // быть ни нулём, ни промежуточным.
+  const [shown, setShown] = useState(value);
+  // Длительность переката берётся на момент смены цифры: в начале набега она
+  // короткая, к концу — длинная. Отсюда и ощущение торможения.
+  const [rollMs, setRollMs] = useState(ROLL_SLOW);
+  const running = useRef(false);
+
+  // Пришли новые данные — показываем их сразу, перекатом без разгона.
   useEffect(() => {
-    base.current = { value, at: Date.now() };
-    setShown(value);
+    if (!running.current) setShown(value);
   }, [value]);
 
   useFocusEffect(
     useCallback(() => {
-      focused.current = true;
-      // Пока экран был в стороне, часы стояли: догоняем правду одним шагом,
-      // чтобы дальше снова идти ровно.
-      if (perSecond > 0) {
-        setShown(base.current.value + perSecond * ((Date.now() - base.current.at) / 1000));
-      }
-      return () => { focused.current = false; };
-    }, [perSecond]),
+      if (value === 0) return;
+      running.current = true;
+      const from = value * START_AT;
+      const started = Date.now();
+      setShown(from);
+      const timer = setInterval(() => {
+        const t = Math.min(1, (Date.now() - started) / INTRO_MS);
+        const k = easeOutQuint(t);
+        setShown(from + (value - from) * k);
+        setRollMs(ROLL_FAST + (ROLL_SLOW - ROLL_FAST) * k);
+        if (t >= 1) {
+          clearInterval(timer);
+          running.current = false;
+        }
+      }, 1000 / FPS);
+      return () => {
+        clearInterval(timer);
+        running.current = false;
+        setShown(value);
+        setRollMs(ROLL_SLOW);
+      };
+    }, [value]),
   );
 
-  // Живой рост. Шагаем РОВНО по копейке через равные промежутки, а не
-  // пересчитываем от часов каждые N мс: при пересчёте копейка менялась то
-  // через один тик, то через два, и ритм выходил рваный.
-  useEffect(() => {
-    if (perSecond <= 0) return;
-    const tick = Math.min(MAX_TICK_MS, Math.max(MIN_TICK_MS, 1000 / (perSecond / STEP)));
-    const timer = setInterval(() => {
-      if (focused.current) setShown((v) => v + STEP);
-    }, tick);
-    return () => clearInterval(timer);
-  }, [perSecond]);
-
-  const text = prefix + formatMoney(shown, options);
-  const chars = [...text];
+  const chars = [...(prefix + formatMoney(shown, options))];
 
   return (
     <View style={s.row}>
@@ -89,7 +93,7 @@ export function MoneyFlow({ value, perSecond = 0, prefix = '', options, style }:
           // Ключ — позиция СПРАВА: когда число перескакивает разряд
           // (999 → 1 000), левый отсчёт сдвинул бы все ячейки, и перекатилось
           // бы всё число целиком вместо одной цифры.
-          <Digit key={`d${chars.length - i}`} char={c} style={style} />
+          <Digit key={`d${chars.length - i}`} char={c} style={style} ms={rollMs} />
         ) : (
           <Text key={`s${chars.length - i}`} style={style}>{c}</Text>
         ),
@@ -105,18 +109,20 @@ export function MoneyFlow({ value, perSecond = 0, prefix = '', options, style }:
  * первого кадра, и до него обрезка схлопнула бы строку в ноль — та же грабля,
  * что с анимированной шириной у табов.
  */
-function Digit({ char, style }: { char: string; style?: StyleProp<TextStyle> }) {
+function Digit({ char, style, ms }: { char: string; style?: StyleProp<TextStyle>; ms: number }) {
   const height = StyleSheet.flatten(style)?.lineHeight;
   const [curr, setCurr] = useState(char);
   const [prev, setPrev] = useState<string | null>(null);
   const t = useSharedValue(0);
+  const msRef = useRef(ms);
+  msRef.current = ms;
 
   useEffect(() => {
     if (char === curr) return;
     setPrev(curr);
     setCurr(char);
     t.value = 1;
-    t.value = withTiming(0, { duration: ROLL_MS, easing: Easing.out(Easing.cubic) });
+    t.value = withTiming(0, { duration: msRef.current, easing: Easing.out(Easing.cubic) });
   }, [char, curr, t]);
 
   const currStyle = useAnimatedStyle(() => ({ transform: [{ translateY: t.value * (height ?? 0) }] }));

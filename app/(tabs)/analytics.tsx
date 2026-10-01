@@ -331,12 +331,8 @@ export default function AnalyticsScreen() {
                   </View>
                 ) : null}
               </View>
-              {/* Капитал растёт В РЕАЛЬНОМ ВРЕМЕНИ: доход за день, делённый на
-                  секунды в сутках. Это не украшение — деньги действительно
-                  прибавляются, и видеть это приятнее, чем статичное число. */}
               <MoneyFlow
                 value={summary.totalCapital + freeCapital}
-                perSecond={summary.incomePerDay / 86_400}
                 options={{ currency: cur }}
                 style={styles.heroValue}
               />
