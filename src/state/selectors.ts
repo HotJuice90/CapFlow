@@ -1,5 +1,5 @@
 import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, PayoutRecord, Snapshot, TaxYearRecord } from '@/domain/types';
-import { accrualSeries, calculate, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
+import { accrualSeries, calculate, payoutBoundaryDates, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
@@ -1100,25 +1100,23 @@ export function payoutEventsForMonth(data: AppData, year: number, month: number,
     // половину, выплата так и показывалась от первоначальной суммы. Движок
     // знает всё это сам, а accrualSeries даёт выборку сразу во всех датах за
     // один проход — звать calculate в цикле по датам нельзя (см. CLAUDE.md).
-    const occ = new Date(open);
-    occ.setMonth(occ.getMonth() + step);
-    let prev = new Date(open);
-    while (occ < monthStart) {
-      prev = new Date(occ);
-      occ.setMonth(occ.getMonth() + step);
-    }
-    const occs: Date[] = [];
-    while (occ <= monthEnd) {
-      if (!hardEnd || occ <= hardEnd) occs.push(new Date(occ));
-      occ.setMonth(occ.getMonth() + step);
-    }
+    // Границы берём у движка — он же считает по ним выплаты. Две независимые
+    // реализации графика выплат рано или поздно разъезжаются, и тогда сумма
+    // считается между одними датами, а показывается на других.
+    const all = payoutBoundaryDates(v.asset, v.instrument, isoDate(monthEnd));
+    const fromIso = isoDate(monthStart);
+    const toIso = isoDate(monthEnd);
+    const hardEndIso = hardEnd ? isoDate(hardEnd) : undefined;
+    const occs = all.filter((d) => d >= fromIso && d <= toIso && (!hardEndIso || d <= hardEndIso));
     if (occs.length === 0) continue;
 
-    const pts = accrualSeries(v.asset, v.instrument, [prev, ...occs].map(isoDate));
+    const firstAt = all.indexOf(occs[0]);
+    const prevIso = firstAt > 0 ? all[firstAt - 1] : v.asset.openDate;
+    const pts = accrualSeries(v.asset, v.instrument, [prevIso, ...occs]);
     occs.forEach((date, i) => {
       const amount = Math.max(0, pts[i + 1].accrued - pts[i].accrued);
       out.push({
-        date: isoDate(date),
+        date,
         assetId: v.asset.id,
         instrumentName: v.instrument.name,
         title: v.asset.title,
@@ -1161,23 +1159,19 @@ export interface PayoutDetails {
 export function payoutDetails(data: AppData, assetId: string, date: string): PayoutDetails | null {
   const v = buildAssetViews(data).find((x) => x.asset.id === assetId);
   if (!v) return null;
-  const period = v.asset.payoutPeriod ?? v.instrument.payoutPeriod;
-  const step = period ? PAYOUT_STEP_MONTHS[period] : undefined;
-  if (!step) return null;
+  const all = payoutBoundaryDates(v.asset, v.instrument, date);
+  const at = all.indexOf(date);
+  if (at < 0) return null;
+  const periodStart = at > 0 ? all[at - 1] : v.asset.openDate;
 
-  const open = parseLocal(v.asset.openDate);
-  const prev = parseLocal(date);
-  prev.setMonth(prev.getMonth() - step);
-  const periodStart = prev < open ? open : prev;
-
-  const [a0, a1] = accrualSeries(v.asset, v.instrument, [isoDate(periodStart), date]);
+  const [a0, a1] = accrualSeries(v.asset, v.instrument, [periodStart, date]);
   const amount = Math.max(0, a1.accrued - a0.accrued);
   const tax = amount * (data.params.taxRate / 100);
   const record = (v.asset.payouts ?? []).find((p) => p.date === date);
   return {
     assetId,
     date,
-    periodStart: isoDate(periodStart),
+    periodStart,
     amount: record?.amount ?? amount,
     tax: (record?.amount ?? amount) * (data.params.taxRate / 100),
     net: (record?.amount ?? amount) - tax,
@@ -1437,14 +1431,10 @@ export function nearestEvent(data: AppData, now: Date = new Date()): NearestEven
   const payoutStart = (assetId: string, date: string): Date | null => {
     const v = viewById.get(assetId);
     if (!v) return null;
-    const period = v.asset.payoutPeriod ?? v.instrument.payoutPeriod;
-    const step = period ? PAYOUT_STEP_MONTHS[period] : undefined;
-    if (!step) return null;
-    const prev = parseLocal(date);
-    prev.setMonth(prev.getMonth() - step);
-    // Первого периода ещё не было — считаем от открытия актива.
-    const open = parseLocal(v.asset.openDate);
-    return prev < open ? open : prev;
+    const all = payoutBoundaryDates(v.asset, v.instrument, date);
+    const at = all.indexOf(date);
+    if (at < 0) return null;
+    return parseLocal(at > 0 ? all[at - 1] : v.asset.openDate);
   };
   let best: NearestEvent | null = null;
   const take = (e: NearestEvent) => {

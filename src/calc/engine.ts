@@ -169,10 +169,48 @@ function isoOf(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** ISO-дата из того, что приходит снаружи: строки или Date. */
+function isoAny(d: string | Date): string {
+  return typeof d === 'string' ? d : isoOf(d);
+}
+
 /**
- * Даты выплат процентов и решение по каждой — от `payoutsSince` до последней
- * нужной даты. Шаг календарный (месяцами от дня открытия), а не «365/периодов»:
- * выплата приходит первого числа, а не каждые 30,4 дня.
+ * Даты выплат процентов — от открытия до указанной даты включительно.
+ *
+ * У НАКОПИТЕЛЬНОГО счёта (бессрочного) расчётный период — календарный месяц, и
+ * проценты приходят первого числа следующего: так написано в условиях банка, и
+ * так это и работает — два счёта, открытые 1 и 11 августа, платят в один день.
+ * Раньше период отсчитывался от даты открытия, и второй счёт ждал выплату
+ * 11-го числа, то есть в день выплаты его просто не было видно.
+ *
+ * У СРОЧНОГО вклада период отсчитывается от даты открытия — там это годовщина
+ * размещения, а не календарь.
+ */
+export function payoutBoundaryDates(
+  asset: Asset,
+  instrument: FinancialInstrument,
+  untilIso: string,
+): string[] {
+  const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
+  const step = payout ? PAYOUT_STEP_MONTHS[payout] : undefined;
+  if (!step) return [];
+  const open = parseLocal(asset.openDate);
+  const out: string[] = [];
+  const d = instrument.behavior === 'perpetual'
+    // первое начисление — первое число месяца через период после открытия
+    ? new Date(open.getFullYear(), open.getMonth() + step, 1)
+    : (() => { const x = new Date(open); x.setMonth(x.getMonth() + step); return x; })();
+  for (let k = 0; k < 2000; k++) {
+    const iso = isoOf(d);
+    if (iso > untilIso) break;
+    out.push(iso);
+    d.setMonth(d.getMonth() + step);
+  }
+  return out;
+}
+
+/**
+ * Даты выплат и решение по каждой — до последней нужной даты.
  *
  * Капитализация сюда не попадает: там проценты и так сворачиваются в тело на
  * границах периодов, выбора нет.
@@ -186,28 +224,20 @@ function buildRealisations(
   asset: Asset,
   instrument: FinancialInstrument,
   mode: CapitalizationMode,
-  payout: PayoutPeriod | undefined,
+  untilIso: string,
   lastIdx: number,
 ): Realisation[] {
   if (mode === 'capitalize' || instrument.behavior !== 'perpetual') return [];
-  const step = payout ? PAYOUT_STEP_MONTHS[payout] : undefined;
-  if (!step) return [];
   const since = asset.payoutsSince;
   const byDate = new Map((asset.payouts ?? []).map((p) => [p.date, p]));
-
-  const out: Realisation[] = [];
-  const occ = parseLocal(asset.openDate);
-  occ.setMonth(occ.getMonth() + step);
-  for (let k = 0; k < 2000; k++) {
-    const iso = isoOf(occ);
-    const idx = dayIndex(iso);
-    if (idx > lastIdx) break;
-    const active = !since || iso >= since;
-    const rec = active ? byDate.get(iso) : undefined;
-    out.push({ idx, action: active ? rec?.action ?? 'keep' : 'skip', amount: rec?.amount });
-    occ.setMonth(occ.getMonth() + step);
-  }
-  return out;
+  return payoutBoundaryDates(asset, instrument, untilIso)
+    .map((iso) => ({ iso, idx: dayIndex(iso) }))
+    .filter((p) => p.idx <= lastIdx)
+    .map(({ iso, idx }) => {
+      const active = !since || iso >= since;
+      const rec = active ? byDate.get(iso) : undefined;
+      return { idx, action: active ? rec?.action ?? 'keep' : 'skip', amount: rec?.amount } as Realisation;
+    });
 }
 
 function walkAccrualAt(
@@ -374,7 +404,7 @@ export function accrualSeries(
   const idx = dates.map((d) => dayIndex(d));
   const rateIdx = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
   const tier = tierOf(asset);
-  const realisations = buildRealisations(asset, instrument, mode, payout, idx[idx.length - 1]);
+  const realisations = buildRealisations(asset, instrument, mode, isoAny(dates[dates.length - 1]), idx[idx.length - 1]);
   const balancePts = walkAccrualAt(timeline, rates, mode, payout, idx, tier, realisations);
 
   const endIdx = asset.endDate ? dayIndex(asset.endDate) : undefined;
@@ -423,7 +453,7 @@ export function calculate(
   const currentRate = rateAt(rates, now);
 
   const tier = tierOf(asset);
-  const realisations = buildRealisations(asset, instrument, mode, payout, dayIndex(now));
+  const realisations = buildRealisations(asset, instrument, mode, isoAny(now), dayIndex(now));
   const { balanceNow, accrued: accruedToNow, realised, earnedInBody } =
     walkAccrual(timeline, rates, mode, payout, now, tier, realisations);
   const invested = balanceNow - earnedInBody;

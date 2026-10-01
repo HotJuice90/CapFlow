@@ -681,10 +681,21 @@ describe('nearestEvent', () => {
     const e = nearestEvent({ ...base, assets: [savings] }, now);
     expect(e).not.toBeNull();
     expect(e!.kind).toBe('payout');
-    expect(e!.date).toBe('2026-03-20');
-    expect(e!.daysRemaining).toBe(10);
-    // Период 20 фев — 20 мар, сегодня 10 марта: прошло 18 из 28 дней.
-    expect(e!.progress).toBeCloseTo(18 / 28, 2);
+    // Накопительный счёт платит ПЕРВОГО числа, а не в годовщину открытия:
+    // расчётный период у него — календарный месяц (условия банка).
+    expect(e!.date).toBe('2026-04-01');
+    expect(e!.daysRemaining).toBe(22);
+    // Период 1 мар — 1 апр, сегодня 10 марта: прошло 9 из 31 дня.
+    expect(e!.progress).toBeCloseTo(9 / 31, 2);
+  });
+
+  it('счета с разными датами открытия платят в один день', () => {
+    // Ровно та ошибка, из-за которой второй счёт не было видно в день выплаты:
+    // период отсчитывался от открытия, и счёт, открытый 11-го, ждал 11-го.
+    const other = { ...savings, id: 'as2', openDate: '2026-01-11' };
+    const a = nearestEvent({ ...base, assets: [savings] }, now);
+    const b = nearestEvent({ ...base, assets: [other] }, now);
+    expect(a!.date).toBe(b!.date);
   });
 
   it('окончание срока выигрывает, если оно раньше выплаты', () => {
@@ -720,7 +731,7 @@ describe('nearestEvent', () => {
 
   it('в конце месяца заглядывает в следующий', () => {
     const e = nearestEvent({ ...base, assets: [savings] }, new Date(2026, 2, 25));
-    expect(e!.date).toBe('2026-04-20');
+    expect(e!.date).toBe('2026-04-01');
   });
 
   it('без активов — null', () => {
