@@ -420,3 +420,61 @@ describe('вклад с вышедшим сроком', () => {
     expect(d.incomePerDay).toBeGreaterThan(0);
   });
 });
+
+describe('порог суммы и ставка сверх него', () => {
+  // Пример прямо из условий ГПБ «Лояльный»: надбавка действует на остаток до
+  // 1,5 млн, всё что выше — по базовой ставке без надбавки.
+  const base: Asset = {
+    id: 'a-tier',
+    instrumentId: 'i2',
+    amount: 2_000_000,
+    currency: 'RUB',
+    rate: 13.5,
+    openDate: '2026-01-01',
+    status: 'active',
+    rateCapAmount: 1_500_000,
+    rateAboveCap: 7,
+  };
+
+  test('доход делится по ставкам: до порога — своя, сверх — базовая', () => {
+    const d = calculate(base, savingsInstrument, params, '2027-01-01');
+    // 1 500 000 × 13,5% + 500 000 × 7% = 202 500 + 35 000
+    expect(d.accrued).toBeCloseTo(237_500, 0);
+  });
+
+  test('без порога считается по одной ставке на весь остаток', () => {
+    const { rateCapAmount, rateAboveCap, ...flat } = base;
+    const d = calculate(flat as Asset, savingsInstrument, params, '2027-01-01');
+    expect(d.accrued).toBeCloseTo(270_000, 0);
+  });
+
+  test('остаток ниже порога — ступенька ни на что не влияет', () => {
+    const small = { ...base, amount: 1_000_000 };
+    const withTier = calculate(small, savingsInstrument, params, '2027-01-01');
+    const { rateCapAmount, rateAboveCap, ...flat } = small;
+    const without = calculate(flat as Asset, savingsInstrument, params, '2027-01-01');
+    expect(withTier.accrued).toBeCloseTo(without.accrued, 6);
+  });
+
+  test('дневной доход тоже учитывает ступеньку', () => {
+    const d = calculate(base, savingsInstrument, params, '2026-06-01');
+    expect(d.incomePerDay).toBeCloseTo(237_500 / 365, 2);
+  });
+
+  test('accrualSeries совпадает с calculate при ступеньке', () => {
+    const [pt] = accrualSeries(base, savingsInstrument, ['2027-01-01']);
+    const d = calculate(base, savingsInstrument, params, '2027-01-01');
+    expect(pt.accrued).toBeCloseTo(d.accrued, 6);
+    expect(pt.incomePerDay).toBeCloseTo(d.incomePerDay, 6);
+  });
+
+  test('ступенька работает и при капитализации', () => {
+    const cap = { ...base, capitalization: 'capitalize' as const };
+    const d = calculate(cap, savingsInstrument, params, '2027-01-01');
+    // С капитализацией доход больше простого, но меньше, чем без порога.
+    const { rateCapAmount, rateAboveCap, ...flat } = cap;
+    const without = calculate(flat as Asset, savingsInstrument, params, '2027-01-01');
+    expect(d.accrued).toBeGreaterThan(237_500);
+    expect(d.accrued).toBeLessThan(without.accrued);
+  });
+});

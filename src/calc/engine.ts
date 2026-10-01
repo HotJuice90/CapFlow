@@ -119,12 +119,36 @@ function rateAt(timeline: RatePoint[], at: string | Date): number {
  * постоянны, доход копится линейно, а сворачивание в тело происходит только на
  * границах периодов капитализации — их набор от выборки не зависит.
  */
+/** Порог суммы и ставка сверх него (см. Asset.rateCapAmount). */
+export interface RateTier {
+  cap: number;
+  rateAbove: number;
+}
+
+/** Порог из актива — только если задан целиком, иначе ступеньки нет. */
+function tierOf(asset: Asset): RateTier | undefined {
+  const cap = asset.rateCapAmount;
+  const rateAbove = asset.rateAboveCap;
+  if (cap === undefined || rateAbove === undefined || cap <= 0) return undefined;
+  return { cap, rateAbove };
+}
+
+/**
+ * Доход за ГОД на данное тело: до порога — основная ставка, сверх — своя.
+ * Без порога это обычное «тело × ставка», поэтому вызывать можно везде.
+ */
+function annualYield(base: number, rate: number, tier?: RateTier): number {
+  if (!tier || base <= tier.cap) return base * (rate / 100);
+  return tier.cap * (rate / 100) + (base - tier.cap) * (tier.rateAbove / 100);
+}
+
 function walkAccrualAt(
   balance: BalancePoint[],
   rates: RatePoint[],
   mode: CapitalizationMode,
   payout: PayoutPeriod | undefined,
   samples: number[],
+  tier?: RateTier,
 ): { balanceNow: number; accrued: number }[] {
   const lastIdx = samples[samples.length - 1];
   const bal = balance.map((p) => ({ idx: dayIndex(p.date), amount: p.amount, isCorrection: p.isCorrection }));
@@ -195,7 +219,7 @@ function walkAccrualAt(
 
     const r = rateAtIdx(rts, date);
     if (mode === 'capitalize') {
-      const growth = principal * (r / 100) * (segmentDays / 365);
+      const growth = annualYield(principal, r, tier) * (segmentDays / 365);
       pending += growth;
       accrued += growth;
       // Отрезок ровно упирается в границу периода капитализации — сворачиваем.
@@ -204,7 +228,7 @@ function walkAccrualAt(
         pending = 0;
       }
     } else {
-      accrued += principal * (r / 100) * (segmentDays / 365);
+      accrued += annualYield(principal, r, tier) * (segmentDays / 365);
     }
   }
 
@@ -218,8 +242,9 @@ function walkAccrual(
   mode: CapitalizationMode,
   payout: PayoutPeriod | undefined,
   now: string | Date,
+  tier?: RateTier,
 ): { balanceNow: number; accrued: number } {
-  return walkAccrualAt(balance, rates, mode, payout, [dayIndex(now)])[0];
+  return walkAccrualAt(balance, rates, mode, payout, [dayIndex(now)], tier)[0];
 }
 
 /** Точка истории актива: то же, что даёт calculate, но только «деньги». */
@@ -255,12 +280,13 @@ export function accrualSeries(
 
   const idx = dates.map((d) => dayIndex(d));
   const rateIdx = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
-  const balancePts = walkAccrualAt(timeline, rates, mode, payout, idx);
+  const tier = tierOf(asset);
+  const balancePts = walkAccrualAt(timeline, rates, mode, payout, idx, tier);
 
   const endIdx = asset.endDate ? dayIndex(asset.endDate) : undefined;
   const needsClamp = endIdx !== undefined && idx[idx.length - 1] > endIdx;
   const accrualPts = needsClamp
-    ? walkAccrualAt(timeline, rates, mode, payout, idx.map((i) => Math.min(i, endIdx)))
+    ? walkAccrualAt(timeline, rates, mode, payout, idx.map((i) => Math.min(i, endIdx)), tier)
     : balancePts;
 
   const openIdx = dayIndex(asset.openDate);
@@ -273,12 +299,13 @@ export function accrualSeries(
       balanceNow,
       accrued,
       currentValue: mode === 'capitalize' ? balanceNow : balanceNow + accrued,
-      incomePerDay: started ? (balanceNow * (rate / 100)) / daysInYear(dates[k]) : 0,
+      incomePerDay: started ? annualYield(balanceNow, rate, tier) / daysInYear(dates[k]) : 0,
     };
   });
 }
 
-/**
+/**
+
  * Главная функция движка. Возвращает производные значения для актива.
  * `now` — текущий момент (по умолчанию устройство).
  */
@@ -298,9 +325,9 @@ export function calculate(
   // Ставка «на сейчас» — из истории изменений, а не открытия: банк мог поменять
   // ставку на счёте, дальнейший прогноз должен идти уже по актуальной.
   const currentRate = rateAt(rates, now);
-  const effectiveRate = currentRate / 100;
 
-  const { balanceNow, accrued: accruedToNow } = walkAccrual(timeline, rates, mode, payout, now);
+  const tier = tierOf(asset);
+  const { balanceNow, accrued: accruedToNow } = walkAccrual(timeline, rates, mode, payout, now, tier);
   // Актив, который ещё не открылся, НЕ приносит дохода. Без этой проверки
   // опечатка в дате открытия (или запись «на будущее») молча добавляла в
   // «Сегодня принесёт» доход по несуществующему вкладу — при том, что
@@ -314,10 +341,10 @@ export function calculate(
   // только на другом конце жизни.
   const ended = asset.endDate !== undefined && diffDays(now, asset.endDate) < 0;
   const earning = started && !ended;
-  const incomePerDay = earning ? (balanceNow * effectiveRate) / daysInYear(now) : 0;
+  const incomePerDay = earning ? annualYield(balanceNow, currentRate, tier) / daysInYear(now) : 0;
   // Прогноз вперёд (месяц/год) — от ТЕКУЩЕГО баланса, а не от суммы открытия:
   // при капитализации проценты уже легли на баланс и сами приносят доход.
-  const annualRunRate = earning ? balanceNow * effectiveRate : 0;
+  const annualRunRate = earning ? annualYield(balanceNow, currentRate, tier) : 0;
   // Месяц — по факту дней в ТЕКУЩЕМ календарном месяце (как считают банки:
   // прогноз «за июль» = дневной доход × 31, а не среднемесячное /12).
   const incomePerMonth = incomePerDay * daysInMonth(now);
@@ -337,10 +364,10 @@ export function calculate(
     const termProgress = termDays > 0 ? elapsedDays / termDays : 0;
 
     // Простой процент (по умолчанию): доход линеен по дням, по текущей ставке.
-    const incomeTotalTerm = asset.amount * effectiveRate * (termDays / 365);
+    const incomeTotalTerm = annualYield(asset.amount, currentRate, tier) * (termDays / 365);
     // «Уже заработано» — посегментно, чтобы честно учитывать пополнения/снятия И смену ставки.
     const accrualNow = diffDays(asset.openDate, now) > termDays ? asset.endDate : now;
-    const { accrued: earnedSoFar } = walkAccrual(timeline, rates, mode, payout, accrualNow);
+    const { accrued: earnedSoFar } = walkAccrual(timeline, rates, mode, payout, accrualNow, tier);
     const remainingToEarn = Math.max(0, incomeTotalTerm - earnedSoFar);
 
     // Налог считается на доход всего срока (проценты по вкладу облагаются в год выплаты).

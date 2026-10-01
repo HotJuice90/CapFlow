@@ -190,6 +190,12 @@ export default function AssetFormScreen() {
   const [fundFromFree, setFundFromFree] = useState(false);
   const [currency, setCurrency] = useState<CurrencyCode>(src?.currency ?? data.settings.defaultCurrency);
   const [rate, setRate] = useState<number | undefined>(src?.rate);
+  // Ступенька ставки: надбавка действует до порога, сверх — базовая ставка
+  // банка. Пара полей раскрывается тумблером, чтобы не висеть у всех подряд —
+  // у большинства продуктов ставка одна на весь остаток.
+  const [rateCapAmount, setRateCapAmount] = useState<number | undefined>(src?.rateCapAmount);
+  const [rateAboveCap, setRateAboveCap] = useState<number | undefined>(src?.rateAboveCap);
+  const [hasTier, setHasTier] = useState(src?.rateCapAmount !== undefined);
   const [openDate, setOpenDate] = useState<string | undefined>(editing?.openDate ?? todayIso());
   const [endDate, setEndDate] = useState<string | undefined>(editing?.endDate ?? duplicateEndDate);
   const [capitalization, setCapitalization] = useState<CapitalizationMode>(src?.capitalization ?? 'none');
@@ -201,6 +207,7 @@ export default function AssetFormScreen() {
   // подтверждения на закрытие без сохранения).
   const initial = useRef({
     orgId, instrumentId, title, amount, currency, rate, openDate, endDate, capitalization, payoutPeriod,
+    rateCapAmount, rateAboveCap,
   }).current;
   const isDirty =
     orgId !== initial.orgId ||
@@ -214,7 +221,9 @@ export default function AssetFormScreen() {
     openDate !== initial.openDate ||
     endDate !== initial.endDate ||
     capitalization !== initial.capitalization ||
-    payoutPeriod !== initial.payoutPeriod;
+    payoutPeriod !== initial.payoutPeriod ||
+    rateCapAmount !== initial.rateCapAmount ||
+    rateAboveCap !== initial.rateAboveCap;
 
   const handleClose = () => {
     if (isDirty) {
@@ -378,9 +387,10 @@ export default function AssetFormScreen() {
       endDate: isTerm ? endDate : undefined,
       capitalization: effectiveCapitalization, payoutPeriod,
       status: 'active',
+      ...(hasTier ? { rateCapAmount, rateAboveCap } : {}),
     };
     return calculate(draft, previewInstrument, data.params);
-  }, [previewInstrument, amount, rate, openDate, endDate, currency, effectiveCapitalization, payoutPeriod, isTerm, data.params, editing?.id]);
+  }, [previewInstrument, amount, rate, openDate, endDate, currency, effectiveCapitalization, payoutPeriod, isTerm, data.params, editing?.id, hasTier, rateCapAmount, rateAboveCap]);
 
   /**
    * Открыть актив задним числом можно, «наперёд» — нет: до дня открытия он
@@ -529,6 +539,10 @@ export default function AssetFormScreen() {
       status: editing?.status ?? 'active',
       isDemo: editing?.isDemo,
       taxWithheldByBank,
+      // Ступенька сохраняется только целиком: половина пары молча считалась бы
+      // как её отсутствие, а в форме выглядела бы заданной.
+      rateCapAmount: hasTier && rateCapAmount ? rateCapAmount : undefined,
+      rateAboveCap: hasTier && rateCapAmount && rateAboveCap !== undefined ? rateAboveCap : undefined,
       // При редактировании updateAsset ЗАМЕНЯЕТ весь объект — не теряем историю.
       balanceAdjustments: editing?.balanceAdjustments,
       rateAdjustments: editing?.rateAdjustments,
@@ -961,6 +975,29 @@ export default function AssetFormScreen() {
                   </View>
                 </Field>
                 <NumberField label="Ставка" value={rate} onChange={setRate} suffix="%" placeholder="0" />
+                <ToggleRow
+                  label="Ставка меняется после порога"
+                  value={hasTier}
+                  onChange={setHasTier}
+                />
+                {hasTier ? (
+                  <>
+                    <NumberField
+                      label="Ставка действует до суммы"
+                      value={rateCapAmount}
+                      onChange={setRateCapAmount}
+                      suffix={CURRENCY_SYMBOL[currency]}
+                      placeholder="0"
+                    />
+                    <NumberField
+                      label="Ставка на сумму сверх порога"
+                      value={rateAboveCap}
+                      onChange={setRateAboveCap}
+                      suffix="%"
+                      placeholder="0"
+                    />
+                  </>
+                ) : null}
                 <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} maxDate={openMaxDate} />
                 {isTerm ? (
                   <DateField label="Дата окончания" value={endDate} onChange={setEndDate} minDate={openDate} />

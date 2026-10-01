@@ -1091,30 +1091,44 @@ export function payoutEventsForMonth(data: AppData, year: number, month: number,
 
     const open = parseLocal(v.asset.openDate);
     const hardEnd = v.asset.endDate ? parseLocal(v.asset.endDate) : null;
-    const periodsPerYear = 12 / step;
-    const periodAmount = (v.asset.amount * v.asset.rate) / 100 / periodsPerYear;
-
-    // первое начисление — через один период после открытия
+    // Даты начислений этого месяца плюс ПРЕДЫДУЩАЯ граница: сумма выплаты —
+    // это доход, набежавший между двумя соседними начислениями.
+    //
+    // Раньше тут стояла формула «сумма на открытии × ставка на открытии / число
+    // периодов». Она не знала ни про пополнения и снятия, ни про смену ставки,
+    // ни про фактическое число дней в периоде: у счёта, с которого сняли
+    // половину, выплата так и показывалась от первоначальной суммы. Движок
+    // знает всё это сам, а accrualSeries даёт выборку сразу во всех датах за
+    // один проход — звать calculate в цикле по датам нельзя (см. CLAUDE.md).
     const occ = new Date(open);
     occ.setMonth(occ.getMonth() + step);
-    while (occ < monthStart) occ.setMonth(occ.getMonth() + step);
-
-    while (occ <= monthEnd) {
-      if (!hardEnd || occ <= hardEnd) {
-        out.push({
-          date: isoDate(occ),
-          assetId: v.asset.id,
-          instrumentName: v.instrument.name,
-          title: v.asset.title,
-          typeId: v.instrument.typeId,
-          color: v.organization.color,
-          amount: periodAmount,
-          amountBase: convert(periodAmount, v.asset.currency, data),
-          currency: v.asset.currency,
-        });
-      }
+    let prev = new Date(open);
+    while (occ < monthStart) {
+      prev = new Date(occ);
       occ.setMonth(occ.getMonth() + step);
     }
+    const occs: Date[] = [];
+    while (occ <= monthEnd) {
+      if (!hardEnd || occ <= hardEnd) occs.push(new Date(occ));
+      occ.setMonth(occ.getMonth() + step);
+    }
+    if (occs.length === 0) continue;
+
+    const pts = accrualSeries(v.asset, v.instrument, [prev, ...occs].map(isoDate));
+    occs.forEach((date, i) => {
+      const amount = Math.max(0, pts[i + 1].accrued - pts[i].accrued);
+      out.push({
+        date: isoDate(date),
+        assetId: v.asset.id,
+        instrumentName: v.instrument.name,
+        title: v.asset.title,
+        typeId: v.instrument.typeId,
+        color: v.organization.color,
+        amount,
+        amountBase: convert(amount, v.asset.currency, data),
+        currency: v.asset.currency,
+      });
+    });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
