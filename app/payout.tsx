@@ -50,6 +50,7 @@ export default function PayoutSheet() {
 
   const cur = data.settings.defaultCurrency;
   const total = rows.reduce((sum, r) => sum + r.details.amount, 0);
+  const totalTax = rows.reduce((sum, r) => sum + r.details.tax, 0);
   const many = rows.length > 1;
   const date = rows[0].details.date;
 
@@ -80,9 +81,14 @@ export default function PayoutSheet() {
         {formatDateShort(date)}
       </Text>
       {many ? (
-        <Text style={st.total} numberOfLines={1} adjustsFontSizeToFit>
-          +{formatMoney(total, { currency: cur, kopecks: 'hide' })}
-        </Text>
+        <View style={st.totalRow}>
+          <Text style={st.total} numberOfLines={1} adjustsFontSizeToFit>
+            +{formatMoney(total, { currency: cur, kopecks: 'hide' })}
+          </Text>
+          <Text style={st.totalTax} numberOfLines={1}>
+            налог {formatMoney(totalTax, { currency: cur, kopecks: 'hide' })}
+          </Text>
+        </View>
       ) : null}
 
       {rows.map((r) => (
@@ -186,7 +192,9 @@ const st = StyleSheet.create({
 
   title: { fontFamily: font.semibold, fontSize: 20, lineHeight: 22, letterSpacing: -0.2, color: tokens.text.primary },
   period: { fontSize: tokens.typography.label, lineHeight: 17, color: tokens.text.tertiary, marginTop: 4 },
-  total: { fontSize: 32, lineHeight: 36, fontFamily: font.semibold, color: tokens.semantic.positive, letterSpacing: -0.6, marginTop: tokens.spacing.sm },
+  totalRow: { flexDirection: 'row', alignItems: 'baseline', gap: tokens.spacing.md, marginTop: tokens.spacing.sm },
+  total: { flexShrink: 1, fontSize: 26, lineHeight: 30, fontFamily: font.semibold, color: tokens.semantic.positive, letterSpacing: -0.5 },
+  totalTax: { fontSize: 15, lineHeight: 18, fontFamily: font.medium, color: tokens.value.forecast },
 
   block: {
     backgroundColor: hexToRgba(tokens.accent.base, 0.05),

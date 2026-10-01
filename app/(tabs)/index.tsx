@@ -275,6 +275,12 @@ export default function HomeScreen() {
     [todayEvents, views],
   );
   const heroPayoutChoice = heroPayoutItems.length > 0;
+  // Пока решение не принято — кнопка называет сам выбор; когда всё разобрано,
+  // звать «забрать или оставить» уже не о чем.
+  const heroPayoutPending = heroPayoutItems.some((e) => {
+    const v = views.find((x) => x.asset.id === e.assetId);
+    return !(v?.asset.payouts ?? []).some((p) => p.date === e.date);
+  });
   const hero = useMemo(
     () =>
       heroState({
@@ -526,7 +532,7 @@ export default function HomeScreen() {
                       {heroEvent.kind === 'maturity'
                         ? 'Можно переложить'
                         : heroPayoutChoice
-                          ? 'Что делать с процентами'
+                          ? heroPayoutPending ? 'Забрать или оставить' : 'Подробнее о выплатах'
                           : 'Открыть актив'}
                     </Text>
                     <MaterialIcons name="arrow-forward" size={15} color={tokens.accent.base} />
