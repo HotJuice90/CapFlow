@@ -6,14 +6,15 @@ const P = {
   cy: 0.575,
   warpX: 0.045, warpXk: 0.03,
   warpY: 0.055, warpYk: 0.03,
-  warp2: 0.10,
+  warp2: 0.17,
   gain: 0.55, gaink: 0.45,
-  centerA: 0.30, centerB: 0.70, centerPow: 1.05,
+  centerA: 0.14, centerB: 0.86, centerPow: 1.60,
   topFloor: 0.45, topFade: [-0.30, 0.30], botFade: [1.02, 0.58],
-  aBase: 0.26, aK: 0.60, aMax: 0.82,
-  // Параметры дня события (e = 0..1)
-  evWarp: 0.70, evAmp: 0.55, evThick: 0.30, evCenter: 0.16, evTight: 0.55, evBreath: 0.10,
-  evDeep: 0.50, evAlpha: 0.16, evGain: 0.35, evCore: 0.45,
+  aBase: 0.26, aK: 0.52, aMax: 0.74,
+  gainWide: 1.35, core: 0.45,
+  // Параметры дня события (e = 0..1): геометрия уже в базе, событие добавляет
+  // ЦВЕТ — фиолетовую и жёлтую волны — и свечение под числом.
+  evViolet: 0.52, evAmber: 0.46, evGlow: 0.55, evAlpha: 0.10, evGain: 0.14, evBreath: 0.08,
 };
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -31,9 +32,9 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
 
   let qx = px + (p.warpX + p.warpXk * k) * Math.sin(py * 3.1 + t * 0.27);
   let qy = py + (p.warpY + p.warpYk * k) * Math.sin(px * 2.3 - t * 0.21);
-  const w2 = p.warp2 * (1 + p.evWarp * e);
-  let wx = qx + w2 * Math.sin(qy * (6.6 - 1.8 * e) - t * 0.16);
-  let wy = qy + w2 * 0.80 * Math.sin(qx * (5.2 - 1.4 * e) + t * 0.19);
+  const w2 = p.warp2;
+  let wx = qx + w2 * Math.sin(qy * 4.8 - t * 0.16);
+  let wy = qy + w2 * 0.80 * Math.sin(qx * 3.8 + t * 0.19);
 
   // ПОТОК: вытянутая лента вдоль изогнутой линии. Из них и набирается
   // ощущение «несколько течений», которого не даёт сумма круглых масс.
@@ -49,13 +50,15 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
     return Math.exp(-dy * dy) * Math.exp(-dx * dx);
   }
 
-  const ea = 1 + p.evAmp * e;    // размах изгиба ленты
-  const et = 1 + p.evThick * e;  // толщина ленты
-  const s1 = 0.62 * stream(-0.24, -0.06, 0.090 * ea, 2.6, 0.0, 0.23, 0.125 * et, 1.05);
-  const s2 = 0.52 * stream( 0.16,  0.13, 0.075 * ea, 3.4, 1.9, -0.19, 0.100 * et, 0.95);
-  const s3 = 0.44 * stream(-0.38, -0.24, 0.100 * ea, 2.1, 3.3, 0.15, 0.090 * et, 0.85);
-  const s4 = 0.36 * stream( 0.31,  0.24, 0.065 * ea, 4.1, 5.0, -0.26, 0.080 * et, 0.88);
-  let d = s1 + s2 + s3 + s4;
+  const s1 = 0.62 * stream(-0.24, -0.06, 0.140, 2.6, 0.0, 0.23, 0.162, 1.05);
+  const s2 = 0.52 * stream( 0.16,  0.13, 0.116, 3.4, 1.9, -0.19, 0.130, 0.95);
+  const s3 = 0.44 * stream(-0.38, -0.24, 0.155, 2.1, 3.3, 0.15, 0.117, 0.85);
+  const s4 = 0.36 * stream( 0.31,  0.24, 0.101, 4.1, 5.0, -0.26, 0.104, 0.88);
+  // Волны дня события — СВОИ ленты, под своими углами: цвет приходит вместе с
+  // новым течением, а не перекраской старого. Их нет в обычный день вовсе.
+  const s5 = p.evViolet * e * stream( 0.46, -0.30, 0.130, 2.0, 2.4, 0.13, 0.110, 0.80);
+  const s6 = p.evAmber  * e * stream(-0.52,  0.30, 0.105, 2.8, 4.1, -0.17, 0.098, 0.78);
+  let d = s1 + s2 + s3 + s4 + s5 + s6;
 
   // Общая масса под суммой: потоки дают полосы, а спека просит ещё и
   // концентрацию плотности вокруг цифры.
@@ -66,18 +69,21 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   // Ядро ровно под суммой: варп в день события сильнее, и без этой добавки
   // масса уезжает из-под числа в части кадров — а по спеке концентрация
   // должна быть именно там.
-  d += p.evCore * e * mass(wx, wy, 0, -0.01, 0.55, 0.26);
+  d += p.core * mass(wx, wy, 0, -0.01, 0.55, 0.26);
 
   const ripple = 0.5 + 0.5 * Math.sin(wy * 7.0 + wx * 3.0 + t * 0.33);
   d *= 0.78 + 0.22 * ripple;
   d += 0.30 * Math.exp(-Math.pow((uvy - 0.32) / 0.52, 2)) * (0.55 + 0.45 * ripple);
-  d *= (p.gain + p.gaink * k) * (1 + p.evGain * e);
+  d *= (p.gain + p.gaink * k) * p.gainWide * (1 + p.evGain * e);
 
   const mx = px * 0.85, my = py * 1.25;
-  const cA = p.centerA - p.evCenter * e;
-  d *= cA + (1 - cA) * Math.exp(-(mx * mx + my * my) * (p.centerPow + p.evTight * e));
+  d *= p.centerA + p.centerB * Math.exp(-(mx * mx + my * my) * p.centerPow);
   // Дыхание: очень медленное, иначе поле «мигает», а не живёт.
   d *= 1 + p.evBreath * e * Math.sin(t * 0.42);
+  // Свечение ровно под суммой — бледно-жёлтое, в прямых координатах: варп его
+  // не трогает, иначе «нимб» гуляет по кадру и перестаёт быть под числом.
+  const glow = p.evGlow * e * mass(px, py, 0, 0.045, 0.26, 0.090);
+  d += glow * 0.55;
   d *= ss(p.botFade[0], p.botFade[1], uvy) * (p.topFloor + (1 - p.topFloor) * ss(p.topFade[0], p.topFade[1], uvy));
   d = clamp(d, 0, 1.4);
 
@@ -89,17 +95,21 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   const cTeal = [0.427, 0.835, 0.847];  // бирюза
   const cSky  = [0.694, 0.878, 0.976];  // светло-синий
   const base  = [0.780, 0.929, 0.961];  // общая дымка
-  const wsum = s1 + s2 + s3 + s4 + 1e-4;
-  let colS = [0, 1, 2].map((i) => (s1 * cTeal[i] + s2 * cMint[i] + s3 * cSky[i] + s4 * cAqua[i]) / wsum);
+  const cViolet = [0.722, 0.596, 0.961];  // фиолетовая волна дня события
+  const cAmber  = [0.996, 0.855, 0.541];  // жёлтая волна дня события
+  const wsum = s1 + s2 + s3 + s4 + s5 + s6 + 1e-4;
+  let colS = [0, 1, 2].map((i) =>
+    (s1 * cTeal[i] + s2 * cMint[i] + s3 * cSky[i] + s4 * cAqua[i]
+      + s5 * cViolet[i] + s6 * cAmber[i]) / wsum);
   // Тёплое состояние двигает всю смесь в зелёный, холодное — в голубой.
   const green = [0.494, 0.898, 0.729];
-  colS = mix(colS, green, 0.42 * warmth);
-  // День события: палитра уходит глубже — поле перестаёт быть дымкой и
-  // становится плотной массой, как в третьем состоянии спеки.
-  const deep = [0.286, 0.702, 0.714];
-  colS = mix(colS, deep, p.evDeep * e);
+  // В день события зелёный тянет смесь слабее: иначе он съедает и фиолетовую,
+  // и жёлтую волну, и обе читаются грязно-серыми.
+  colS = mix(colS, green, 0.42 * warmth * (1 - 0.65 * e));
   // Вне лент (дымка, края) — общий светлый тон.
   let col = mix(base, colS, clamp(wsum * 2.2, 0, 1));
+  const cGlow = [0.996, 0.957, 0.808];
+  col = mix(col, cGlow, clamp(glow * 1.5, 0, 0.85));
   const a = clamp((p.aBase + p.aK * k) * ss(0.02, 1.30, d), 0, p.aMax + p.evAlpha * e);
   return { col, a, d };
 }

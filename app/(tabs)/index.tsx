@@ -468,7 +468,7 @@ export default function HomeScreen() {
                         logo={heroEventOrg.logo}
                         imageUri={heroEventOrg.customImageUri}
                         size={22}
-                        bordered={false}
+                        variant="bare"
                       />
                     ) : null}
                     <Text style={styles.heroEventTitle} numberOfLines={1}>
