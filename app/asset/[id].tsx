@@ -23,6 +23,7 @@ import { formatDateShort, pluralDays } from '@/format/date';
 import { calculate } from '@/calc';
 import { uid } from '@/utils/id';
 import { successBuzz, tapBuzz, warnBuzz } from '@/lib/haptics';
+import { openPayoutSheet } from '@/lib/payoutSheet';
 import { openDatePicker } from '@/lib/datePicker';
 import { openActionSheet, type SheetAction } from '@/lib/actionSheet';
 import { t } from '@/i18n';

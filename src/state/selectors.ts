@@ -1759,7 +1759,7 @@ export function assetValueSeries(data: AppData, assetId: string, maxPoints = 30)
 export interface AssetTimelineEntry {
   /** 'close' — закрытие актива; в assetTimeline не порождается, его добавляет
    *  экран: сумма закрытия берётся из assetOutcome, а тот знает про налог. */
-  type: 'open' | 'balance' | 'rate' | 'close';
+  type: 'open' | 'balance' | 'rate' | 'close' | 'payout';
   /** undefined только у 'open' — это не корректировка, а точка открытия */
   id?: string;
   date: string;
@@ -1774,6 +1774,8 @@ export interface AssetTimelineEntry {
   isCorrection?: boolean;
   /** см. BalanceAdjustment.taxWithheld — только для 'balance' (снятие) */
   taxWithheld?: number;
+  /** только для 'payout' — что сделали с процентами. */
+  payoutAction?: 'keep' | 'wallet';
 }
 
 /**
@@ -1847,6 +1849,34 @@ export function assetTimeline(
       taxWithheld: p.taxWithheld,
     });
   }
+  // Выплаты процентов — такое же событие жизни актива, как пополнение: деньги
+  // либо легли в тело, либо ушли в кошелёк. Суммы у решений 'keep' не хранятся
+  // (движок считает их сам), поэтому берём накопленное во ВСЕХ границах
+  // периодов одним проходом и вычитаем соседние — звать calculate по каждой
+  // дате нельзя (см. CLAUDE.md).
+  const payouts = asset.payouts ?? [];
+  if (payouts.length > 0 && instrument) {
+    const last = payouts.reduce((m, p) => (p.date > m ? p.date : m), payouts[0].date);
+    const bounds = payoutBoundaryDates(asset, instrument, last);
+    if (bounds.length > 0) {
+      const pts = accrualSeries(asset, instrument, [asset.openDate, ...bounds]);
+      const accruedAt = new Map(bounds.map((d, i) => [d, pts[i + 1].accrued]));
+      const prevAccrued = new Map(bounds.map((d, i) => [d, pts[i].accrued]));
+      for (const p of payouts) {
+        const a1 = accruedAt.get(p.date);
+        const a0 = prevAccrued.get(p.date);
+        if (a1 === undefined || a0 === undefined) continue;
+        entries.push({
+          type: 'payout',
+          id: p.id,
+          date: p.date,
+          amount: p.amount ?? Math.max(0, a1 - a0),
+          payoutAction: p.action,
+        });
+      }
+    }
+  }
+
   for (let i = 1; i < ratePoints.length; i++) {
     const p = ratePoints[i] as (typeof ratePoints)[number] & { id: string; comment?: string };
     entries.push({

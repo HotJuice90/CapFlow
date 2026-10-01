@@ -92,7 +92,18 @@ export default function PayoutSheet() {
       ) : null}
 
       {rows.map((r) => (
-        <PayoutBlock key={r.details.assetId} row={r} compact={many} onDecide={decide} />
+        <PayoutBlock
+          key={r.details.assetId}
+          row={r}
+          compact={many}
+          onDecide={decide}
+          onOpenAsset={() => {
+            // Экран актива поверх ещё не закрытого шита не показывается —
+            // тот же приём, что в runSheetAction: сначала закрыть, потом идти.
+            router.back();
+            setTimeout(() => router.push(`/asset/${r.details.assetId}`), 80);
+          }}
+        />
       ))}
 
       <Text style={st.hint}>
@@ -111,11 +122,12 @@ function pluralAccounts(n: number): string {
 }
 
 function PayoutBlock({
-  row, compact, onDecide,
+  row, compact, onDecide, onOpenAsset,
 }: {
   row: { details: PayoutDetails; view: AssetView };
   compact: boolean;
   onDecide: (r: { details: PayoutDetails; view: AssetView }, action: 'keep' | 'wallet') => void;
+  onOpenAsset: () => void;
 }) {
   const { details, view } = row;
   const money = (v: number) => formatMoney(v, { currency: details.currency, kopecks: 'hide' });
@@ -124,7 +136,7 @@ function PayoutBlock({
 
   return (
     <View style={[st.block, compact && st.blockCompact]}>
-      <View style={st.head}>
+      <Pressable style={st.head} onPress={onOpenAsset} hitSlop={6}>
         <OrgLogo
           color={view.organization.color}
           logo={view.organization.logo}
@@ -139,7 +151,8 @@ function PayoutBlock({
           </Text>
         </View>
         <Text style={st.amount} numberOfLines={1}>+{money(details.amount)}</Text>
-      </View>
+        <MaterialCommunityIcons name="chevron-right" size={18} color={tokens.text.tertiary} />
+      </Pressable>
 
       {details.locked ? (
         <View style={st.done}>
