@@ -1369,6 +1369,58 @@ export interface NearestEvent {
  * с вышедшим сроком не закрыт, деньги лежат под 0%, и никакое будущее событие
  * не важнее этого. Из нескольких просроченных берём самый давний.
  */
+/**
+ * ВСЕ события на сегодня, а не только ближайшее.
+ *
+ * Отдельная функция, потому что nearestEvent по смыслу возвращает одно: это
+ * «что ближе всего впереди». А в день события их может быть несколько — у
+ * человека обычно не один счёт, и платят по ним первого числа все сразу.
+ * Герой главной показывает сумму по всем, иначе второй доход просто не виден
+ * нигде.
+ */
+export function eventsToday(data: AppData, now: Date = new Date()): (NearestEvent & { amountBase: number })[] {
+  const today = isoDate(now);
+  const viewById = new Map(buildAssetViews(data, now).map((v) => [v.asset.id, v]));
+  const out: (NearestEvent & { amountBase: number })[] = [];
+
+  for (const e of calendarEvents(data, now)) {
+    if (e.date !== today) continue;
+    out.push({
+      kind: 'maturity',
+      date: e.date,
+      assetId: e.assetId,
+      name: e.title || e.instrumentName,
+      amount: e.amount,
+      amountBase: convert(e.amount, e.currency, data),
+      currency: e.currency,
+      daysRemaining: 0,
+      progress: 1,
+    });
+  }
+
+  for (const e of payoutEventsForMonth(data, now.getFullYear(), now.getMonth(), now)) {
+    if (e.date !== today) continue;
+    const v = viewById.get(e.assetId);
+    out.push({
+      kind: 'payout',
+      date: e.date,
+      assetId: e.assetId,
+      name: e.title || e.instrumentName,
+      amount: e.amount,
+      amountBase: e.amountBase,
+      currency: e.currency,
+      daysRemaining: 0,
+      progress: 1,
+      // Окончание срока важнее выплаты: оно требует решения, а выплата — нет.
+      ...(v ? {} : {}),
+    });
+  }
+
+  // Срочное вперёд: если в один день и выплата, и конец срока, главным должен
+  // стать тот, который требует действия.
+  return out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'maturity' ? -1 : 1));
+}
+
 export function nearestEvent(data: AppData, now: Date = new Date()): NearestEvent | null {
   const today = isoDate(now);
   const viewById = new Map(buildAssetViews(data, now).map((v) => [v.asset.id, v]));

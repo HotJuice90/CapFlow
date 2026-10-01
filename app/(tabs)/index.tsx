@@ -45,6 +45,7 @@ import {
   goalsProgress,
   idleCapital,
   nearestEvent as nearestEventOf,
+  eventsToday,
   standaloneGoalsProgress,
   type GoalProgress,
   type GoalMetric,
@@ -165,6 +166,13 @@ function pluralPlatform(n: number): string {
   return 'площадок';
 }
 
+function pluralAccounts(n: number): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'счёт';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'счёта';
+  return 'счетов';
+}
+
 function pluralAssets(n: number): string {
   const t = n % 100;
   if (t >= 11 && t <= 14) return 'активов';
@@ -238,19 +246,35 @@ export default function HomeScreen() {
   const runRate = useMemo(() => incomeRunRateSeries(data, 30), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
   const nearestEvent = useMemo(() => nearestEventOf(data), [data]);
-  // Событие СЕГОДНЯ (кроме просрочки — она не праздник, а повод действовать):
-  // герой переключается на него, поле вспыхивает. См. heroState → celebration.
-  const heroEvent = nearestEvent && nearestEvent.daysRemaining === 0 && nearestEvent.kind !== 'overdue'
-    ? nearestEvent
-    : null;
+  // События СЕГОДНЯ (кроме просрочки — она не праздник, а повод действовать):
+  // герой переключается на них, поле вспыхивает. См. heroState → celebration.
+  // Их может быть несколько: счета обычно платят первого числа все разом, и
+  // показать только один — значит спрятать остальной доход.
+  const todayEvents = useMemo(() => eventsToday(data), [data]);
+  const heroEvent = todayEvents[0] ?? null;
+  const heroEventTotal = todayEvents.reduce((sum, e) => sum + e.amountBase, 0);
   // Площадка события — для логотипа рядом с названием: «принёс доход» без
   // лица банка читается безлично, а лого опознаётся быстрее текста.
   const heroEventView = heroEvent ? views.find((v) => v.asset.id === heroEvent.assetId) : undefined;
-  const heroEventOrg = heroEventView?.organization;
+  // Логотипы всех площадок дня — по ним событие опознаётся быстрее, чем по тексту.
+  const heroEventOrgs = useMemo(() => {
+    const seen = new Map<string, (typeof views)[number]['organization']>();
+    for (const e of todayEvents) {
+      const v = views.find((x) => x.asset.id === e.assetId);
+      if (v && !seen.has(v.organization.id)) seen.set(v.organization.id, v.organization);
+    }
+    return [...seen.values()].slice(0, 3);
+  }, [todayEvents, views]);
   // Выбор «оставить или в кошелёк» есть только у бессрочных: у срочного вклада
   // выплата уходит на другой счёт, оставлять там нечего (см. buildRealisations).
-  const heroPayoutChoice =
-    !!heroEvent && heroEvent.kind === 'payout' && heroEventView?.instrument.behavior === 'perpetual';
+  const heroPayoutItems = useMemo(
+    () => todayEvents.filter((e) => {
+      const v = views.find((x) => x.asset.id === e.assetId);
+      return e.kind === 'payout' && v?.instrument.behavior === 'perpetual';
+    }),
+    [todayEvents, views],
+  );
+  const heroPayoutChoice = heroPayoutItems.length > 0;
   const hero = useMemo(
     () =>
       heroState({
@@ -470,28 +494,32 @@ export default function HomeScreen() {
                   style={styles.heroMain}
                   onPress={() => {
                     tapBuzz();
-                    if (heroPayoutChoice) openPayoutSheet({ assetId: heroEvent.assetId, date: heroEvent.date });
-                    else router.push(`/asset/${heroEvent.assetId}`);
+                    if (heroPayoutChoice) {
+                      openPayoutSheet(heroPayoutItems.map((e) => ({ assetId: e.assetId, date: e.date })));
+                    } else router.push(`/asset/${heroEvent.assetId}`);
                   }}
                 >
                   <View style={styles.heroEventTitleRow}>
-                    {heroEventOrg ? (
+                    {heroEventOrgs.map((o) => (
                       <OrgLogo
-                        color={heroEventOrg.color}
-                        logo={heroEventOrg.logo}
-                        imageUri={heroEventOrg.customImageUri}
+                        key={o.id}
+                        color={o.color}
+                        logo={o.logo}
+                        imageUri={o.customImageUri}
                         size={22}
                         variant="bare"
                       />
-                    ) : null}
+                    ))}
                     <Text style={styles.heroEventTitle} numberOfLines={1}>
-                      {heroEvent.kind === 'maturity'
-                        ? `«${heroEvent.name}» завершился`
-                        : `«${heroEvent.name}» принёс доход`}
+                      {todayEvents.length > 1
+                        ? `${todayEvents.length} ${pluralAccounts(todayEvents.length)} принесли доход`
+                        : heroEvent.kind === 'maturity'
+                          ? `«${heroEvent.name}» завершился`
+                          : `«${heroEvent.name}» принёс доход`}
                     </Text>
                   </View>
                   <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                    +{formatMoney(heroEvent.amount, { currency: heroEvent.currency, kopecks: 'hide' })}
+                    +{formatMoney(heroEventTotal, { currency: cur, kopecks: 'hide' })}
                   </Text>
                   <View style={styles.heroCta}>
                     <Text style={styles.heroCtaText}>
