@@ -14,7 +14,7 @@ const P = {
   gainWide: 1.35, core: 0.45,
   // Параметры дня события (e = 0..1): геометрия уже в базе, событие добавляет
   // ЦВЕТ — фиолетовую и жёлтую волны — и свечение под числом.
-  evViolet: 0.52, evAmber: 0.46, evGlow: 0.55, evAlpha: 0.10, evGain: 0.14, evBreath: 0.08,
+  evViolet: 0.40, evAmber: 0.34, evGlow: 0.48, evAlpha: 0.10, evGain: 0.14, evBreath: 0.08,
 };
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -95,8 +95,12 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   const cTeal = [0.427, 0.835, 0.847];  // бирюза
   const cSky  = [0.694, 0.878, 0.976];  // светло-синий
   const base  = [0.780, 0.929, 0.961];  // общая дымка
-  const cViolet = [0.655, 0.639, 0.984];  // сине-фиолетовая волна (василёк)
-  const cAmber  = [0.933, 0.937, 0.643];  // холодная лимонная волна
+  // Акценты дня события держим НИЗКОЙ насыщенности и рядом с фирменным
+  // слейт-индиго: три далёких тона (василёк + лимон + бирюза) спорят между
+  // собой и дают радугу. Праздник должен читаться светом, а не количеством
+  // красок, поэтому у обеих волн яркость высокая, а цветность — малая.
+  const cViolet = [0.698, 0.722, 0.882];  // приглушённый слейт-периwinkle
+  const cAmber  = [0.929, 0.910, 0.800];  // тёплый песочный, почти без цвета
   const wsum = s1 + s2 + s3 + s4 + s5 + s6 + 1e-4;
   let colS = [0, 1, 2].map((i) =>
     (s1 * cTeal[i] + s2 * cMint[i] + s3 * cSky[i] + s4 * cAqua[i]
@@ -108,7 +112,7 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   colS = mix(colS, green, 0.42 * warmth * (1 - 0.65 * e));
   // Вне лент (дымка, края) — общий светлый тон.
   let col = mix(base, colS, clamp(wsum * 2.2, 0, 1));
-  const cGlow = [0.961, 0.965, 0.804];
+  const cGlow = [0.980, 0.969, 0.914];
   col = mix(col, cGlow, clamp(glow * 1.5, 0, 0.85));
   const a = clamp((p.aBase + p.aK * k) * ss(0.02, 1.30, d), 0, p.aMax + p.evAlpha * e);
   return { col, a, d };
