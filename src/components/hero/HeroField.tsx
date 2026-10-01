@@ -32,9 +32,12 @@ export interface HeroFieldProps {
   intensity: number;
   /** 0..1 — сдвиг палитры в тёплый мятно-зелёный. */
   warmth: number;
+  /** 0..1 — день события: складки крупнее, масса собирается под суммой,
+   *  палитра глубже. См. heroState → celebration. */
+  event?: number;
 }
 
-export function HeroField({ height, intensity, warmth }: HeroFieldProps) {
+export function HeroField({ height, intensity, warmth, event = 0 }: HeroFieldProps) {
   const { width } = useWindowDimensions();
 
   // Собственные часы, а не useClock() из Skia: их можно остановить. Экран
@@ -59,17 +62,20 @@ export function HeroField({ height, intensity, warmth }: HeroFieldProps) {
   // иначе на монтировании поле разгоняется из нуля на глазах у пользователя.
   const k = useSharedValue(intensity);
   const w = useSharedValue(warmth);
+  const ev = useSharedValue(event);
   useEffect(() => {
     const opts = { duration: 1400, easing: Easing.inOut(Easing.quad) };
     k.value = withTiming(intensity, opts);
     w.value = withTiming(warmth, opts);
-  }, [intensity, warmth, k, w]);
+    ev.value = withTiming(event, opts);
+  }, [intensity, warmth, event, k, w, ev]);
 
   const uniforms = useDerivedValue(() => ({
     u_res: [width, height],
     u_time: time.value,
     u_intensity: k.value,
     u_warmth: w.value,
+    u_event: ev.value,
   }), [width, height]);
 
   const style = useMemo(() => [styles.canvas, { width, height }], [width, height]);

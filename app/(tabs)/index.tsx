@@ -31,6 +31,7 @@ import { Card } from '@/components/Card';
 import { TypeCardsRow } from '@/components/TypeCardsRow';
 import { Donut } from '@/components/Donut';
 import { AssetRow } from '@/components/AssetRow';
+import { OrgLogo } from '@/components/BankLogo';
 import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
 import { useData } from '@/state/DataContext';
 import {
@@ -241,6 +242,9 @@ export default function HomeScreen() {
   const heroEvent = nearestEvent && nearestEvent.daysRemaining === 0 && nearestEvent.kind !== 'overdue'
     ? nearestEvent
     : null;
+  // Площадка события — для логотипа рядом с названием: «принёс доход» без
+  // лица банка читается безлично, а лого опознаётся быстрее текста.
+  const heroEventOrg = heroEvent ? views.find((v) => v.asset.id === heroEvent.assetId)?.organization : undefined;
   const hero = useMemo(
     () =>
       heroState({
@@ -433,7 +437,7 @@ export default function HomeScreen() {
             Отрицательные margin'ы выносят зону на всю ширину и под шапку. */}
         <View style={styles.heroZone}>
           {hasAssets ? (
-            <HeroField height={HERO_FIELD_H} intensity={hero.intensity} warmth={hero.warmth} />
+            <HeroField height={HERO_FIELD_H} intensity={hero.intensity} warmth={hero.warmth} event={hero.celebration ? 1 : 0} />
           ) : null}
           <View style={styles.heroZoneInner}>
             <View style={styles.topRow}>
@@ -457,11 +461,22 @@ export default function HomeScreen() {
                    про СОБЫТИЕ, а обычный дневной доход уезжает вниз мелким —
                    он никуда не делся, просто сегодня не он главный. */
                 <Pressable style={styles.heroMain} onPress={() => router.push(`/asset/${heroEvent.assetId}`)}>
-                  <Text style={styles.heroEventTitle} numberOfLines={2}>
-                    {heroEvent.kind === 'maturity'
-                      ? `«${heroEvent.name}» завершился`
-                      : `«${heroEvent.name}» принёс доход`}
-                  </Text>
+                  <View style={styles.heroEventTitleRow}>
+                    {heroEventOrg ? (
+                      <OrgLogo
+                        color={heroEventOrg.color}
+                        logo={heroEventOrg.logo}
+                        imageUri={heroEventOrg.customImageUri}
+                        size={22}
+                        bordered={false}
+                      />
+                    ) : null}
+                    <Text style={styles.heroEventTitle} numberOfLines={1}>
+                      {heroEvent.kind === 'maturity'
+                        ? `«${heroEvent.name}» завершился`
+                        : `«${heroEvent.name}» принёс доход`}
+                    </Text>
+                  </View>
                   <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
                     +{formatMoney(heroEvent.amount, { currency: heroEvent.currency, kopecks: 'hide' })}
                   </Text>
@@ -1062,7 +1077,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
     letterSpacing: -1,
   },
+  heroEventTitleRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, maxWidth: '100%' },
   heroEventTitle: {
+    flexShrink: 1,
     fontSize: tokens.typography.label,
     lineHeight: tokens.typography.label + 4,
     fontFamily: font.medium,

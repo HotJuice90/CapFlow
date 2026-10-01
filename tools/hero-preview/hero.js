@@ -11,6 +11,9 @@ const P = {
   centerA: 0.30, centerB: 0.70, centerPow: 1.05,
   topFloor: 0.45, topFade: [-0.30, 0.30], botFade: [1.02, 0.58],
   aBase: 0.26, aK: 0.60, aMax: 0.82,
+  // Параметры дня события (e = 0..1)
+  evWarp: 0.70, evAmp: 0.55, evThick: 0.30, evCenter: 0.16, evTight: 0.55, evBreath: 0.10,
+  evDeep: 0.50, evAlpha: 0.16, evGain: 0.35, evCore: 0.45,
 };
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -22,14 +25,15 @@ function mass(px, py, cx, cy, rx, ry) {
   return Math.exp(-(dx * dx + dy * dy));
 }
 
-function field(uvx, uvy, t, k, warmth, p = P) {
+function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   const asp = p.W / p.H;
   const px = (uvx - 0.5) * asp, py = uvy - p.cy;
 
   let qx = px + (p.warpX + p.warpXk * k) * Math.sin(py * 3.1 + t * 0.27);
   let qy = py + (p.warpY + p.warpYk * k) * Math.sin(px * 2.3 - t * 0.21);
-  let wx = qx + p.warp2 * Math.sin(qy * 6.6 - t * 0.16);
-  let wy = qy + p.warp2 * 0.80 * Math.sin(qx * 5.2 + t * 0.19);
+  const w2 = p.warp2 * (1 + p.evWarp * e);
+  let wx = qx + w2 * Math.sin(qy * (6.6 - 1.8 * e) - t * 0.16);
+  let wy = qy + w2 * 0.80 * Math.sin(qx * (5.2 - 1.4 * e) + t * 0.19);
 
   // ПОТОК: вытянутая лента вдоль изогнутой линии. Из них и набирается
   // ощущение «несколько течений», которого не даёт сумма круглых масс.
@@ -45,10 +49,12 @@ function field(uvx, uvy, t, k, warmth, p = P) {
     return Math.exp(-dy * dy) * Math.exp(-dx * dx);
   }
 
-  const s1 = 0.62 * stream(-0.24, -0.06, 0.090, 2.6, 0.0, 0.23, 0.125, 1.05);
-  const s2 = 0.52 * stream( 0.16,  0.13, 0.075, 3.4, 1.9, -0.19, 0.100, 0.95);
-  const s3 = 0.44 * stream(-0.38, -0.24, 0.100, 2.1, 3.3, 0.15, 0.090, 0.85);
-  const s4 = 0.36 * stream( 0.31,  0.24, 0.065, 4.1, 5.0, -0.26, 0.080, 0.88);
+  const ea = 1 + p.evAmp * e;    // размах изгиба ленты
+  const et = 1 + p.evThick * e;  // толщина ленты
+  const s1 = 0.62 * stream(-0.24, -0.06, 0.090 * ea, 2.6, 0.0, 0.23, 0.125 * et, 1.05);
+  const s2 = 0.52 * stream( 0.16,  0.13, 0.075 * ea, 3.4, 1.9, -0.19, 0.100 * et, 0.95);
+  const s3 = 0.44 * stream(-0.38, -0.24, 0.100 * ea, 2.1, 3.3, 0.15, 0.090 * et, 0.85);
+  const s4 = 0.36 * stream( 0.31,  0.24, 0.065 * ea, 4.1, 5.0, -0.26, 0.080 * et, 0.88);
   let d = s1 + s2 + s3 + s4;
 
   // Общая масса под суммой: потоки дают полосы, а спека просит ещё и
@@ -57,13 +63,21 @@ function field(uvx, uvy, t, k, warmth, p = P) {
   d += 0.20 * mass(wx, wy, -0.28 + 0.06 * Math.sin(t * 0.17), 0.08, 0.46, 0.24);
   d += 0.18 * mass(wx, wy, 0.28 + 0.05 * Math.sin(t * 0.15 + 1.7), -0.10, 0.44, 0.22);
 
+  // Ядро ровно под суммой: варп в день события сильнее, и без этой добавки
+  // масса уезжает из-под числа в части кадров — а по спеке концентрация
+  // должна быть именно там.
+  d += p.evCore * e * mass(wx, wy, 0, -0.01, 0.55, 0.26);
+
   const ripple = 0.5 + 0.5 * Math.sin(wy * 7.0 + wx * 3.0 + t * 0.33);
   d *= 0.78 + 0.22 * ripple;
   d += 0.30 * Math.exp(-Math.pow((uvy - 0.32) / 0.52, 2)) * (0.55 + 0.45 * ripple);
-  d *= p.gain + p.gaink * k;
+  d *= (p.gain + p.gaink * k) * (1 + p.evGain * e);
 
   const mx = px * 0.85, my = py * 1.25;
-  d *= p.centerA + p.centerB * Math.exp(-(mx * mx + my * my) * p.centerPow);
+  const cA = p.centerA - p.evCenter * e;
+  d *= cA + (1 - cA) * Math.exp(-(mx * mx + my * my) * (p.centerPow + p.evTight * e));
+  // Дыхание: очень медленное, иначе поле «мигает», а не живёт.
+  d *= 1 + p.evBreath * e * Math.sin(t * 0.42);
   d *= ss(p.botFade[0], p.botFade[1], uvy) * (p.topFloor + (1 - p.topFloor) * ss(p.topFade[0], p.topFade[1], uvy));
   d = clamp(d, 0, 1.4);
 
@@ -80,9 +94,13 @@ function field(uvx, uvy, t, k, warmth, p = P) {
   // Тёплое состояние двигает всю смесь в зелёный, холодное — в голубой.
   const green = [0.494, 0.898, 0.729];
   colS = mix(colS, green, 0.42 * warmth);
+  // День события: палитра уходит глубже — поле перестаёт быть дымкой и
+  // становится плотной массой, как в третьем состоянии спеки.
+  const deep = [0.286, 0.702, 0.714];
+  colS = mix(colS, deep, p.evDeep * e);
   // Вне лент (дымка, края) — общий светлый тон.
   let col = mix(base, colS, clamp(wsum * 2.2, 0, 1));
-  const a = clamp((p.aBase + p.aK * k) * ss(0.02, 1.30, d), 0, p.aMax);
+  const a = clamp((p.aBase + p.aK * k) * ss(0.02, 1.30, d), 0, p.aMax + p.evAlpha * e);
   return { col, a, d };
 }
 
@@ -97,7 +115,7 @@ function bg(uvx, uvy) {
   return mix(stops[i][1], stops[i + 1][1], t);
 }
 
-function render(path, samples, k, warmth, p = P) {
+function render(path, samples, k, warmth, e = 0, p = P) {
   const W = p.W, H = p.H, N = samples.length;
   const GAP = 8;
   const OW = W * N + GAP * (N - 1);
@@ -108,7 +126,7 @@ function render(path, samples, k, warmth, p = P) {
       for (let x = 0; x < W; x++) {
         const uvx = (x + 0.5) / W, uvy = (y + 0.5) / H;
         const b = bg(uvx, (y + 0.5) / 915);
-        const f = field(uvx, uvy, t, k, warmth, p);
+        const f = field(uvx, uvy, t, k, warmth, e, p);
         const o = ((y * OW) + ox + x) * 3;
         for (let c = 0; c < 3; c++) {
           buf[o + c] = Math.round(255 * clamp(f.col[c] * f.a + b[c] * (1 - f.a), 0, 1));
@@ -123,5 +141,5 @@ function render(path, samples, k, warmth, p = P) {
 }
 
 const out = process.argv[2] || 'hero.png';
-render(out, [0, 9, 21], Number(process.argv[3] ?? 0.62), Number(process.argv[4] ?? 0.35));
+render(out, [0, 9, 21], Number(process.argv[3] ?? 0.62), Number(process.argv[4] ?? 0.35), Number(process.argv[5] ?? 0));
 console.log('ok', out);
