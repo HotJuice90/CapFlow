@@ -547,6 +547,7 @@ export default function AssetScreen() {
                 if (entry.type === 'balance') onDeleteBalanceEntry(entry.id);
                 else if (entry.type === 'rate') onDeleteRateEntry(entry.id);
               }}
+              onOpenPayout={() => openPayoutSheet([{ assetId: asset.id, date: entry.date }])}
             />
           ))}
           {timeline.length > 5 ? (
@@ -714,24 +715,35 @@ function TimelineRow({
   currency,
   onEdit,
   onDelete,
+  onOpenPayout,
 }: {
   entry: AssetTimelineEntry;
   isLast: boolean;
   currency: CurrencyCode;
   onEdit: () => void;
   onDelete: () => void;
+  onOpenPayout: () => void;
 }) {
   const swipeRef = useRef<SwipeableMethods>(null);
   const isBalance = entry.type === 'balance';
   const isRate = entry.type === 'rate';
-  const isUp = isBalance ? (entry.amountDelta ?? 0) >= 0 : (entry.rateDelta ?? 0) >= 0;
+  // Выплата процентов — такое же движение денег, как пополнение или снятие:
+  // в кошелёк они уходят ровно так же, как снятая вручную сумма. Поэтому и
+  // рисуется она как движение, а не особым видом записи.
+  const isPayout = entry.type === 'payout';
+  const isMoney = isBalance || isPayout;
+  const isUp = isPayout
+    ? entry.payoutAction === 'keep'
+    : isBalance ? (entry.amountDelta ?? 0) >= 0 : (entry.rateDelta ?? 0) >= 0;
 
   const isClose = entry.type === 'close';
-  const icon = isClose ? 'check-circle-outline' : entry.type === 'open' ? 'flag-outline' : entry.isCorrection ? 'wrench-outline' : isBalance ? (isUp ? 'arrow-up' : 'arrow-down') : isUp ? 'trending-up' : 'trending-down';
+  const icon = isClose ? 'check-circle-outline' : entry.type === 'open' ? 'flag-outline' : entry.isCorrection ? 'wrench-outline' : isMoney ? (isUp ? 'arrow-up' : 'arrow-down') : isUp ? 'trending-up' : 'trending-down';
   const iconStyle = isClose || entry.type === 'open' ? styles.histIconOpen : entry.isCorrection ? styles.histIconCorrection : isUp ? styles.histIconUp : styles.histIconDown;
   const iconColor = isClose || entry.type === 'open' ? tokens.accent.base : entry.isCorrection ? tokens.category.dfa : isUp ? tokens.semantic.positive : tokens.semantic.negative;
 
-  const sub = (isClose
+  const sub = (isPayout
+    ? (entry.payoutAction === 'wallet' ? 'Проценты в кошелёк' : 'Проценты на счёт')
+    : isClose
     ? 'Закрытие'
     : entry.type === 'open'
     ? 'Открытие'
@@ -756,7 +768,7 @@ function TimelineRow({
           <Text style={styles.histBalance}>
             {formatMoney(entry.amount ?? 0, { currency })} · {formatPercent(entry.rate ?? 0)}
           </Text>
-        ) : isBalance ? (
+        ) : isMoney ? (
           <>
             <Text style={[styles.histDelta, isUp ? styles.histDeltaUp : styles.histDeltaDown]}>
               {isUp ? '+' : '−'}{formatMoney(Math.abs(entry.amountDelta ?? 0), { currency })}
@@ -775,6 +787,15 @@ function TimelineRow({
     </View>
   );
 
+  // Выплата правится не свайпом, а тем же шитом, где принималось решение:
+  // «оставить» можно передумать, пока деньги не ушли в кошелёк.
+  if (isPayout) {
+    return (
+      <Pressable onPress={onOpenPayout} style={({ pressed }) => pressed && { opacity: 0.6 }}>
+        {row}
+      </Pressable>
+    );
+  }
   // Открытие и закрытие — факты жизни актива, а не операции: не правятся свайпом.
   if (entry.type === 'open' || isClose) return row;
   return (

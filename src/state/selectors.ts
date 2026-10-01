@@ -1860,17 +1860,20 @@ export function assetTimeline(
     const bounds = payoutBoundaryDates(asset, instrument, last);
     if (bounds.length > 0) {
       const pts = accrualSeries(asset, instrument, [asset.openDate, ...bounds]);
-      const accruedAt = new Map(bounds.map((d, i) => [d, pts[i + 1].accrued]));
-      const prevAccrued = new Map(bounds.map((d, i) => [d, pts[i].accrued]));
+      const at = new Map(bounds.map((d, i) => [d, i + 1]));
       for (const p of payouts) {
-        const a1 = accruedAt.get(p.date);
-        const a0 = prevAccrued.get(p.date);
-        if (a1 === undefined || a0 === undefined) continue;
+        const i = at.get(p.date);
+        if (i === undefined) continue;
+        const sum = p.amount ?? Math.max(0, pts[i].accrued - pts[i - 1].accrued);
         entries.push({
           type: 'payout',
           id: p.id,
           date: p.date,
-          amount: p.amount ?? Math.max(0, a1 - a0),
+          // Как у обычной корректировки баланса: `amount` — стоимость ПОСЛЕ
+          // операции, `amountDelta` — движение. Для человека выплата в кошелёк
+          // ничем не отличается от снятия, и выглядеть должна так же.
+          amount: pts[i].currentValue,
+          amountDelta: p.action === 'wallet' ? -sum : sum,
           payoutAction: p.action,
         });
       }

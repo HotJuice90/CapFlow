@@ -146,11 +146,14 @@ function PayoutBlock({
         />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={st.name} numberOfLines={1}>{name}</Text>
-          <Text style={st.sub} numberOfLines={1}>
-            с {formatDateShort(details.periodStart)} · налог {money(details.tax)}
-          </Text>
+          <Text style={st.sub} numberOfLines={1}>с {formatDateShort(details.periodStart)}</Text>
         </View>
-        <Text style={st.amount} numberOfLines={1}>+{money(details.amount)}</Text>
+        {/* Налог — под суммой, а не в подписи слева: там он первым и обрезался,
+            хотя подпись про период короткая и места ей хватает. */}
+        <View style={st.amountCol}>
+          <Text style={st.amount} numberOfLines={1}>+{money(details.amount)}</Text>
+          <Text style={st.amountTax} numberOfLines={1}>налог {money(details.tax)}</Text>
+        </View>
         <MaterialCommunityIcons name="chevron-right" size={18} color={tokens.text.tertiary} />
       </Pressable>
 
@@ -220,7 +223,9 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm },
   name: { fontFamily: font.semibold, fontSize: 16, lineHeight: 18, color: tokens.text.primary },
   sub: { fontSize: 12, lineHeight: 16, color: tokens.text.tertiary, marginTop: 2 },
+  amountCol: { alignItems: 'flex-end' },
   amount: { fontSize: 18, lineHeight: 22, fontFamily: font.semibold, color: tokens.semantic.positive },
+  amountTax: { fontSize: 12, lineHeight: 15, color: tokens.value.forecast, marginTop: 2 },
 
   choices: { flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.md },
   choice: {
