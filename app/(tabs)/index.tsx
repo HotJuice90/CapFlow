@@ -31,6 +31,7 @@ import { Card } from '@/components/Card';
 import { TypeCardsRow } from '@/components/TypeCardsRow';
 import { Donut } from '@/components/Donut';
 import { AssetRow } from '@/components/AssetRow';
+import { MoneyFlow } from '@/components/MoneyFlow';
 import { OrgLogo } from '@/components/BankLogo';
 import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
 import { useData } from '@/state/DataContext';
@@ -545,9 +546,14 @@ export default function HomeScreen() {
               ) : (
                 <Pressable style={styles.heroMain} onPress={() => router.push('/calendar')}>
                   <Text style={styles.heroLabel}>Сегодня принесёт</Text>
-                  <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                    +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
-                  </Text>
+                  <MoneyFlow
+                    value={summary.incomePerDay}
+                    prefix="+"
+                    options={{ currency: cur, kopecks: 'hide' }}
+                    style={styles.heroValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  />
                   <View style={styles.heroStatusRow}>
                     <View style={[styles.heroStatusDot, { backgroundColor: hero.tone }]} />
                     <Text style={styles.heroStatus}>{hero.label}</Text>

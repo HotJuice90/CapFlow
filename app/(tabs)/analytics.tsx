@@ -16,6 +16,7 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ScreenTitle } from '@/components/ScreenTitle';
+import { MoneyFlow } from '@/components/MoneyFlow';
 import { Card } from '@/components/Card';
 import { boxShadow } from '@/theme/shadow';
 import { OrgLogo } from '@/components/BankLogo';
@@ -330,9 +331,17 @@ export default function AnalyticsScreen() {
                   </View>
                 ) : null}
               </View>
-              <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatMoney(summary.totalCapital + freeCapital, { currency: cur })}
-              </Text>
+              {/* Капитал растёт В РЕАЛЬНОМ ВРЕМЕНИ: доход за день, делённый на
+                  секунды в сутках. Это не украшение — деньги действительно
+                  прибавляются, и видеть это приятнее, чем статичное число. */}
+              <MoneyFlow
+                value={summary.totalCapital + freeCapital}
+                perSecond={summary.incomePerDay / 86_400}
+                options={{ currency: cur }}
+                style={styles.heroValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              />
             </View>
 
             {/* Свайп по графику и чипы ниже переключают одно состояние.
