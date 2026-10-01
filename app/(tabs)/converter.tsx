@@ -1014,8 +1014,11 @@ const s = StyleSheet.create({
   depChipText: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: 'Onest_400Regular', color: tokens.text.secondary },
   // Выбранный шаблон: без подсветки список читается как «ничего не выбрано»,
   // хотя значение в поле ровно из него.
-  depChipOn: { backgroundColor: tokens.accent.base },
-  depChipTextOn: { fontFamily: 'Onest_600SemiBold', color: tokens.text.inverse },
+  // Подсветка нарочно слабая: это пометка «значение отсюда», а не кнопка-акцент.
+  // Залитый фирменным цветом чип перетягивал внимание на себя сильнее, чем
+  // само число в поле, ради которого всё и считается.
+  depChipOn: { backgroundColor: hexToRgba(tokens.accent.base, 0.10) },
+  depChipTextOn: { fontFamily: 'Onest_600SemiBold', color: tokens.accent.deep },
 
   depResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: tokens.spacing.tight, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
   depResultTitle: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.2 },
