@@ -1,4 +1,4 @@
-import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, Snapshot, TaxYearRecord } from '@/domain/types';
+import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, PayoutRecord, Snapshot, TaxYearRecord } from '@/domain/types';
 import { accrualSeries, calculate, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
@@ -1131,6 +1131,60 @@ export function payoutEventsForMonth(data: AppData, year: number, month: number,
     });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface PayoutDetails {
+  assetId: string;
+  /** Дата начисления (она же дата решения). */
+  date: string;
+  /** Начало периода — предыдущее начисление либо открытие актива. */
+  periodStart: string;
+  /** Доход за период — то, что реально выплачивается. */
+  amount: number;
+  /** Налог с этого дохода, плоской ставкой. Справочно: по накопительному счёту
+   *  банк его не удерживает, он уходит в общий годовой расчёт на главной. */
+  tax: number;
+  /** Чистыми — сколько из выплаты в итоге останется. */
+  net: number;
+  currency: CurrencyCode;
+  /** Уже принятое решение, если есть. */
+  record?: PayoutRecord;
+  /** Решение можно менять, пока деньги не ушли в кошелёк. */
+  locked: boolean;
+}
+
+/**
+ * Разбор одной выплаты процентов: сколько набежало за период, сколько из этого
+ * налог и что с ней уже решили. Сумма считается движком между соседними
+ * начислениями — той же методикой, что в payoutEventsForMonth.
+ */
+export function payoutDetails(data: AppData, assetId: string, date: string): PayoutDetails | null {
+  const v = buildAssetViews(data).find((x) => x.asset.id === assetId);
+  if (!v) return null;
+  const period = v.asset.payoutPeriod ?? v.instrument.payoutPeriod;
+  const step = period ? PAYOUT_STEP_MONTHS[period] : undefined;
+  if (!step) return null;
+
+  const open = parseLocal(v.asset.openDate);
+  const prev = parseLocal(date);
+  prev.setMonth(prev.getMonth() - step);
+  const periodStart = prev < open ? open : prev;
+
+  const [a0, a1] = accrualSeries(v.asset, v.instrument, [isoDate(periodStart), date]);
+  const amount = Math.max(0, a1.accrued - a0.accrued);
+  const tax = amount * (data.params.taxRate / 100);
+  const record = (v.asset.payouts ?? []).find((p) => p.date === date);
+  return {
+    assetId,
+    date,
+    periodStart: isoDate(periodStart),
+    amount: record?.amount ?? amount,
+    tax: (record?.amount ?? amount) * (data.params.taxRate / 100),
+    net: (record?.amount ?? amount) - tax,
+    currency: v.asset.currency,
+    record,
+    locked: record?.action === 'wallet',
+  };
 }
 
 export interface AssetOutcome {

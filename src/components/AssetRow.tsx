@@ -53,7 +53,7 @@ export function AssetRow({ view }: { view: AssetView }) {
   // при простом проценте currentValue = balanceNow + earnedSoFar. Разложение
   // точное: базовая + заработано = currentValue, то есть ровно та сумма,
   // которую показывает аналитика.
-  const invested = derived.currentValue - derived.earnedSoFar;
+  const invested = derived.invested;
 
   return (
     <Pressable

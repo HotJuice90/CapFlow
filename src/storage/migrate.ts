@@ -35,6 +35,16 @@ export function migrate(data: AppData): AppData {
   if (!next.goals) next.goals = [];
   if (!next.freeCapitalEntries) next.freeCapitalEntries = [];
 
+  // Выплаты процентов по накопительным счетам раньше просто копились рядом с
+  // телом и ничего не приносили. Теперь по умолчанию они причисляются к телу,
+  // как это и делает банк. Чтобы появление правила не пересчитало задним
+  // числом всю прошлую историю, уже заведённым активам ставим точку отсчёта —
+  // сегодня. У активов, заведённых после обновления, поля нет, и правило у них
+  // работает с открытия.
+  const today = new Date();
+  const payoutsSince = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  next.assets = next.assets.map((a) => (a.payoutsSince ? a : { ...a, payoutsSince }));
+
   // Смена фирменного цвета банка в реестре (src/domain/banks.ts) НЕ доходит до
   // уже заведённых площадок: цвет копируется в организацию в момент создания
   // (`color: bank.color`) и дальше живёт в данных. Поэтому переносим точечно —

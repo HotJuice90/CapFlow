@@ -55,6 +55,7 @@ import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz, successBuzz } from '@/lib/haptics';
 import { limitEta, limitEtaUntil } from '@/lib/taxLimit';
+import { openPayoutSheet } from '@/lib/payoutSheet';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
 import { t } from '@/i18n';
 
@@ -78,7 +79,7 @@ const SORTS: { key: SortKey; label: string }[] = [
 
 /** Базовая сумма — ровно та, что показана в строке (см. AssetRow → invested). */
 function investedOf(v: AssetView): number {
-  return v.derived.currentValue - v.derived.earnedSoFar;
+  return v.derived.invested;
 }
 
 function sortViews(views: AssetView[], key: SortKey): AssetView[] {
@@ -244,7 +245,12 @@ export default function HomeScreen() {
     : null;
   // Площадка события — для логотипа рядом с названием: «принёс доход» без
   // лица банка читается безлично, а лого опознаётся быстрее текста.
-  const heroEventOrg = heroEvent ? views.find((v) => v.asset.id === heroEvent.assetId)?.organization : undefined;
+  const heroEventView = heroEvent ? views.find((v) => v.asset.id === heroEvent.assetId) : undefined;
+  const heroEventOrg = heroEventView?.organization;
+  // Выбор «оставить или в кошелёк» есть только у бессрочных: у срочного вклада
+  // выплата уходит на другой счёт, оставлять там нечего (см. buildRealisations).
+  const heroPayoutChoice =
+    !!heroEvent && heroEvent.kind === 'payout' && heroEventView?.instrument.behavior === 'perpetual';
   const hero = useMemo(
     () =>
       heroState({
@@ -460,7 +466,14 @@ export default function HomeScreen() {
                 /* Третье состояние поля из спеки: в день события герой говорит
                    про СОБЫТИЕ, а обычный дневной доход уезжает вниз мелким —
                    он никуда не делся, просто сегодня не он главный. */
-                <Pressable style={styles.heroMain} onPress={() => router.push(`/asset/${heroEvent.assetId}`)}>
+                <Pressable
+                  style={styles.heroMain}
+                  onPress={() => {
+                    tapBuzz();
+                    if (heroPayoutChoice) openPayoutSheet({ assetId: heroEvent.assetId, date: heroEvent.date });
+                    else router.push(`/asset/${heroEvent.assetId}`);
+                  }}
+                >
                   <View style={styles.heroEventTitleRow}>
                     {heroEventOrg ? (
                       <OrgLogo
@@ -482,7 +495,11 @@ export default function HomeScreen() {
                   </Text>
                   <View style={styles.heroCta}>
                     <Text style={styles.heroCtaText}>
-                      {heroEvent.kind === 'maturity' ? 'Можно переложить' : 'Открыть актив'}
+                      {heroEvent.kind === 'maturity'
+                        ? 'Можно переложить'
+                        : heroPayoutChoice
+                          ? 'Что делать с процентами'
+                          : 'Открыть актив'}
                     </Text>
                     <MaterialIcons name="arrow-forward" size={15} color={tokens.accent.base} />
                   </View>

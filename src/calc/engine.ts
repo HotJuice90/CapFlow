@@ -142,6 +142,74 @@ function annualYield(base: number, rate: number, tier?: RateTier): number {
   return tier.cap * (rate / 100) + (base - tier.cap) * (tier.rateAbove / 100);
 }
 
+const PAYOUT_STEP_MONTHS: Partial<Record<string, number>> = {
+  monthly: 1,
+  quarterly: 3,
+  semiannual: 6,
+  annual: 12,
+};
+
+/**
+ * Точка «реализации» выплаты: что происходит с накопленным в эту дату.
+ *
+ * `skip` — граница периода ДО даты включения правила: денег она не двигает, но
+ * сдвигает базу, от которой считается следующая выплата. Без неё первая же
+ * выплата после включения забрала бы весь хвост, накопленный за всю прошлую
+ * жизнь актива, — а мы договорились прошлое не трогать.
+ */
+interface Realisation {
+  idx: number;
+  action: 'keep' | 'wallet' | 'skip';
+  /** Факт из записи пользователя; нет — движок берёт накопленное с прошлой границы. */
+  amount?: number;
+}
+
+function isoOf(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * Даты выплат процентов и решение по каждой — от `payoutsSince` до последней
+ * нужной даты. Шаг календарный (месяцами от дня открытия), а не «365/периодов»:
+ * выплата приходит первого числа, а не каждые 30,4 дня.
+ *
+ * Капитализация сюда не попадает: там проценты и так сворачиваются в тело на
+ * границах периодов, выбора нет.
+ *
+ * И только БЕССРОЧНЫЕ активы: у накопительного счёта банк причисляет проценты
+ * к тому же счёту, поэтому «оставить» — это реальный выбор и разумное
+ * умолчание. У срочного вклада выплата уходит на другой счёт или карту, там
+ * оставлять нечего — поведение остаётся прежним.
+ */
+function buildRealisations(
+  asset: Asset,
+  instrument: FinancialInstrument,
+  mode: CapitalizationMode,
+  payout: PayoutPeriod | undefined,
+  lastIdx: number,
+): Realisation[] {
+  if (mode === 'capitalize' || instrument.behavior !== 'perpetual') return [];
+  const step = payout ? PAYOUT_STEP_MONTHS[payout] : undefined;
+  if (!step) return [];
+  const since = asset.payoutsSince;
+  const byDate = new Map((asset.payouts ?? []).map((p) => [p.date, p]));
+
+  const out: Realisation[] = [];
+  const occ = parseLocal(asset.openDate);
+  occ.setMonth(occ.getMonth() + step);
+  for (let k = 0; k < 2000; k++) {
+    const iso = isoOf(occ);
+    const idx = dayIndex(iso);
+    if (idx > lastIdx) break;
+    const active = !since || iso >= since;
+    const rec = active ? byDate.get(iso) : undefined;
+    out.push({ idx, action: active ? rec?.action ?? 'keep' : 'skip', amount: rec?.amount });
+    occ.setMonth(occ.getMonth() + step);
+  }
+  return out;
+}
+
 function walkAccrualAt(
   balance: BalancePoint[],
   rates: RatePoint[],
@@ -149,7 +217,8 @@ function walkAccrualAt(
   payout: PayoutPeriod | undefined,
   samples: number[],
   tier?: RateTier,
-): { balanceNow: number; accrued: number }[] {
+  realisations: Realisation[] = [],
+): { balanceNow: number; accrued: number; realised: number; earnedInBody: number }[] {
   const lastIdx = samples[samples.length - 1];
   const bal = balance.map((p) => ({ idx: dayIndex(p.date), amount: p.amount, isCorrection: p.isCorrection }));
   const rts = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
@@ -169,19 +238,26 @@ function walkAccrualAt(
     }
   }
 
+  const realisationAt = new Map(realisations.map((r) => [r.idx, r]));
   const checkpoints = [
-    ...new Set([...bal.map((p) => p.idx), ...rts.map((p) => p.idx), ...boundarySet, ...samples]),
+    ...new Set([
+      ...bal.map((p) => p.idx), ...rts.map((p) => p.idx), ...boundarySet, ...samples,
+      ...realisations.map((r) => r.idx),
+    ]),
   ].sort((a, b) => a - b);
 
   let principal = bal[0].amount;
   let pending = 0; // накоплено внутри текущего периода капитализации, ещё не в теле
   let accrued = 0;
+  let realised = 0;         // выплаты, по которым решение уже принято
+  let earnedInBody = 0;     // проценты, осевшие в самом теле (капитализация или «оставить»)
+  let boundaryAccrued = 0;  // уровень дохода на прошлой границе периода выплат
 
-  const out: { balanceNow: number; accrued: number }[] = [];
+  const out: { balanceNow: number; accrued: number; realised: number; earnedInBody: number }[] = [];
   let sampleAt = 0;
   const flushSamples = (upTo: number) => {
     while (sampleAt < samples.length && samples[sampleAt] <= upTo) {
-      out.push({ balanceNow: principal + pending, accrued });
+      out.push({ balanceNow: principal + pending, accrued, realised, earnedInBody });
       sampleAt++;
     }
   };
@@ -194,6 +270,21 @@ function walkAccrualAt(
       // Факт из банка перекрывает и не свёрнутые в тело проценты модели.
       principal = explicitAmount;
       pending = 0;
+    }
+    // Выплата: накопленное с прошлой выплаты либо ложится в тело («оставить»),
+    // либо уходит из актива («в кошелёк»). В обоих случаях оно перестаёт
+    // висеть сверху — иначе currentValue посчитает эти деньги дважды.
+    const real = realisationAt.get(date);
+    if (real) {
+      const amount = real.amount ?? Math.max(0, accrued - boundaryAccrued);
+      boundaryAccrued = accrued;
+      if (real.action !== 'skip') {
+        realised += amount;
+        if (real.action === 'keep') {
+          principal += amount;
+          earnedInBody += amount;
+        }
+      }
     }
     // Состояние на саму точку фиксируем ДО начисления за следующий отрезок:
     // на дату X доход накоплен по X, а не по X включительно вперёд.
@@ -225,6 +316,7 @@ function walkAccrualAt(
       // Отрезок ровно упирается в границу периода капитализации — сворачиваем.
       if (segmentEndsAtNext && boundarySet.has(next)) {
         principal += pending;
+        earnedInBody += pending;
         pending = 0;
       }
     } else {
@@ -243,8 +335,9 @@ function walkAccrual(
   payout: PayoutPeriod | undefined,
   now: string | Date,
   tier?: RateTier,
-): { balanceNow: number; accrued: number } {
-  return walkAccrualAt(balance, rates, mode, payout, [dayIndex(now)], tier)[0];
+  realisations: Realisation[] = [],
+): { balanceNow: number; accrued: number; realised: number; earnedInBody: number } {
+  return walkAccrualAt(balance, rates, mode, payout, [dayIndex(now)], tier, realisations)[0];
 }
 
 /** Точка истории актива: то же, что даёт calculate, но только «деньги». */
@@ -281,12 +374,13 @@ export function accrualSeries(
   const idx = dates.map((d) => dayIndex(d));
   const rateIdx = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
   const tier = tierOf(asset);
-  const balancePts = walkAccrualAt(timeline, rates, mode, payout, idx, tier);
+  const realisations = buildRealisations(asset, instrument, mode, payout, idx[idx.length - 1]);
+  const balancePts = walkAccrualAt(timeline, rates, mode, payout, idx, tier, realisations);
 
   const endIdx = asset.endDate ? dayIndex(asset.endDate) : undefined;
   const needsClamp = endIdx !== undefined && idx[idx.length - 1] > endIdx;
   const accrualPts = needsClamp
-    ? walkAccrualAt(timeline, rates, mode, payout, idx.map((i) => Math.min(i, endIdx)), tier)
+    ? walkAccrualAt(timeline, rates, mode, payout, idx.map((i) => Math.min(i, endIdx)), tier, realisations)
     : balancePts;
 
   const openIdx = dayIndex(asset.openDate);
@@ -298,7 +392,9 @@ export function accrualSeries(
     return {
       balanceNow,
       accrued,
-      currentValue: mode === 'capitalize' ? balanceNow : balanceNow + accrued,
+      // Реализованное больше не висит сверху: оно либо уже в теле, либо ушло
+      // в кошелёк. Без вычета эти деньги считались бы дважды.
+      currentValue: mode === 'capitalize' ? balanceNow : balanceNow + accrued - accrualPts[k].realised,
       incomePerDay: started ? annualYield(balanceNow, rate, tier) / daysInYear(dates[k]) : 0,
     };
   });
@@ -327,7 +423,10 @@ export function calculate(
   const currentRate = rateAt(rates, now);
 
   const tier = tierOf(asset);
-  const { balanceNow, accrued: accruedToNow } = walkAccrual(timeline, rates, mode, payout, now, tier);
+  const realisations = buildRealisations(asset, instrument, mode, payout, dayIndex(now));
+  const { balanceNow, accrued: accruedToNow, realised, earnedInBody } =
+    walkAccrual(timeline, rates, mode, payout, now, tier, realisations);
+  const invested = balanceNow - earnedInBody;
   // Актив, который ещё не открылся, НЕ приносит дохода. Без этой проверки
   // опечатка в дате открытия (или запись «на будущее») молча добавляла в
   // «Сегодня принесёт» доход по несуществующему вкладу — при том, что
@@ -367,7 +466,7 @@ export function calculate(
     const incomeTotalTerm = annualYield(asset.amount, currentRate, tier) * (termDays / 365);
     // «Уже заработано» — посегментно, чтобы честно учитывать пополнения/снятия И смену ставки.
     const accrualNow = diffDays(asset.openDate, now) > termDays ? asset.endDate : now;
-    const { accrued: earnedSoFar } = walkAccrual(timeline, rates, mode, payout, accrualNow, tier);
+    const { accrued: earnedSoFar } = walkAccrual(timeline, rates, mode, payout, accrualNow, tier, realisations);
     const remainingToEarn = Math.max(0, incomeTotalTerm - earnedSoFar);
 
     // Налог считается на доход всего срока (проценты по вкладу облагаются в год выплаты).
@@ -378,7 +477,9 @@ export function calculate(
     return {
       balanceNow,
       // При капитализации начисленное уже в теле; при простом % — лежит рядом.
-      currentValue: mode === 'capitalize' ? balanceNow : balanceNow + earnedSoFar,
+      // Реализованные выплаты вычитаем: они уже либо в теле, либо в кошельке.
+      currentValue: mode === 'capitalize' ? balanceNow : balanceNow + earnedSoFar - realised,
+      invested,
       incomePerDay,
       incomePerMonth,
       incomeTotalTerm,
@@ -406,7 +507,8 @@ export function calculate(
   return {
     balanceNow,
     // При капитализации начисленное уже в теле; при простом % — лежит рядом.
-    currentValue: mode === 'capitalize' ? balanceNow : balanceNow + earnedSoFar,
+    currentValue: mode === 'capitalize' ? balanceNow : balanceNow + earnedSoFar - realised,
+    invested,
     incomePerDay,
     incomePerMonth,
     accrued: earnedSoFar,

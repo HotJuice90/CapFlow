@@ -478,3 +478,89 @@ describe('порог суммы и ставка сверх него', () => {
     expect(d.accrued).toBeLessThan(without.accrued);
   });
 });
+
+describe('выплаты процентов: оставить или забрать', () => {
+  const account: Asset = {
+    id: 'a-pay',
+    instrumentId: 'i2',
+    amount: 1_000_000,
+    currency: 'RUB',
+    rate: 12,
+    openDate: '2026-01-01',
+    status: 'active',
+    payoutPeriod: 'monthly',
+  };
+
+  test('по умолчанию выплата ложится в тело и дальше приносит доход', () => {
+    const d = calculate(account, savingsInstrument, params, '2027-01-01');
+    // Ежемесячное присоединение даёт чуть больше простого процента.
+    expect(d.accrued).toBeGreaterThan(120_000);
+    expect(d.accrued).toBeLessThan(127_000);
+    // Тело выросло на оставленные проценты, а «вложено» осталось своим.
+    expect(d.balanceNow).toBeGreaterThan(1_000_000);
+    expect(d.invested).toBeCloseTo(1_000_000, 0);
+  });
+
+  test('«с этой даты» не даёт пересчитать прошлое', () => {
+    const since = { ...account, payoutsSince: '2027-01-01' };
+    const d = calculate(since, savingsInstrument, params, '2027-01-01');
+    // Весь прошлый год считался простым процентом, как и раньше, — включение
+    // правила его не переписало.
+    expect(d.accrued).toBeCloseTo(120_000, 0);
+    const def = calculate(account, savingsInstrument, params, '2027-01-01');
+    expect(d.accrued).toBeLessThan(def.accrued);
+  });
+
+  test('первая выплата после включения — только за свой период, не весь хвост', () => {
+    const since = { ...account, payoutsSince: '2027-01-01' };
+    const d = calculate(since, savingsInstrument, params, '2027-01-01');
+    // В тело легла выплата за декабрь (месяц), а не накопленное за весь год.
+    const added = d.balanceNow - 1_000_000;
+    expect(added).toBeGreaterThan(9_000);
+    expect(added).toBeLessThan(11_000);
+  });
+
+  test('забранное в кошелёк уходит из актива и не удваивается', () => {
+    const withdrawn: Asset = {
+      ...account,
+      payouts: [{ id: 'p1', date: '2026-02-01', action: 'wallet', amount: 10_191.78 }],
+    };
+    const d = calculate(withdrawn, savingsInstrument, params, '2026-02-01');
+    // Доход за всю жизнь остаётся фактом, а вот в активе его уже нет.
+    expect(d.accrued).toBeCloseTo(10_191.78, 1);
+    expect(d.currentValue).toBeCloseTo(1_000_000, 1);
+    expect(d.balanceNow).toBeCloseTo(1_000_000, 6);
+    expect(d.invested).toBeCloseTo(1_000_000, 1);
+  });
+
+  test('после забора в кошелёк тело не сползает — процент идёт с той же базы', () => {
+    const withdrawn: Asset = {
+      ...account,
+      payouts: [{ id: 'p1', date: '2026-02-01', action: 'wallet', amount: 10_191.78 }],
+    };
+    const plain = calculate(account, savingsInstrument, params, '2026-02-01');
+    const taken = calculate(withdrawn, savingsInstrument, params, '2026-02-01');
+    // Тело одно и то же: «оставить» его подняло бы, «в кошелёк» — нет.
+    expect(taken.balanceNow).toBeLessThan(plain.balanceNow);
+    expect(taken.balanceNow).toBeCloseTo(1_000_000, 6);
+  });
+
+  test('у срочного вклада выплата уходит с него — поведение не меняется', () => {
+    const term: Asset = {
+      ...account,
+      id: 'a-term',
+      instrumentId: 'i1',
+      endDate: '2027-01-01',
+    };
+    const d = calculate(term, depositInstrument, params, '2027-01-01');
+    expect(d.accrued).toBeCloseTo(120_000, 0);
+    expect(d.balanceNow).toBeCloseTo(1_000_000, 6);
+  });
+
+  test('accrualSeries видит выплаты так же, как calculate', () => {
+    const [pt] = accrualSeries(account, savingsInstrument, ['2027-01-01']);
+    const d = calculate(account, savingsInstrument, params, '2027-01-01');
+    expect(pt.accrued).toBeCloseTo(d.accrued, 6);
+    expect(pt.currentValue).toBeCloseTo(d.currentValue, 6);
+  });
+});

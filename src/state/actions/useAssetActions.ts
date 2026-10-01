@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import type { Asset, AssetStatus, FinancialInstrument, Organization, Snapshot } from '@/domain/types';
+import type { Asset, AssetStatus, CurrencyCode, FinancialInstrument, Organization, Snapshot } from '@/domain/types';
 import { calculate, ENGINE_VERSION } from '@/calc';
 import { uid } from '@/utils/id';
 import type { Persist } from './persist';
@@ -14,6 +14,19 @@ export interface AssetActions {
   /** `closedDate` (ISO 'YYYY-MM-DD') — фактический день закрытия, а не момент
    *  нажатия кнопки: именно он определяет, до какого дня актив жил на графике. */
   setAssetStatus: (id: string, status: AssetStatus, closedDate?: string) => Promise<void>;
+  /**
+   * Решение по выплате процентов. Запись у актива и (для «в кошелёк») приход в
+   * свободный капитал пишутся ОДНИМ persist: это одно движение денег, и
+   * половина его в данных — хуже, чем ничего.
+   */
+  recordPayout: (args: {
+    assetId: string;
+    date: string;
+    action: 'keep' | 'wallet';
+    amount: number;
+    currency: CurrencyCode;
+    comment: string;
+  }) => Promise<void>;
 }
 
 export function useAssetActions(persist: Persist): AssetActions {
@@ -91,8 +104,43 @@ export function useAssetActions(persist: Persist): AssetActions {
     [persist],
   );
 
+  const recordPayout = useCallback(
+    async ({ assetId, date, action, amount, currency, comment }: {
+      assetId: string; date: string; action: 'keep' | 'wallet';
+      amount: number; currency: CurrencyCode; comment: string;
+    }) => {
+      await persist((prev) => {
+        const assets = prev.assets.map((a) => {
+          if (a.id !== assetId) return a;
+          const rest = (a.payouts ?? []).filter((p) => p.date !== date);
+          return {
+            ...a,
+            payouts: [
+              ...rest,
+              // Сумму храним только у «в кошелёк»: это факт движения денег, он
+              // должен совпасть с записью в свободном капитале.
+              { id: uid('po-'), date, action, ...(action === 'wallet' ? { amount } : {}) },
+            ],
+          };
+        });
+        const freeCapitalEntries = action === 'wallet'
+          ? [...prev.freeCapitalEntries, {
+              id: uid('fc-'),
+              date,
+              amount,
+              currency,
+              comment,
+              createdAt: new Date().toISOString(),
+            }]
+          : prev.freeCapitalEntries;
+        return { ...prev, assets, freeCapitalEntries };
+      });
+    },
+    [persist],
+  );
+
   return useMemo(
-    () => ({ addAsset, createAssetBundle, updateAsset, deleteAsset, setAssetStatus }),
-    [addAsset, createAssetBundle, updateAsset, deleteAsset, setAssetStatus],
+    () => ({ addAsset, createAssetBundle, updateAsset, deleteAsset, setAssetStatus, recordPayout }),
+    [addAsset, createAssetBundle, updateAsset, deleteAsset, setAssetStatus, recordPayout],
   );
 }
