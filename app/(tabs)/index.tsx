@@ -551,8 +551,6 @@ export default function HomeScreen() {
                     prefix="+"
                     options={{ currency: cur, kopecks: 'hide' }}
                     style={styles.heroValue}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
                   />
                   <View style={styles.heroStatusRow}>
                     <View style={[styles.heroStatusDot, { backgroundColor: hero.tone }]} />

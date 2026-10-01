@@ -339,8 +339,6 @@ export default function AnalyticsScreen() {
                 perSecond={summary.incomePerDay / 86_400}
                 options={{ currency: cur }}
                 style={styles.heroValue}
-                numberOfLines={1}
-                adjustsFontSizeToFit
               />
             </View>
 
