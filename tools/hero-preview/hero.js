@@ -82,7 +82,7 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   d *= 1 + p.evBreath * e * Math.sin(t * 0.42);
   // Свечение ровно под суммой — бледно-жёлтое, в прямых координатах: варп его
   // не трогает, иначе «нимб» гуляет по кадру и перестаёт быть под числом.
-  const glow = p.evGlow * e * mass(px, py, 0, 0.045, 0.26, 0.090);
+  const glow = p.evGlow * e * mass(px, py, 0, 0.040, 0.44, 0.120);
   d += glow * 0.55;
   d *= ss(p.botFade[0], p.botFade[1], uvy) * (p.topFloor + (1 - p.topFloor) * ss(p.topFade[0], p.topFade[1], uvy));
   d = clamp(d, 0, 1.4);
@@ -95,8 +95,8 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   const cTeal = [0.427, 0.835, 0.847];  // бирюза
   const cSky  = [0.694, 0.878, 0.976];  // светло-синий
   const base  = [0.780, 0.929, 0.961];  // общая дымка
-  const cViolet = [0.722, 0.596, 0.961];  // фиолетовая волна дня события
-  const cAmber  = [0.996, 0.855, 0.541];  // жёлтая волна дня события
+  const cViolet = [0.655, 0.639, 0.984];  // сине-фиолетовая волна (василёк)
+  const cAmber  = [0.933, 0.937, 0.643];  // холодная лимонная волна
   const wsum = s1 + s2 + s3 + s4 + s5 + s6 + 1e-4;
   let colS = [0, 1, 2].map((i) =>
     (s1 * cTeal[i] + s2 * cMint[i] + s3 * cSky[i] + s4 * cAqua[i]
@@ -108,7 +108,7 @@ function field(uvx, uvy, t, k, warmth, e = 0, p = P) {
   colS = mix(colS, green, 0.42 * warmth * (1 - 0.65 * e));
   // Вне лент (дымка, края) — общий светлый тон.
   let col = mix(base, colS, clamp(wsum * 2.2, 0, 1));
-  const cGlow = [0.996, 0.957, 0.808];
+  const cGlow = [0.961, 0.965, 0.804];
   col = mix(col, cGlow, clamp(glow * 1.5, 0, 0.85));
   const a = clamp((p.aBase + p.aK * k) * ss(0.02, 1.30, d), 0, p.aMax + p.evAlpha * e);
   return { col, a, d };

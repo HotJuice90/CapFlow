@@ -106,7 +106,7 @@ half4 main(float2 fragCoord) {
   d *= 1.0 + 0.08 * e * sin(t * 0.42);
   // Свечение ровно под суммой — бледно-жёлтое, в ПРЯМЫХ координатах: варп его
   // не трогает, иначе «нимб» гуляет по кадру и перестаёт быть под числом.
-  float glow = 0.55 * e * mass(p, float2(0.0, 0.045), float2(0.26, 0.090));
+  float glow = 0.55 * e * mass(p, float2(0.0, 0.040), float2(0.44, 0.120));
   d += glow * 0.55;
 
   // Снизу растворяемся до контента; сверху не в ноль, а до 0.45 — цвет должен
@@ -124,8 +124,8 @@ half4 main(float2 fragCoord) {
   half3 cSky  = half3(0.694, 0.878, 0.976);
   half3 base  = half3(0.780, 0.929, 0.961);
   half3 green = half3(0.494, 0.898, 0.729);
-  half3 cViolet = half3(0.722, 0.596, 0.961);
-  half3 cAmber  = half3(0.996, 0.855, 0.541);
+  half3 cViolet = half3(0.655, 0.639, 0.984);  // василёк: холодный, без красноты
+  half3 cAmber  = half3(0.933, 0.937, 0.643);  // холодный лимон, не янтарь
 
   float wsum = s1 + s2 + s3 + s4 + s5 + s6 + 0.0001;
   half3 colS = (half(s1) * cTeal + half(s2) * cMint + half(s3) * cSky + half(s4) * cAqua
@@ -134,7 +134,7 @@ half4 main(float2 fragCoord) {
   // и жёлтую волну, и обе читаются грязно-серыми.
   colS = mix(colS, green, half(0.42 * u_warmth * (1.0 - 0.65 * e)));
   half3 col = mix(base, colS, half(clamp(wsum * 2.2, 0.0, 1.0)));
-  half3 cGlow = half3(0.996, 0.957, 0.808);
+  half3 cGlow = half3(0.961, 0.965, 0.804);
   col = mix(col, cGlow, half(clamp(glow * 1.5, 0.0, 0.85)));
 
   // Разгон альфы без насыщения: если оборвать его на 0.9, ядро становится
