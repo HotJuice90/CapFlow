@@ -701,11 +701,18 @@ export default function ConverterScreen() {
                   selectionColor={D.resetBg}
                 />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.depChipsRow}>
-                  {DEP_RATE_PRESETS.map((r) => (
-                    <Pressable key={r} style={s.depChip} onPress={() => { tapBuzz(); setDepRateText(fmtPct(r).replace('%', '')); }}>
-                      <Text style={s.depChipText}>{fmtPct(r)}</Text>
-                    </Pressable>
-                  ))}
+                  {DEP_RATE_PRESETS.map((r) => {
+                    const on = parseRaw(depRateText) === r;
+                    return (
+                      <Pressable
+                        key={r}
+                        style={[s.depChip, on && s.depChipOn]}
+                        onPress={() => { tapBuzz(); setDepRateText(fmtPct(r).replace('%', '')); }}
+                      >
+                        <Text style={[s.depChipText, on && s.depChipTextOn]}>{fmtPct(r)}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
               </View>
             </View>
@@ -725,11 +732,18 @@ export default function ConverterScreen() {
                   selectionColor={D.resetBg}
                 />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.depChipsRow}>
-                  {DEP_PERIODS.map((p) => (
-                    <Pressable key={p.days} style={s.depChip} onPress={() => { tapBuzz(); setDepDaysText(String(p.days)); }}>
-                      <Text style={s.depChipText}>{p.label}</Text>
-                    </Pressable>
-                  ))}
+                  {DEP_PERIODS.map((p) => {
+                    const on = (parseInt(depDaysText, 10) || 0) === p.days;
+                    return (
+                      <Pressable
+                        key={p.days}
+                        style={[s.depChip, on && s.depChipOn]}
+                        onPress={() => { tapBuzz(); setDepDaysText(String(p.days)); }}
+                      >
+                        <Text style={[s.depChipText, on && s.depChipTextOn]}>{p.label}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
               </View>
             </View>
@@ -802,11 +816,18 @@ export default function ConverterScreen() {
                   selectionColor={D.resetBg}
                 />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.depChipsRow}>
-                  {TAX_RATE_PRESETS.map((r) => (
-                    <Pressable key={r} style={s.depChip} onPress={() => { tapBuzz(); setTaxRateText(String(r)); }}>
-                      <Text style={s.depChipText}>{fmtPct(r)}</Text>
-                    </Pressable>
-                  ))}
+                  {TAX_RATE_PRESETS.map((r) => {
+                    const on = parseRaw(taxRateText) === r;
+                    return (
+                      <Pressable
+                        key={r}
+                        style={[s.depChip, on && s.depChipOn]}
+                        onPress={() => { tapBuzz(); setTaxRateText(String(r)); }}
+                      >
+                        <Text style={[s.depChipText, on && s.depChipTextOn]}>{fmtPct(r)}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
               </View>
             </View>
@@ -991,6 +1012,10 @@ const s = StyleSheet.create({
   depChipsRow: { flexDirection: 'row', gap: 2 },
   depChip: { paddingHorizontal: tokens.spacing.tight, paddingVertical: tokens.spacing.chip, borderRadius: tokens.radius.pill, backgroundColor: tokens.surface.neutral },
   depChipText: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: 'Onest_400Regular', color: tokens.text.secondary },
+  // Выбранный шаблон: без подсветки список читается как «ничего не выбрано»,
+  // хотя значение в поле ровно из него.
+  depChipOn: { backgroundColor: tokens.accent.base },
+  depChipTextOn: { fontFamily: 'Onest_600SemiBold', color: tokens.text.inverse },
 
   depResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: tokens.spacing.tight, marginTop: tokens.spacing.xl, marginBottom: tokens.spacing.md },
   depResultTitle: { fontSize: tokens.typography.title, lineHeight: tokens.typography.title + 2, fontFamily: 'Onest_600SemiBold', color: tokens.text.primary, letterSpacing: -0.2 },
