@@ -18,6 +18,13 @@ export interface HeroState {
   label: string;
   /** Цвет точки перед эпитетом — та же шкала, но видна боковым зрением. */
   tone: string;
+  /**
+   * День события (выплата или завершение срока) — третье состояние из спеки
+   * поля. Поле вспыхивает, а герой говорит про СОБЫТИЕ, а не про обычный день:
+   * дневной доход уезжает вниз мелким. Эпитет в этот день не показываем —
+   * он описывает фон, а на фоне сегодня праздник.
+   */
+  celebration: boolean;
 }
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
@@ -62,6 +69,8 @@ export function heroState(args: {
   freeCapital: number;
   /** Средняя ставка минус ключевая, в процентных пунктах. */
   premiumToKeyRate: number;
+  /** Событие СЕГОДНЯ: выплата процентов или окончание срока. */
+  eventToday?: 'payout' | 'maturity' | null;
 }): HeroState {
   const { incomePerDay, daily, assetCount, workingCapital, freeCapital, premiumToKeyRate } = args;
 
@@ -89,9 +98,26 @@ export function heroState(args: {
   // ощущаются живее одного даже в самый обычный день.
   const breadth = Math.min(1, assetCount / 5);
 
-  const intensity = Math.min(1, Math.max(0.18, 0.22 + 0.55 * vitality + 0.16 * boost + 0.10 * breadth));
-  const warmth = Math.min(1, Math.max(0, 0.08 + 0.72 * vitality + 0.20 * boost));
+  // Потолок обычного дня НИЖЕ единицы намеренно: иначе на «полном ходу» поле
+  // упирается в максимум, и в день события расти уже некуда — третье состояние
+  // из спеки выглядело бы ровно как хороший вторник. Запас сверху
+  // зарезервирован за праздником, см. ветку celebration ниже.
+  const intensity = Math.min(0.86, Math.max(0.18, 0.22 + 0.55 * vitality + 0.16 * boost + 0.10 * breadth));
+  const warmth = Math.min(0.82, Math.max(0, 0.08 + 0.72 * vitality + 0.20 * boost));
   const tier = EPITHETS.find((e) => vitality < e.upTo)!;
 
-  return { intensity, warmth, label: tier.label, tone: tier.tone };
+  // День события перебивает обычную шкалу: поле уходит почти на максимум по
+  // обоим параметрам — это единственный день, когда оно заметно отличается от
+  // вчерашнего, и отличие должно читаться с порога, а не угадываться.
+  if (args.eventToday === 'payout' || args.eventToday === 'maturity') {
+    return {
+      intensity: 1,
+      warmth: 0.97,
+      label: tier.label,
+      tone: tier.tone,
+      celebration: true,
+    };
+  }
+
+  return { intensity, warmth, label: tier.label, tone: tier.tone, celebration: false };
 }

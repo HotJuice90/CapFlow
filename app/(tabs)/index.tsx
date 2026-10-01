@@ -52,7 +52,7 @@ import type { AssetView, Goal } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
-import { tapBuzz } from '@/lib/haptics';
+import { tapBuzz, successBuzz } from '@/lib/haptics';
 import { limitEta, limitEtaUntil } from '@/lib/taxLimit';
 import { statusBarVeil, veilForOffset } from '@/lib/statusBarVeil';
 import { t } from '@/i18n';
@@ -235,6 +235,12 @@ export default function HomeScreen() {
   const grouped = useMemo(() => groupByInstrumentType(data), [data]);
   const runRate = useMemo(() => incomeRunRateSeries(data, 30), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
+  const nearestEvent = useMemo(() => nearestEventOf(data), [data]);
+  // Событие СЕГОДНЯ (кроме просрочки — она не праздник, а повод действовать):
+  // герой переключается на него, поле вспыхивает. См. heroState → celebration.
+  const heroEvent = nearestEvent && nearestEvent.daysRemaining === 0 && nearestEvent.kind !== 'overdue'
+    ? nearestEvent
+    : null;
   const hero = useMemo(
     () =>
       heroState({
@@ -244,9 +250,20 @@ export default function HomeScreen() {
         workingCapital: summary.workingCapital,
         freeCapital: freeCapitalBalance(data),
         premiumToKeyRate: summary.premiumToKeyRate,
+        eventToday: heroEvent ? (heroEvent.kind as 'payout' | 'maturity') : null,
       }),
-    [summary, runRate, views.length, data],
+    [summary, runRate, views.length, data, heroEvent],
   );
+  // Праздник «отмечаем» один раз за запуск: useFocusEffect иначе бьёт хаптикой
+  // на каждый возврат с другой вкладки.
+  const celebrated = useRef<string | null>(null);
+  useEffect(() => {
+    if (!heroEvent) return;
+    if (celebrated.current === heroEvent.date) return;
+    celebrated.current = heroEvent.date;
+    successBuzz();
+  }, [heroEvent]);
+
   const liq = useMemo(() => liquidity(data), [data]);
   const liqTotal = liq.liquid + liq.frozen;
   const liqLiquidShare = liqTotal > 0 ? liq.liquid / liqTotal : 0;
@@ -265,7 +282,6 @@ export default function HomeScreen() {
    * у бессрочного портфеля их не бывает вовсе, а начисление процентов —
    * тоже событие, просто за ним не следует обязательного действия.
    */
-  const nearestEvent = useMemo(() => nearestEventOf(data), [data]);
   const idle = useMemo(() => idleCapital(data), [data]);
   // Просроченное — единственное, что требует действия, поэтому и цветом
   // отличается от спокойных «скоро выплата» / «скоро конец срока».
@@ -436,16 +452,42 @@ export default function HomeScreen() {
                 доход разложен по дням, и это единственный вопрос, который
                 возникает к цифре («а дальше сколько?»). */}
             {hasAssets ? (
-              <Pressable style={styles.heroMain} onPress={() => router.push('/calendar')}>
-                <Text style={styles.heroLabel}>Сегодня принесёт</Text>
-                <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
-                  +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
-                </Text>
-                <View style={styles.heroStatusRow}>
-                  <View style={[styles.heroStatusDot, { backgroundColor: hero.tone }]} />
-                  <Text style={styles.heroStatus}>{hero.label}</Text>
-                </View>
-              </Pressable>
+              heroEvent ? (
+                /* Третье состояние поля из спеки: в день события герой говорит
+                   про СОБЫТИЕ, а обычный дневной доход уезжает вниз мелким —
+                   он никуда не делся, просто сегодня не он главный. */
+                <Pressable style={styles.heroMain} onPress={() => router.push(`/asset/${heroEvent.assetId}`)}>
+                  <Text style={styles.heroEventTitle} numberOfLines={2}>
+                    {heroEvent.kind === 'maturity'
+                      ? `«${heroEvent.name}» завершился`
+                      : `«${heroEvent.name}» принёс доход`}
+                  </Text>
+                  <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                    +{formatMoney(heroEvent.amount, { currency: heroEvent.currency, kopecks: 'hide' })}
+                  </Text>
+                  <View style={styles.heroCta}>
+                    <Text style={styles.heroCtaText}>
+                      {heroEvent.kind === 'maturity' ? 'Можно переложить' : 'Открыть актив'}
+                    </Text>
+                    <MaterialIcons name="arrow-forward" size={15} color={tokens.accent.base} />
+                  </View>
+                  <Text style={styles.heroDemotedLabel}>Сегодня принесёт</Text>
+                  <Text style={styles.heroDemotedValue}>
+                    +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable style={styles.heroMain} onPress={() => router.push('/calendar')}>
+                  <Text style={styles.heroLabel}>Сегодня принесёт</Text>
+                  <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                    +{formatMoney(summary.incomePerDay, { currency: cur, kopecks: 'hide' })}
+                  </Text>
+                  <View style={styles.heroStatusRow}>
+                    <View style={[styles.heroStatusDot, { backgroundColor: hero.tone }]} />
+                    <Text style={styles.heroStatus}>{hero.label}</Text>
+                  </View>
+                </Pressable>
+              )
             ) : null}
 
           </View>
@@ -479,7 +521,7 @@ export default function HomeScreen() {
                 портфеля их не бывает вовсе и строка пустовала бы всегда.
                 Подпись разная нарочно — за выплатой, в отличие от срока,
                 никакого обязательного действия не следует. */}
-            {nearestEvent ? (
+            {nearestEvent && !heroEvent ? (
               <Pressable
                 style={[styles.heroEventPill, nearestEvent.kind === 'overdue' && styles.heroEventPillAlert]}
                 onPress={() => router.push(`/asset/${nearestEvent.assetId}`)}
@@ -521,6 +563,13 @@ export default function HomeScreen() {
                           : 'Выплата процентов'}
                     </Text>
                     <Text style={styles.heroEventName} numberOfLines={1}>{nearestEvent.name}</Text>
+                    {nearestEvent.amount > 0.5 ? (
+                      <Text style={styles.heroEventAmount} numberOfLines={1}>
+                        {nearestEvent.kind === 'payout' ? '+' : ''}
+                        {formatMoney(nearestEvent.amount, { currency: nearestEvent.currency, kopecks: 'hide' })}
+                        {nearestEvent.kind === 'payout' ? '' : ' освободится'}
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={styles.heroEventWhen}>
                     <Text style={[styles.heroEventDate, { color: eventTone }]}>
@@ -1013,6 +1062,24 @@ const styles = StyleSheet.create({
     marginTop: 6,
     letterSpacing: -1,
   },
+  heroEventTitle: {
+    fontSize: tokens.typography.label,
+    lineHeight: tokens.typography.label + 4,
+    fontFamily: font.medium,
+    color: tokens.text.secondary,
+    textAlign: 'center',
+  },
+  heroCta: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: tokens.spacing.md,
+    backgroundColor: hexToRgba(tokens.surface.white, 0.72),
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.tight,
+    boxShadow: tokens.shadow.subtle,
+  },
+  heroCtaText: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.semibold, color: tokens.accent.base },
+  heroDemotedLabel: { fontSize: tokens.typography.hint, lineHeight: 15, fontFamily: font.medium, color: tokens.text.tertiary, marginTop: tokens.spacing.xl },
+  heroDemotedValue: { fontSize: 17, lineHeight: 21, fontFamily: font.semibold, color: tokens.text.secondary, marginTop: 2 },
   heroStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   heroStatusDot: { width: 6, height: 6, borderRadius: 3 },
   heroStatus: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.medium, color: tokens.text.secondary },
@@ -1081,6 +1148,7 @@ const styles = StyleSheet.create({
   heroEventRingIcon: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   heroEventLabel: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: font.regular, color: tokens.text.tertiary },
   heroEventName: { fontSize: tokens.typography.labelLg, lineHeight: tokens.typography.labelLg + 2, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 2 },
+  heroEventAmount: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.medium, color: tokens.text.secondary, marginTop: 2 },
   heroEventWhen: { alignItems: 'flex-end' },
   heroEventDate: { fontSize: tokens.typography.labelLg, lineHeight: tokens.typography.labelLg + 2, fontFamily: font.semibold, color: tokens.accent.base },
   heroEventDays: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 1 },

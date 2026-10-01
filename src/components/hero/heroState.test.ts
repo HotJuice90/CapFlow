@@ -30,6 +30,21 @@ describe('heroState', () => {
     expect(heroState({ ...base, premiumToKeyRate: 4 }).label).toBe('На полном ходу');
   });
 
+  it('день события поднимает поле выше любого обычного дня', () => {
+    // Сравниваем с САМЫМ живым обычным состоянием: праздник должен быть ярче
+    // даже его, иначе в хороший день разницу не заметить.
+    const best = heroState({ ...base, premiumToKeyRate: 4, incomePerDay: 2000 });
+    const payout = heroState({ ...base, eventToday: 'payout' });
+    expect(payout.celebration).toBe(true);
+    expect(payout.intensity).toBeGreaterThan(best.intensity);
+    expect(payout.warmth).toBeGreaterThan(best.warmth);
+  });
+
+  it('просрочка — не праздник: обычный день без вспышки', () => {
+    expect(heroState({ ...base, eventToday: null }).celebration).toBe(false);
+    expect(heroState(base).celebration).toBe(false);
+  });
+
   it('эпитет не скачет от разового всплеска дохода', () => {
     const spike = heroState({ ...base, incomePerDay: 2000 });
     expect(spike.label).toBe(heroState(base).label);
