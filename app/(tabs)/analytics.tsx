@@ -16,7 +16,6 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { ScreenTitle } from '@/components/ScreenTitle';
-import { MoneyFlow } from '@/components/MoneyFlow';
 import { Card } from '@/components/Card';
 import { boxShadow } from '@/theme/shadow';
 import { OrgLogo } from '@/components/BankLogo';
@@ -331,11 +330,9 @@ export default function AnalyticsScreen() {
                   </View>
                 ) : null}
               </View>
-              <MoneyFlow
-                value={summary.totalCapital + freeCapital}
-                options={{ currency: cur }}
-                style={styles.heroValue}
-              />
+              <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatMoney(summary.totalCapital + freeCapital, { currency: cur })}
+              </Text>
             </View>
 
             {/* Свайп по графику и чипы ниже переключают одно состояние.

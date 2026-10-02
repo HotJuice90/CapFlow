@@ -5,7 +5,6 @@ import type { CurrencyCode } from '@/domain/types';
 import type { MonthIncomeYear } from '@/state/selectors';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
-import { MoneyFlow } from './MoneyFlow';
 import { tapBuzz } from '@/lib/haptics';
 
 const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -200,13 +199,9 @@ export function MonthlyIncomeChart({
           </View>
 
           {/* Чистыми — результат, доход и налог под ним слагаемые. */}
-          {/* Единственное место, где перекат реально видно: число меняется
-              от тапа по месяцу, а не раз в сутки. */}
-          <MoneyFlow
-            value={row.earned - row.taxWithLimit}
-            options={{ currency, kopecks: 'hide' }}
-            style={styles.netValue}
-          />
+          <Text style={styles.netValue} numberOfLines={1}>
+            {formatMoney(row.earned - row.taxWithLimit, { currency, kopecks: 'hide' })}
+          </Text>
           <Text style={styles.netLabel}>Чистыми</Text>
 
           <View style={styles.detailRow}>
