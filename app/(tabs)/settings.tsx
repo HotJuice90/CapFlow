@@ -125,6 +125,8 @@ export default function SettingsScreen() {
           <Divider />
           <SettingsRow icon="layers" color="#21A038" label="Фин. инструменты" onPress={() => router.push('/catalog/instruments')} />
           <Divider />
+          <SettingsRow icon="event-available" color={tokens.category.savings} label="Когда открывать счёт" onPress={() => router.push('/catalog/bank-timing' as never)} />
+          <Divider />
           <SettingsRow icon="archive" color={tokens.accent.base} label="Архив активов" onPress={() => router.push('/archive')} />
           <Divider />
           <SettingsRow icon="flag" color={tokens.semantic.positive} label="Цели" onPress={() => router.push('/settings/goals')} />

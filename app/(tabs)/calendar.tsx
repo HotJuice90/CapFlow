@@ -316,6 +316,24 @@ export default function CalendarScreen() {
                 <Text style={styles.dayEmpty}>На эту дату нет активных инструментов</Text>
               )}
             </Card>
+
+            {/* Памятка по срокам открытия/закрытия НС. Живёт в Каталоге, но
+                вопрос «какое сегодня число и что с ним делать» — календарный,
+                поэтому ссылка стоит и здесь. */}
+            <Pressable style={styles.timingLink} onPress={() => router.push('/catalog/bank-timing' as never)}>
+              <Card style={styles.softShadow}>
+                <View style={styles.timingRow}>
+                  <View style={styles.timingIcon}>
+                    <MaterialCommunityIcons name="calendar-check-outline" size={18} color={tokens.category.savings} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.timingTitle}>Когда открывать счёт</Text>
+                    <Text style={styles.timingHint} numberOfLines={1}>Сроки открытия, выплат и закрытия</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={18} color={tokens.text.tertiary} />
+                </View>
+              </Card>
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -522,6 +540,15 @@ const styles = StyleSheet.create({
   dayHeaderSub: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   negative: { color: tokens.semantic.negative },
 
+  timingLink: { marginTop: tokens.spacing.md },
+  timingRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  timingIcon: {
+    width: 32, height: 32, borderRadius: tokens.radius.sm,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: hexToRgba(tokens.category.savings, 0.12),
+  },
+  timingTitle: { fontSize: tokens.typography.labelLg, lineHeight: 17, fontWeight: '600', color: tokens.text.primary },
+  timingHint: { fontSize: tokens.typography.hint, lineHeight: 16, color: tokens.text.tertiary, marginTop: 2 },
   dayEmpty: { fontSize: tokens.typography.label, color: tokens.text.tertiary, padding: tokens.spacing.lg, textAlign: 'center' },
   dayList: { paddingHorizontal: 16, paddingTop: tokens.spacing.tight, paddingBottom: 8 },
 
