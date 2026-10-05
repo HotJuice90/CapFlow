@@ -32,16 +32,17 @@ const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн',
  * Экран отвечает на один вопрос, и вёрстка идёт в порядке ответа:
  *  1. Герой прямо на фоне — сколько дней до окна и линейка месяца, где видно,
  *     где ты сейчас и где окно. Без своей плашки: это ответ, а не блок.
- *  2. Ось «31-е | 1-е» с банками по сторонам. Колонки зеркальные — лого стоят
- *     вдоль оси, как позвонки, и линия читается как граница, а не как
- *     разделитель двух таблиц. Ось — ГРАНИЦА без данных: строки по сторонам
- *     не парные, и содержимое в центре читали бы как связь между соседями.
+ *  2. Ось «последний день | 1-е число» с банками по сторонам. Ось — ГРАНИЦА
+ *     без данных: строки по сторонам не парные, и содержимое в центре читали
+ *     бы как связь между соседями. Лого в карточках всегда слева, в обеих
+ *     колонках: зеркальная раскладка (лого вдоль оси) читалась хуже.
  *  3. Банки «в любой день» — той же карточкой, сеткой.
  *  4. Правила — заголовком вперёд.
  *
  * Свои площадки не вынесены отдельным блоком, а подсвечены на месте и подняты
  * в начало своей группы: так сразу видно не только «что у меня», но и «где
- * мои банки относительно оси».
+ * мои банки относительно оси». Подсветка — только фоном и тенью: бейдж-галочка
+ * и обводка поверх этого были лишним третьим и четвёртым сигналом.
  */
 export default function BankTimingScreen() {
   const insets = useSafeAreaInsets();
@@ -122,29 +123,23 @@ export default function BankTimingScreen() {
           <MonthRuler day={day} daysInMonth={daysInMonth} month={month} />
         </View>
 
-        <View style={st.sectionHead}>
-          <Text style={st.sectionTitle}>Когда открыть счёт</Text>
-          {mine.size > 0 ? (
-            <View style={st.legend}>
-              <OwnBadge />
-              <Text style={st.legendText}>твои — первыми</Text>
-            </View>
-          ) : null}
-        </View>
+        <Text style={[st.sectionTitle, st.sectionHead]}>Когда открыть счёт</Text>
 
-        {/* Ось. Даты в шапках колонок — те же, что в герое: шапка сразу
-            отвечает «когда», и подписи «в последний день месяца» не нужны. */}
+        {/* Ось. В шапках — правило, а не дата: конкретные числа уже в герое,
+            а «31 октября» над колонкой читалось бы как «только в этот день
+            этого месяца». «Конец месяца» тоже не годится — для левых банков
+            важен именно последний день: открыв 28-го, теряешь неполный месяц. */}
         <View>
           <View style={st.axisLine} />
           <View style={st.axisHead}>
-            <Text style={[st.axisDate, st.alignRight]} numberOfLines={1}>{formatDateShort(lastDay)}</Text>
+            <Text style={[st.axisDate, st.alignRight]} numberOfLines={1}>Последний день</Text>
             <View style={st.axisNode} />
-            <Text style={st.axisDate} numberOfLines={1}>с {formatDateShort(firstDay)}</Text>
+            <Text style={st.axisDate} numberOfLines={1}>С 1-го числа</Text>
           </View>
           <View style={st.axisCols}>
             <View style={st.axisCol}>
               {left.map((t) => (
-                <BankCard key={t.name} t={t} own={mine.get(t.name)} mirrored onPress={() => open(t)} />
+                <BankCard key={t.name} t={t} own={mine.get(t.name)} onPress={() => open(t)} />
               ))}
             </View>
             <View style={st.axisCol}>
@@ -249,36 +244,28 @@ function MonthRuler({ day, daysInMonth, month }: { day: number; daysInMonth: num
  * приглушённом тоне, а не в «фирменном» цвете: выдумывать брендбук 30 банкам,
  * для которых у нас нет лого, хуже, чем честно показать букву.
  */
-function BankCard({
-  t, own, mirrored, onPress,
-}: {
-  t: BankTiming; own?: Organization; mirrored?: boolean; onPress: () => void;
-}) {
+function BankCard({ t, own, onPress }: { t: BankTiming; own?: Organization; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         st.bank,
         own ? [st.bankOwn, boxShadow(tokens.shadow.subtle)] : st.bankOther,
-        mirrored && st.bankMirrored,
         pressed && st.pressed,
       ]}
     >
-      <View>
-        {own ? (
-          <OrgLogo color={own.color} logo={own.logo} imageUri={own.customImageUri} size={30} radius={9} />
-        ) : t.bankId ? (
-          <OrgLogo color={tokens.accent.base} logo={t.bankId} size={30} radius={9} />
-        ) : (
-          <View style={st.mono}>
-            <Text style={st.monoText}>{brandOf(t).charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
-        {own ? <View style={st.ownBadgePos}><OwnBadge /></View> : null}
-      </View>
+      {own ? (
+        <OrgLogo color={own.color} logo={own.logo} imageUri={own.customImageUri} size={30} radius={9} />
+      ) : t.bankId ? (
+        <OrgLogo color={tokens.accent.base} logo={t.bankId} size={30} radius={9} />
+      ) : (
+        <View style={st.mono}>
+          <Text style={st.monoText}>{brandOf(t).charAt(0).toUpperCase()}</Text>
+        </View>
+      )}
       <View style={st.bankText}>
         <Text
-          style={[st.bankName, own && st.bankNameOwn, mirrored && st.alignRight]}
+          style={[st.bankName, own && st.bankNameOwn]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.75}
@@ -287,7 +274,7 @@ function BankCard({
         </Text>
         {t.product ? (
           <Text
-            style={[st.bankProduct, mirrored && st.alignRight]}
+            style={st.bankProduct}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.8}
@@ -297,14 +284,6 @@ function BankCard({
         ) : null}
       </View>
     </Pressable>
-  );
-}
-
-function OwnBadge() {
-  return (
-    <View style={st.ownBadge}>
-      <MaterialCommunityIcons name="check" size={9} color={tokens.text.inverse} />
-    </View>
   );
 }
 
@@ -346,18 +325,9 @@ const st = StyleSheet.create({
   rulerLabelWindow: { color: tokens.accent.base },
 
   // --- Секции ---
-  sectionHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 48,
-    marginBottom: 14,
-    paddingLeft: 8,
-  },
+  sectionHead: { marginTop: 48, marginBottom: 14, paddingLeft: 8 },
   sectionTitle: { fontSize: tokens.typography.title, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary },
   sectionGap: { marginTop: 40, marginBottom: 14, paddingLeft: 8 },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendText: { fontSize: tokens.typography.hint, lineHeight: 15, fontFamily: font.medium, color: tokens.text.tertiary },
 
   // --- Ось ---
   axisLine: {
@@ -386,13 +356,8 @@ const st = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 14,
   },
-  bankMirrored: { flexDirection: 'row-reverse' },
   bankOther: { backgroundColor: hexToRgba(tokens.surface.white, 0.6) },
-  bankOwn: {
-    backgroundColor: tokens.surface.white,
-    borderWidth: 1,
-    borderColor: hexToRgba(tokens.accent.base, 0.28),
-  },
+  bankOwn: { backgroundColor: tokens.surface.white },
   pressed: { opacity: 0.6 },
   bankText: { flex: 1, minWidth: 0 },
   bankName: { fontSize: tokens.typography.label, lineHeight: 17, fontFamily: font.medium, color: tokens.text.primary },
@@ -413,17 +378,6 @@ const st = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.accent.base, 0.1),
   },
   monoText: { fontSize: 13, lineHeight: 15, fontFamily: font.semibold, color: tokens.accent.deep },
-  ownBadgePos: { position: 'absolute', right: -4, bottom: -4 },
-  ownBadge: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: tokens.accent.base,
-    borderWidth: 1.5,
-    borderColor: tokens.surface.white,
-  },
 
   // --- Сетка «в любой день» ---
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
