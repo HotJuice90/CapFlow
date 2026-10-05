@@ -69,6 +69,28 @@ export default function BankTimingScreen() {
     return map;
   }, [data.organizations]);
 
+  /**
+   * Свои накопительные счета по площадкам — вторая строка своей карточки.
+   * Только НС и только открытые: памятка про накопительные счета, и вклад того
+   * же банка в этой строке выглядел бы так, будто правило касается и его.
+   */
+  const accounts = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const a of data.assets) {
+      if (a.status !== 'active') continue;
+      const inst = data.instruments.find((i) => i.id === a.instrumentId);
+      if (!inst || inst.typeId !== 'savings') continue;
+      const list = map.get(inst.organizationId) ?? [];
+      list.push(a.title || inst.name);
+      map.set(inst.organizationId, list);
+    }
+    return map;
+  }, [data.assets, data.instruments]);
+  const accountsOf = (t: BankTiming) => {
+    const o = mine.get(t.name);
+    return o ? accounts.get(o.id) : undefined;
+  };
+
   /** Свои — первыми, дальше порядок источника. */
   const ordered = (list: BankTiming[]) => [
     ...list.filter((t) => mine.has(t.name)),
@@ -139,12 +161,12 @@ export default function BankTimingScreen() {
           <View style={st.axisCols}>
             <View style={st.axisCol}>
               {left.map((t) => (
-                <BankCard key={t.name} t={t} own={mine.get(t.name)} onPress={() => open(t)} />
+                <BankCard key={t.name} t={t} own={mine.get(t.name)} accounts={accountsOf(t)} onPress={() => open(t)} />
               ))}
             </View>
             <View style={st.axisCol}>
               {right.map((t) => (
-                <BankCard key={t.name} t={t} own={mine.get(t.name)} onPress={() => open(t)} />
+                <BankCard key={t.name} t={t} own={mine.get(t.name)} accounts={accountsOf(t)} onPress={() => open(t)} />
               ))}
             </View>
           </View>
@@ -154,7 +176,7 @@ export default function BankTimingScreen() {
         <View style={st.grid}>
           {anyDay.map((t) => (
             <View key={t.name} style={st.gridCell}>
-              <BankCard t={t} own={mine.get(t.name)} onPress={() => open(t)} />
+              <BankCard t={t} own={mine.get(t.name)} accounts={accountsOf(t)} onPress={() => open(t)} />
             </View>
           ))}
         </View>
@@ -244,7 +266,15 @@ function MonthRuler({ day, daysInMonth, month }: { day: number; daysInMonth: num
  * приглушённом тоне, а не в «фирменном» цвете: выдумывать брендбук 30 банкам,
  * для которых у нас нет лого, хуже, чем честно показать букву.
  */
-function BankCard({ t, own, onPress }: { t: BankTiming; own?: Organization; onPress: () => void }) {
+function BankCard({
+  t, own, accounts, onPress,
+}: {
+  t: BankTiming; own?: Organization; accounts?: string[]; onPress: () => void;
+}) {
+  // На своей карточке вторая строка — твои счета: это ответ на «какие из моих
+  // денег подчиняются этому правилу». Продукт из памятки остаётся в шите.
+  const mineLine = !!accounts && accounts.length > 0;
+  const second = mineLine ? accounts.join(', ') : t.product;
   return (
     <Pressable
       onPress={onPress}
@@ -272,14 +302,16 @@ function BankCard({ t, own, onPress }: { t: BankTiming; own?: Organization; onPr
         >
           {brandOf(t)}
         </Text>
-        {t.product ? (
+        {second ? (
           <Text
-            style={st.bankProduct}
-            numberOfLines={1}
-            adjustsFontSizeToFit
+            style={[st.bankProduct, mineLine && st.bankAccounts]}
+            // Три-четыре счёта в одной строке узкой колонки ужались бы в нечитаемое —
+            // своим даём вторую строку, продукт из памятки всегда короткий.
+            numberOfLines={mineLine ? 2 : 1}
+            adjustsFontSizeToFit={!mineLine}
             minimumFontScale={0.8}
           >
-            {t.product}
+            {second}
           </Text>
         ) : null}
       </View>
@@ -369,6 +401,7 @@ const st = StyleSheet.create({
     color: tokens.text.tertiary,
     marginTop: 1,
   },
+  bankAccounts: { color: tokens.text.secondary },
   mono: {
     width: 30,
     height: 30,
