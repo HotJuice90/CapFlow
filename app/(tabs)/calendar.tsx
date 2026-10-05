@@ -319,20 +319,39 @@ export default function CalendarScreen() {
 
             {/* Памятка по срокам открытия/закрытия НС. Живёт в Каталоге, но
                 вопрос «какое сегодня число и что с ним делать» — календарный,
-                поэтому ссылка стоит и здесь. */}
-            <Pressable style={styles.timingLink} onPress={() => router.push('/catalog/bank-timing' as never)}>
-              <Card style={styles.softShadow}>
-                <View style={styles.timingRow}>
-                  <View style={styles.timingIcon}>
-                    <MaterialCommunityIcons name="calendar-check-outline" size={18} color={tokens.category.savings} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.timingTitle}>Когда открывать счёт</Text>
-                    <Text style={styles.timingHint} numberOfLines={1}>Сроки открытия, выплат и закрытия</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={tokens.text.tertiary} />
+                поэтому ссылка стоит и здесь.
+
+                Нарочно НЕ строка-навигация: это подсказка, а не функция экрана,
+                поэтому форма взята у инсайта в аналитике — тёплая плашка с
+                тегом, вотермаркой и без шеврона. Шеврон тут читался бы как
+                «ещё один раздел календаря». */}
+            <Pressable
+              style={({ pressed }) => [styles.timingCard, pressed && styles.timingPressed]}
+              onPress={() => router.push('/catalog/bank-timing' as never)}
+            >
+              <LinearGradient
+                colors={[hexToRgba(tokens.category.savings, 0.16), hexToRgba(tokens.category.savings, 0.05)]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.timingBg}
+              >
+                {/* Вотермарка вместо декоративной картинки: своего PNG под эту
+                    тему нет, а иконка в тон даёт ту же «несерьёзность» плашки. */}
+                <MaterialCommunityIcons
+                  name="calendar-month-outline"
+                  size={120}
+                  color={hexToRgba(tokens.category.savings, 0.10)}
+                  style={styles.timingWatermark}
+                />
+                <View style={styles.timingIcon}>
+                  <MaterialCommunityIcons name="calendar-check-outline" size={22} color={tokens.category.savings} />
                 </View>
-              </Card>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={styles.timingTag}><Text style={styles.timingTagText}>ПАМЯТКА</Text></View>
+                  <Text style={styles.timingTitle}>Когда открывать счёт</Text>
+                  <Text style={styles.timingHint}>Сроки открытия, выплат и закрытия</Text>
+                </View>
+              </LinearGradient>
             </Pressable>
           </>
         )}
@@ -540,15 +559,40 @@ const styles = StyleSheet.create({
   dayHeaderSub: { fontSize: tokens.typography.hint, color: hexToRgba(tokens.text.primary, 0.3), letterSpacing: -0.24 },
   negative: { color: tokens.semantic.negative },
 
-  timingLink: { marginTop: tokens.spacing.md },
-  timingRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  timingIcon: {
-    width: 32, height: 32, borderRadius: tokens.radius.sm,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: hexToRgba(tokens.category.savings, 0.12),
+  timingCard: { marginTop: tokens.spacing.xl },
+  timingPressed: { opacity: 0.7 },
+  timingBg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.md,
+    borderRadius: tokens.radius.lg,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingTop: tokens.spacing.md,
+    paddingBottom: tokens.spacing.lg,
+    overflow: 'hidden',
   },
-  timingTitle: { fontSize: tokens.typography.labelLg, lineHeight: 17, fontWeight: '600', color: tokens.text.primary },
-  timingHint: { fontSize: tokens.typography.hint, lineHeight: 16, color: tokens.text.tertiary, marginTop: 2 },
+  timingWatermark: { position: 'absolute', right: -18, top: -24 },
+  timingIcon: {
+    width: 44, height: 44, borderRadius: tokens.radius.md,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: hexToRgba(tokens.surface.white, 0.7),
+  },
+  timingTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: hexToRgba(tokens.category.savings, 0.08),
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: 8, paddingTop: 6, paddingBottom: 4,
+    marginBottom: 4,
+  },
+  timingTagText: { fontSize: 9, lineHeight: 11, fontFamily: font.regular, color: tokens.category.savings },
+  timingTitle: {
+    fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2,
+    fontFamily: font.semibold, color: tokens.text.primary,
+  },
+  timingHint: {
+    fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2,
+    fontFamily: font.regular, color: hexToRgba(tokens.text.primary, 0.4), marginTop: 6,
+  },
   dayEmpty: { fontSize: tokens.typography.label, color: tokens.text.tertiary, padding: tokens.spacing.lg, textAlign: 'center' },
   dayList: { paddingHorizontal: 16, paddingTop: tokens.spacing.tight, paddingBottom: 8 },
 
