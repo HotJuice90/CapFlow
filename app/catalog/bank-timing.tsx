@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,33 +11,37 @@ import { openBankTimingSheet } from '@/lib/bankTimingSheet';
 import { tapBuzz } from '@/lib/haptics';
 import {
   BANK_TIMING,
-  CLOSE_RULE,
-  MOVE_RULES,
-  OPEN_GROUPS,
+  RULES,
   TIMING_AS_OF,
+  brandOf,
   pluralPlatforms,
   timingForOrg,
   timingsBy,
   type BankTiming,
 } from '@/domain/bankTiming';
+import type { Organization } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
-import { formatDateFull, pluralDays } from '@/format/date';
+import { boxShadow } from '@/theme/shadow';
+import { formatDateFull, formatDateShort, pluralDays } from '@/format/date';
+
+const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 /**
- * «Когда открывать счёт» — памятка по срокам у 44 площадок.
+ * «Когда открывать счёт» — инфографика по срокам у 42 площадок.
  *
- * Главный вопрос у неё один: открывать до 1 числа или после. Поэтому главный
- * блок — вертикальная ось «1 число», а банки стоят по её сторонам. Ось именно
- * ГРАНИЦА, без данных: строки по сторонам не парные, и любое содержимое в
- * центре начали бы читать как связь между соседями, которой нет.
+ * Экран отвечает на один вопрос, и вёрстка идёт в порядке ответа:
+ *  1. Герой прямо на фоне — сколько дней до окна и линейка месяца, где видно,
+ *     где ты сейчас и где окно. Без своей плашки: это ответ, а не блок.
+ *  2. Ось «31-е | 1-е» с банками по сторонам. Колонки зеркальные — лого стоят
+ *     вдоль оси, как позвонки, и линия читается как граница, а не как
+ *     разделитель двух таблиц. Ось — ГРАНИЦА без данных: строки по сторонам
+ *     не парные, и содержимое в центре читали бы как связь между соседями.
+ *  3. Банки «в любой день» — той же карточкой, сеткой.
+ *  4. Правила — заголовком вперёд.
  *
- * Третья группа (период считается от даты открытия) ось ломает — она идёт
- * отдельным блоком чипами, и она же самая большая.
- *
- * Сверху — полоса текущего месяца: она превращает справочник в ответ «окно
- * открытия через N дней». Ниже — площадки пользователя: приложение знает, что
- * у него за банки, и строка про его собственный Газпромбанк полезнее тех же
- * сведений, найденных в списке из 44 названий.
+ * Свои площадки не вынесены отдельным блоком, а подсвечены на месте и подняты
+ * в начало своей группы: так сразу видно не только «что у меня», но и «где
+ * мои банки относительно оси».
  */
 export default function BankTimingScreen() {
   const insets = useSafeAreaInsets();
@@ -45,34 +49,55 @@ export default function BankTimingScreen() {
 
   const now = new Date();
   const day = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  // Окно — последний день месяца и следующее 1-е: обе стороны оси попадают в
-  // него, поэтому «до окна» считаем до последнего дня.
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const lastDay = new Date(year, month, daysInMonth);
+  // В сам день 1-го правая колонка открывается СЕГОДНЯ, а не через месяц.
+  const firstDay = day === 1 ? now : new Date(year, month + 1, 1);
   const toWindow = daysInMonth - day;
-  const inWindow = day === daysInMonth || day === 1;
 
-  /** Площадки пользователя, про которые памятка что-то знает. */
+  /** Имя записи памятки → площадка пользователя (для лого и подсветки). */
   const mine = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { name: string; color: string; logo?: string; imageUri?: string; timing: BankTiming }[] = [];
+    const map = new Map<string, Organization>();
     for (const o of data.organizations) {
       if (o.archived) continue;
-      const timing = timingForOrg(o);
-      if (!timing || seen.has(timing.name)) continue;
-      seen.add(timing.name);
-      out.push({ name: o.name, color: o.color, logo: o.logo, imageUri: o.customImageUri, timing });
+      const t = timingForOrg(o);
+      if (t && !map.has(t.name)) map.set(t.name, o);
     }
-    return out;
+    return map;
   }, [data.organizations]);
 
-  const left = timingsBy('lastDay');
-  const right = timingsBy('firstDay');
-  const anyDay = timingsBy('anyDay');
+  /** Свои — первыми, дальше порядок источника. */
+  const ordered = (list: BankTiming[]) => [
+    ...list.filter((t) => mine.has(t.name)),
+    ...list.filter((t) => !mine.has(t.name)),
+  ];
+  const left = ordered(timingsBy('lastDay'));
+  const right = ordered(timingsBy('firstDay'));
+  const anyDay = ordered(timingsBy('anyDay'));
 
   const open = (t: BankTiming) => {
     tapBuzz();
     openBankTimingSheet(t.name);
   };
+
+  // --- Герой ---
+  let heroLabel = 'До окна открытия';
+  let heroNumber = String(toWindow);
+  let heroUnit: string | null = pluralDays(toWindow);
+  let heroSub = `${formatDateShort(lastDay)} и ${formatDateShort(firstDay)}`;
+  if (day === daysInMonth) {
+    heroLabel = 'Окно открыто';
+    heroNumber = 'Сегодня';
+    heroUnit = null;
+    heroSub = 'Последний день месяца — время для банков слева';
+  } else if (day === 1) {
+    heroLabel = 'Окно открыто';
+    heroNumber = 'Сегодня';
+    heroUnit = null;
+    heroSub = 'Первое число — время для банков справа';
+  }
 
   return (
     <ScreenBackground>
@@ -84,253 +109,351 @@ export default function BankTimingScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <SubHeader title="Когда открывать" />
+        <SubHeader title="Когда открывать счёт" />
 
-        {/* Полоса месяца. Прогресс-заливки намеренно нет: на дорожке уже две
-            метки — «сегодня» и окно, — а третий слой делал бы из ответа
-            диаграмму. */}
-        <Card>
-          <Text style={st.stripLabel}>{inWindow ? 'Окно открытия' : 'До окна открытия'}</Text>
-          <Text style={[st.stripValue, inWindow && { color: tokens.accent.base }]}>
-            {inWindow ? 'сегодня' : `${toWindow} ${pluralDays(toWindow)}`}
-          </Text>
+        <View style={st.hero}>
+          <Text style={st.heroLabel}>{heroLabel}</Text>
+          <View style={st.heroNumberRow}>
+            <Text style={st.heroNumber}>{heroNumber}</Text>
+            {heroUnit ? <Text style={st.heroUnit}>{heroUnit}</Text> : null}
+          </View>
+          <Text style={st.heroSub}>{heroSub}</Text>
 
-          <View style={st.strip}>
-            <View style={st.track}>
-              <View style={[st.window, { width: `${100 / daysInMonth}%` }]} />
-              <View
-                style={[
-                  st.today,
-                  // Крайние дни упёрлись бы точкой в торец дорожки — поджимаем,
-                  // чтобы она осталась целиком видимой.
-                  { left: `${Math.min(97, Math.max(1, ((day - 0.5) / daysInMonth) * 100))}%` },
-                ]}
-              />
+          <MonthRuler day={day} daysInMonth={daysInMonth} month={month} />
+        </View>
+
+        <View style={st.sectionHead}>
+          <Text style={st.sectionTitle}>Когда открыть счёт</Text>
+          {mine.size > 0 ? (
+            <View style={st.legend}>
+              <OwnBadge />
+              <Text style={st.legendText}>твои — первыми</Text>
             </View>
-            <View style={st.boundary} />
-            <View style={st.nextCell} />
-          </View>
-          <View style={st.stripAxis}>
-            <Text style={st.stripTick}>1-е</Text>
-            <Text style={st.stripTick}>
-              {daysInMonth}-е · 1-е
-            </Text>
-          </View>
-        </Card>
+          ) : null}
+        </View>
 
-        {mine.length > 0 ? (
-          <>
-            <Text style={st.section}>Твои площадки</Text>
-            <Card padded={false}>
-              <View style={st.mineInner}>
-                {mine.map((m, i) => (
-                  <Pressable
-                    key={m.timing.name}
-                    style={[st.mineRow, i > 0 && st.mineRowNext]}
-                    onPress={() => open(m.timing)}
-                  >
-                    <OrgLogo color={m.color} logo={m.logo} imageUri={m.imageUri} size={32} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={st.mineName} numberOfLines={1}>{m.name}</Text>
-                      <Text style={st.mineHint} numberOfLines={1}>
-                        Открывать {groupTitle(m.timing)}
-                      </Text>
-                    </View>
-                    <MaterialCommunityIcons name="chevron-right" size={18} color={tokens.text.tertiary} />
-                  </Pressable>
-                ))}
-              </View>
-            </Card>
-          </>
-        ) : null}
-
-        <Text style={st.section}>Открывать счёт</Text>
-        <Card>
-          {/* Ось. Подписи групп стоят по своим сторонам и сами объясняют чип —
-              отдельная легенда была бы третьим прочтением одного и того же. */}
-          <View style={st.axisChipRow}>
-            <View style={st.axisChip}>
-              <Text style={st.axisChipText}>1 число</Text>
+        {/* Ось. Даты в шапках колонок — те же, что в герое: шапка сразу
+            отвечает «когда», и подписи «в последний день месяца» не нужны. */}
+        <View>
+          <View style={st.axisLine} />
+          <View style={st.axisHead}>
+            <Text style={[st.axisDate, st.alignRight]} numberOfLines={1}>{formatDateShort(lastDay)}</Text>
+            <View style={st.axisNode} />
+            <Text style={st.axisDate} numberOfLines={1}>с {formatDateShort(firstDay)}</Text>
+          </View>
+          <View style={st.axisCols}>
+            <View style={st.axisCol}>
+              {left.map((t) => (
+                <BankCard key={t.name} t={t} own={mine.get(t.name)} mirrored onPress={() => open(t)} />
+              ))}
+            </View>
+            <View style={st.axisCol}>
+              {right.map((t) => (
+                <BankCard key={t.name} t={t} own={mine.get(t.name)} onPress={() => open(t)} />
+              ))}
             </View>
           </View>
-          <View style={st.axisBody}>
-            <View style={st.axisLine} />
-            <View style={st.axisCols}>
-              <View style={st.colLeft}>
-                <Text style={[st.colTitle, st.alignRight]}>в последний{'\n'}день месяца</Text>
-                {left.map((t) => (
-                  <Pressable key={t.name} onPress={() => open(t)} style={st.nameHit}>
-                    <Text style={[st.name, st.alignRight]} numberOfLines={1}>{t.name}</Text>
-                  </Pressable>
-                ))}
+        </View>
+
+        <Text style={[st.sectionTitle, st.sectionGap]}>В любой день</Text>
+        <View style={st.grid}>
+          {anyDay.map((t) => (
+            <View key={t.name} style={st.gridCell}>
+              <BankCard t={t} own={mine.get(t.name)} onPress={() => open(t)} />
+            </View>
+          ))}
+        </View>
+
+        <Text style={[st.sectionTitle, st.sectionGap]}>Как не потерять проценты</Text>
+        <Card>
+          {RULES.map((r, i) => (
+            <View key={r.title} style={[st.rule, i > 0 && st.ruleNext]}>
+              <View style={st.ruleIcon}>
+                <MaterialCommunityIcons name={r.icon as never} size={18} color={tokens.accent.base} />
               </View>
-              <View style={st.colRight}>
-                <Text style={st.colTitle}>с 1-го{'\n'}числа</Text>
-                {right.map((t) => (
-                  <Pressable key={t.name} onPress={() => open(t)} style={st.nameHit}>
-                    <Text style={st.name} numberOfLines={1}>{t.name}</Text>
-                  </Pressable>
-                ))}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={st.ruleTitle}>{r.title}</Text>
+                <Text style={st.ruleText}>{r.text}</Text>
               </View>
             </View>
-          </View>
+          ))}
         </Card>
 
-        <Text style={st.section}>Можно в любой день</Text>
-        <Card>
-          <Text style={st.groupHint}>{OPEN_GROUPS[2].hint}</Text>
-          <View style={st.chips}>
-            {anyDay.map((t) => (
-              <Pressable key={t.name} style={st.chip} onPress={() => open(t)}>
-                {t.bankId ? <OrgLogo color={tokens.accent.base} logo={t.bankId} size={16} variant="bare" /> : null}
-                <Text style={st.chipText}>{t.name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Card>
-
-        <Text style={st.section}>Правила</Text>
-        <Card>
-          <Rule icon="close-circle-outline" tint={tokens.value.outflow} title="Закрытие" text={CLOSE_RULE} />
-          <View style={st.ruleSep} />
-          <Rule
-            icon="swap-vertical"
-            tint={tokens.accent.base}
-            title="Пополнение и вывод"
-            text={MOVE_RULES.map((r) => `• ${r}`).join('\n')}
-          />
-          <View style={st.ruleSep} />
-          <Rule
-            icon="information-outline"
-            tint={tokens.text.tertiary}
-            title="Откуда данные"
-            text={`Памятка на ${formatDateFull(TIMING_AS_OF)} — ${BANK_TIMING.length} ${pluralPlatforms(BANK_TIMING.length)}. Это сводка, а не условия договора: банки меняют правила, а список обновляется вместе с приложением. Перед открытием счёта сверяйся с тарифами банка.`}
-          />
-        </Card>
+        <Text style={st.footnote}>
+          Памятка на {formatDateFull(TIMING_AS_OF)} · {BANK_TIMING.length} {pluralPlatforms(BANK_TIMING.length)}
+          {'\n'}Это сводка, а не условия договора — перед открытием сверяйся с тарифами банка.
+        </Text>
       </ScrollView>
     </ScreenBackground>
   );
 }
 
-function groupTitle(t: BankTiming): string {
-  return OPEN_GROUPS.find((g) => g.key === t.openWhen)!.title;
-}
+/**
+ * Линейка месяца: штрих на каждый день + 1-е следующего месяца за границей.
+ * Прошедшие дни темнее будущих, «сегодня» — тёмный штрих с подписью, окно —
+ * два высоких штриха в акценте по обе стороны границы месяца. Дорожка с
+ * точкой отвечала на тот же вопрос, но не давала почувствовать масштаб —
+ * сколько дней ещё впереди.
+ */
+function MonthRuler({ day, daysInMonth, month }: { day: number; daysInMonth: number; month: number }) {
+  const [w, setW] = useState(0);
+  const n = daysInMonth + 1;
+  const cell = w / n;
+  const LABEL_W = 64;
+  // Подпись «сегодня» центрируется над штрихом, но у краёв прижимается к ним —
+  // иначе 1-го и 2-го числа она уезжала бы за экран.
+  const todayLeft = Math.min(Math.max(0, (day - 0.5) * cell - LABEL_W / 2), Math.max(0, w - LABEL_W));
+  const todayAlign = todayLeft <= 0 ? 'left' : todayLeft >= w - LABEL_W ? 'right' : 'center';
 
-function Rule({ icon, tint, title, text }: { icon: string; tint: string; title: string; text: string }) {
   return (
-    <View style={st.rule}>
-      <View style={[st.ruleIcon, { backgroundColor: hexToRgba(tint, 0.12) }]}>
-        <MaterialCommunityIcons name={icon as never} size={16} color={tint} />
+    <View style={st.ruler} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      <View style={st.rulerTop}>
+        {w > 0 ? (
+          <Text style={[st.todayLabel, { left: todayLeft, width: LABEL_W, textAlign: todayAlign }]}>сегодня</Text>
+        ) : null}
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={st.ruleTitle}>{title}</Text>
-        <Text style={st.ruleText}>{text}</Text>
+      <View style={st.ticks}>
+        {Array.from({ length: n }, (_, i) => {
+          const next = i === daysInMonth;
+          const d = i + 1;
+          const isWindow = next || d === daysInMonth;
+          const isToday = !next && d === day;
+          return (
+            <View key={i} style={st.tickCell}>
+              <View
+                style={[
+                  st.tick,
+                  !next && d < day && st.tickPast,
+                  isWindow && st.tickWindow,
+                  isToday && st.tickToday,
+                ]}
+              />
+            </View>
+          );
+        })}
+        {w > 0 ? <View style={[st.monthSep, { left: daysInMonth * cell }]} /> : null}
+      </View>
+      <View style={st.rulerLabels}>
+        <Text style={st.rulerLabel}>1 {MONTH_SHORT[month]}</Text>
+        <Text style={[st.rulerLabel, st.rulerLabelWindow]}>
+          {daysInMonth} {MONTH_SHORT[month]} · 1 {MONTH_SHORT[(month + 1) % 12]}
+        </Text>
       </View>
     </View>
   );
 }
 
+/**
+ * Карточка площадки. Лого одного размера у всех: своё фото/цвет площадки
+ * пользователя → SVG из нашего набора → монограмма. Монограмма в одном
+ * приглушённом тоне, а не в «фирменном» цвете: выдумывать брендбук 30 банкам,
+ * для которых у нас нет лого, хуже, чем честно показать букву.
+ */
+function BankCard({
+  t, own, mirrored, onPress,
+}: {
+  t: BankTiming; own?: Organization; mirrored?: boolean; onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        st.bank,
+        own ? [st.bankOwn, boxShadow(tokens.shadow.subtle)] : st.bankOther,
+        mirrored && st.bankMirrored,
+        pressed && st.pressed,
+      ]}
+    >
+      <View>
+        {own ? (
+          <OrgLogo color={own.color} logo={own.logo} imageUri={own.customImageUri} size={30} radius={9} />
+        ) : t.bankId ? (
+          <OrgLogo color={tokens.accent.base} logo={t.bankId} size={30} radius={9} />
+        ) : (
+          <View style={st.mono}>
+            <Text style={st.monoText}>{brandOf(t).charAt(0).toUpperCase()}</Text>
+          </View>
+        )}
+        {own ? <View style={st.ownBadgePos}><OwnBadge /></View> : null}
+      </View>
+      <View style={st.bankText}>
+        <Text
+          style={[st.bankName, own && st.bankNameOwn, mirrored && st.alignRight]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+        >
+          {brandOf(t)}
+        </Text>
+        {t.product ? (
+          <Text
+            style={[st.bankProduct, mirrored && st.alignRight]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {t.product}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function OwnBadge() {
+  return (
+    <View style={st.ownBadge}>
+      <MaterialCommunityIcons name="check" size={9} color={tokens.text.inverse} />
+    </View>
+  );
+}
+
 const st = StyleSheet.create({
-  section: {
-    fontSize: tokens.typography.title,
-    fontWeight: '600',
+  // --- Герой ---
+  hero: { marginTop: tokens.spacing.sm },
+  heroLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
+  heroNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6 },
+  heroNumber: { fontSize: 52, lineHeight: 56, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -1.2 },
+  heroUnit: { fontSize: 22, lineHeight: 26, fontFamily: font.medium, color: tokens.text.secondary, letterSpacing: -0.3 },
+  heroSub: { fontSize: tokens.typography.labelLg, lineHeight: 18, fontFamily: font.medium, color: tokens.text.secondary, marginTop: 4 },
+
+  // --- Линейка ---
+  ruler: { marginTop: tokens.spacing.xl },
+  rulerTop: { height: 16 },
+  todayLabel: {
+    position: 'absolute',
+    top: 0,
+    fontSize: tokens.typography.micro,
+    lineHeight: 13,
+    fontFamily: font.semibold,
     color: tokens.text.primary,
-    marginTop: 40,
+  },
+  ticks: { flexDirection: 'row', alignItems: 'flex-end', height: 34, marginTop: 4 },
+  tickCell: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' },
+  tick: { width: 3, height: 12, borderRadius: 1.5, backgroundColor: hexToRgba(tokens.accent.base, 0.18) },
+  tickPast: { backgroundColor: hexToRgba(tokens.accent.base, 0.45) },
+  tickWindow: { width: 4, height: 34, borderRadius: 2, backgroundColor: tokens.accent.base },
+  tickToday: { width: 4, height: 22, borderRadius: 2, backgroundColor: tokens.text.primary },
+  monthSep: {
+    position: 'absolute',
+    top: -6,
+    bottom: 0,
+    width: 1,
+    backgroundColor: hexToRgba(tokens.accent.base, 0.35),
+  },
+  rulerLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: tokens.spacing.sm },
+  rulerLabel: { fontSize: tokens.typography.hint, lineHeight: 15, fontFamily: font.medium, color: tokens.text.tertiary },
+  rulerLabelWindow: { color: tokens.accent.base },
+
+  // --- Секции ---
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 48,
     marginBottom: 14,
     paddingLeft: 8,
   },
+  sectionTitle: { fontSize: tokens.typography.title, lineHeight: 24, fontFamily: font.semibold, color: tokens.text.primary },
+  sectionGap: { marginTop: 40, marginBottom: 14, paddingLeft: 8 },
+  legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendText: { fontSize: tokens.typography.hint, lineHeight: 15, fontFamily: font.medium, color: tokens.text.tertiary },
 
-  // --- Полоса месяца ---
-  stripLabel: { fontSize: tokens.typography.label, lineHeight: 17, color: tokens.text.secondary },
-  stripValue: {
-    fontSize: 26,
-    lineHeight: 30,
-    fontFamily: font.semibold,
-    color: tokens.text.primary,
-    letterSpacing: -0.5,
-    marginTop: 2,
-  },
-  strip: { flexDirection: 'row', alignItems: 'center', marginTop: tokens.spacing.lg },
-  track: {
-    flex: 1,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: hexToRgba(tokens.accent.base, 0.12),
-    overflow: 'hidden',
-  },
-  window: { position: 'absolute', right: 0, top: 0, bottom: 0, backgroundColor: tokens.accent.base },
-  today: {
-    position: 'absolute',
-    top: 1,
-    width: 8,
-    height: 8,
-    marginLeft: -4,
-    borderRadius: 4,
-    backgroundColor: tokens.accent.deep,
-  },
-  boundary: { width: 1, height: 16, backgroundColor: hexToRgba(tokens.accent.base, 0.35), marginHorizontal: 4 },
-  nextCell: { width: 12, height: 10, borderRadius: 5, backgroundColor: tokens.accent.base },
-  stripAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: tokens.spacing.sm },
-  stripTick: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
-
-  // --- Площадки пользователя ---
-  mineInner: { paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.lg },
-  mineRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  mineRowNext: { marginTop: tokens.spacing.lg },
-  mineName: { fontSize: tokens.typography.labelLg, lineHeight: 17, fontWeight: '600', color: tokens.text.primary },
-  mineHint: { fontSize: tokens.typography.hint, lineHeight: 16, color: tokens.text.secondary, marginTop: 2 },
-
-  // --- Ось «1 число» ---
-  axisChipRow: { alignItems: 'center' },
-  axisChip: {
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 5,
-    borderRadius: tokens.radius.pill,
-    backgroundColor: hexToRgba(tokens.accent.base, 0.10),
-  },
-  axisChipText: { fontSize: tokens.typography.hint, lineHeight: 15, fontFamily: font.semibold, color: tokens.accent.deep },
-  axisBody: { marginTop: tokens.spacing.sm },
+  // --- Ось ---
   axisLine: {
     position: 'absolute',
     left: '50%',
-    top: 0,
+    top: 10,
     bottom: 0,
     width: 1,
-    backgroundColor: hexToRgba(tokens.accent.base, 0.18),
+    marginLeft: -0.5,
+    backgroundColor: hexToRgba(tokens.accent.base, 0.22),
   },
-  axisCols: { flexDirection: 'row' },
-  // Колонки «обнимают» ось: левая выровнена вправо, правая влево — тогда линия
-  // читается как граница, а не как случайный разделитель двух таблиц.
-  colLeft: { flex: 1, minWidth: 0, paddingRight: tokens.spacing.md },
-  colRight: { flex: 1, minWidth: 0, paddingLeft: tokens.spacing.md },
+  axisHead: { flexDirection: 'row', alignItems: 'center', marginBottom: tokens.spacing.md },
+  axisDate: { flex: 1, fontSize: 17, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary },
+  axisNode: { width: 9, height: 9, borderRadius: 4.5, marginHorizontal: 11, backgroundColor: tokens.accent.base },
   alignRight: { textAlign: 'right' },
-  colTitle: {
-    fontSize: tokens.typography.hint,
-    lineHeight: 15,
-    color: tokens.text.tertiary,
-    marginBottom: tokens.spacing.sm,
-  },
-  nameHit: { paddingVertical: 5 },
-  name: { fontSize: tokens.typography.label, lineHeight: 16, fontWeight: '500', color: tokens.text.primary },
+  axisCols: { flexDirection: 'row', gap: 24 },
+  axisCol: { flex: 1, minWidth: 0, gap: 8 },
 
-  // --- Чипы «в любой день» ---
-  groupHint: { fontSize: tokens.typography.hint, lineHeight: 16, color: tokens.text.tertiary, marginBottom: tokens.spacing.md },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: tokens.spacing.sm },
-  chip: {
+  // --- Карточка площадки ---
+  bank: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: tokens.spacing.chip,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radius.pill,
-    backgroundColor: hexToRgba(tokens.accent.base, 0.06),
+    gap: 10,
+    minHeight: 52,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
   },
-  chipText: { fontSize: tokens.typography.label, lineHeight: 16, fontWeight: '500', color: tokens.text.primary },
+  bankMirrored: { flexDirection: 'row-reverse' },
+  bankOther: { backgroundColor: hexToRgba(tokens.surface.white, 0.6) },
+  bankOwn: {
+    backgroundColor: tokens.surface.white,
+    borderWidth: 1,
+    borderColor: hexToRgba(tokens.accent.base, 0.28),
+  },
+  pressed: { opacity: 0.6 },
+  bankText: { flex: 1, minWidth: 0 },
+  bankName: { fontSize: tokens.typography.label, lineHeight: 17, fontFamily: font.medium, color: tokens.text.primary },
+  bankNameOwn: { fontFamily: font.semibold },
+  bankProduct: {
+    fontSize: tokens.typography.micro,
+    lineHeight: 14,
+    fontFamily: font.regular,
+    color: tokens.text.tertiary,
+    marginTop: 1,
+  },
+  mono: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: hexToRgba(tokens.accent.base, 0.1),
+  },
+  monoText: { fontSize: 13, lineHeight: 15, fontFamily: font.semibold, color: tokens.accent.deep },
+  ownBadgePos: { position: 'absolute', right: -4, bottom: -4 },
+  ownBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: tokens.accent.base,
+    borderWidth: 1.5,
+    borderColor: tokens.surface.white,
+  },
+
+  // --- Сетка «в любой день» ---
+  grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
+  gridCell: { width: '50%', paddingHorizontal: 4, paddingBottom: 8 },
 
   // --- Правила ---
   rule: { flexDirection: 'row', gap: tokens.spacing.md },
-  ruleIcon: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  ruleTitle: { fontSize: tokens.typography.label, lineHeight: 17, fontWeight: '600', color: tokens.text.primary },
-  ruleText: { fontSize: tokens.typography.caption, lineHeight: 18, color: tokens.text.secondary, marginTop: 4 },
-  ruleSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.lg },
+  ruleNext: {
+    marginTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: tokens.surface.hairline,
+  },
+  ruleIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: tokens.radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: hexToRgba(tokens.accent.base, 0.08),
+  },
+  ruleTitle: { fontSize: tokens.typography.labelLg, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary },
+  ruleText: { fontSize: tokens.typography.caption, lineHeight: 18, color: tokens.text.secondary, marginTop: 3 },
+
+  footnote: {
+    fontSize: tokens.typography.hint,
+    lineHeight: 17,
+    color: tokens.text.tertiary,
+    textAlign: 'center',
+    marginTop: tokens.spacing.xl,
+    paddingHorizontal: tokens.spacing.lg,
+  },
 });

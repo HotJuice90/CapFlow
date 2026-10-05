@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { OrgLogo } from '@/components/BankLogo';
 import { getBankTimingSheet } from '@/lib/bankTimingSheet';
-import { BANK_TIMING, CLOSE_RULE, OPEN_GROUPS } from '@/domain/bankTiming';
+import { BANK_TIMING, CLOSE_RULE, OPEN_GROUPS, timingForOrg } from '@/domain/bankTiming';
+import { useData } from '@/state/DataContext';
 import { findBank } from '@/domain/banks';
 import { tokens, font, hexToRgba } from '@/theme';
 
@@ -18,6 +19,13 @@ import { tokens, font, hexToRgba } from '@/theme';
 export default function BankTimingDetail() {
   const name = getBankTimingSheet();
   const timing = BANK_TIMING.find((t) => t.name === name);
+  const { data } = useData();
+  // Своя площадка — со своим лого/фото, как на экране: иначе из подсвеченной
+  // карточки открывался бы шит с чужой картинкой.
+  const own = useMemo(
+    () => data.organizations.find((o) => !o.archived && timingForOrg(o)?.name === name),
+    [data.organizations, name],
+  );
 
   useEffect(() => {
     if (!timing) router.back();
@@ -34,10 +42,14 @@ export default function BankTimingDetail() {
       <View style={st.grabber} />
 
       <View style={st.head}>
-        <OrgLogo color={bank?.color ?? tokens.accent.base} logo={timing.bankId} size={34} />
+        {own ? (
+          <OrgLogo color={own.color} logo={own.logo} imageUri={own.customImageUri} size={34} />
+        ) : (
+          <OrgLogo color={bank?.color ?? tokens.accent.base} logo={timing.bankId} size={34} fallbackIcon="bank-outline" />
+        )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={st.title} numberOfLines={2}>{timing.name}</Text>
-          <Text style={st.subtitle}>Накопительный счёт</Text>
+          <Text style={st.subtitle}>{own ? 'Твоя площадка · накопительный счёт' : 'Накопительный счёт'}</Text>
         </View>
       </View>
 

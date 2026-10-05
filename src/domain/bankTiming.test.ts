@@ -1,4 +1,4 @@
-import { BANK_TIMING, timingForOrg, timingsBy } from './bankTiming';
+import { BANK_TIMING, brandOf, timingForOrg, timingsBy } from './bankTiming';
 
 describe('bankTiming', () => {
   it('каждая площадка попала ровно в одну группу открытия', () => {
@@ -14,8 +14,20 @@ describe('bankTiming', () => {
   it('лого подтягивается из реестра банков', () => {
     expect(BANK_TIMING.find((t) => t.name === 'Газпромбанк')?.bankId).toBe('gazprombank');
     expect(BANK_TIMING.find((t) => t.name === 'Сбербанк')?.bankId).toBe('sber');
-    // Банка нет в нашем SVG-наборе — поле пустое, в колонке будет только имя.
+    // Банка нет в нашем SVG-наборе — поле пустое, в карточке будет монограмма.
     expect(BANK_TIMING.find((t) => t.name === 'Хлынов')?.bankId).toBeUndefined();
+  });
+
+  it('продукт уходит во вторую строку, бренд остаётся названием', () => {
+    const cashbox = BANK_TIMING.find((t) => t.name === 'МТС Банк «Кешбокс»')!;
+    expect(brandOf(cashbox)).toBe('МТС Банк');
+    expect(cashbox.product).toBe('Кешбокс');
+    // Продукт из уточнения, а не из названия, тоже доезжает до карточки.
+    expect(BANK_TIMING.find((t) => t.name === 'ТКБ')?.product).toBe('Выгодный');
+  });
+
+  it('лого берётся по бренду, если в названии есть продукт', () => {
+    expect(BANK_TIMING.find((t) => t.name === 'МТС Банк «Кешбокс»')?.bankId).toBe('mts');
   });
 
   it('площадка находится по id лого, даже если названа иначе', () => {

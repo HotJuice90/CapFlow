@@ -32,6 +32,8 @@ export interface BankTiming {
   name: string;
   /** id из BANKS, если лого у нас есть. Заполняется автоматически по имени. */
   bankId?: string;
+  /** Продукт, если памятка говорит про конкретный счёт, — вторая строка карточки. */
+  product?: string;
   openWhen: OpenWhen;
   /** Уточнение к открытию: длина расчётного периода, оговорки по продуктам. */
   openNote?: string;
@@ -50,11 +52,31 @@ export const TIMING_AS_OF = '2026-09-30';
 export const CLOSE_RULE =
   'Обычно закрывать можно в последний день месяца, после выплаты процентов. Если закрыть раньше, начисленные проценты можно потерять.';
 
-/** Как не потерять проценты при пополнении и выводе. */
-export const MOVE_RULES = [
-  'Выводить средства — в последний день месяца.',
-  'По счетам с расчётными периодами — в расчётную дату (например, ПСБ и Локо-Банк).',
-  'Счета с начислением на минимальный остаток пополнять нужно в день открытия, иначе период считается от нуля.',
+/**
+ * Правила — заголовком вперёд: экран инфографичный, и строка «Закрывать — после
+ * выплаты» должна читаться без абзаца под ней. Абзац — уточнение, не суть.
+ */
+export const RULES: { icon: string; title: string; text: string }[] = [
+  {
+    icon: 'calendar-arrow-right',
+    title: 'Почему дата важна',
+    text: 'Слева — банки, где первый месяц начнётся со следующего дня. Справа — где день открытия уже считается месяцем: открыв 31-го, потеряешь его за день.',
+  },
+  {
+    icon: 'lock-clock',
+    title: 'Закрывать — после выплаты',
+    text: 'Обычно в последний день месяца. Если закрыть раньше, проценты за месяц можно потерять.',
+  },
+  {
+    icon: 'bank-transfer-out',
+    title: 'Выводить — в последний день',
+    text: 'А по счетам с расчётными периодами — в расчётную дату: так у ПСБ и Локо-Банка.',
+  },
+  {
+    icon: 'cash-plus',
+    title: 'Мин. остаток — пополнять сразу',
+    text: 'Счёт на минимальный остаток пополняй в день открытия, иначе период посчитают от нуля.',
+  },
 ];
 
 const LAST_DAY_PAYOUT = 'В последний день месяца.';
@@ -76,9 +98,9 @@ const RAW: BankTiming[] = [
   { name: 'Дальневосточный', openWhen: 'lastDay', payout: LAST_DAY_PAYOUT },
   { name: 'Долинск', openWhen: 'lastDay', payout: '1-го числа.' },
   { name: 'Зенит', openWhen: 'lastDay', payout: LAST_DAY_PAYOUT },
-  { name: 'Металлинвестбанк', openWhen: 'lastDay', openNote: 'Счёт «Комфортный New».', payout: LAST_DAY_PAYOUT },
+  { name: 'Металлинвестбанк', product: 'Комфортный New', openWhen: 'lastDay', openNote: 'Счёт «Комфортный New».', payout: LAST_DAY_PAYOUT },
   { name: 'Русский Стандарт', openWhen: 'lastDay', payout: LAST_DAY_PAYOUT },
-  { name: 'ТКБ', openWhen: 'lastDay', openNote: 'Счёт «Выгодный».', payout: LAST_DAY_PAYOUT },
+  { name: 'ТКБ', product: 'Выгодный', openWhen: 'lastDay', openNote: 'Счёт «Выгодный».', payout: LAST_DAY_PAYOUT },
 
   // --- Расчётный период = календарный месяц, день открытия в счёт ---
   { name: 'БКС Банк', openWhen: 'firstDay' },
@@ -91,10 +113,10 @@ const RAW: BankTiming[] = [
       'Закрытие в офисе или дистанционно по скану подписанного заявления. Проценты начисляют только в рабочий день до 14:00 мск, поэтому иногда выгоднее вывести деньги раньше.',
   },
   { name: 'Инго Банк', openWhen: 'firstDay' },
-  { name: 'МТС Банк', openWhen: 'firstDay', openNote: 'Счёт на ежедневный остаток.', payout: LAST_DAY_PAYOUT },
+  { name: 'МТС Банк', product: 'Ежедневный остаток', openWhen: 'firstDay', openNote: 'Счёт на ежедневный остаток.', payout: LAST_DAY_PAYOUT },
   { name: 'Ренессанс Банк', openWhen: 'firstDay', payout: LAST_DAY_PAYOUT },
   { name: 'Реалист', openWhen: 'firstDay', openNote: 'Кроме счёта «Премиальный старт» — он в любой день.' },
-  { name: 'РСХБ', openWhen: 'firstDay', openNote: 'Счёт на ежедневный остаток.', payout: LAST_DAY_PAYOUT },
+  { name: 'РСХБ', product: 'Ежедневный остаток', openWhen: 'firstDay', openNote: 'Счёт на ежедневный остаток.', payout: LAST_DAY_PAYOUT },
   {
     name: 'Синара',
     openWhen: 'firstDay',
@@ -173,10 +195,27 @@ const RAW: BankTiming[] = [
  * колонках стоит только название, и это нормально: колонка, где у трёх строк
  * иконка, а у девяти нет, читается хуже, чем ровный текст.
  */
-export const BANK_TIMING: BankTiming[] = RAW.map((t) => ({
-  ...t,
-  bankId: findBankByName(t.name)?.id,
-}));
+export const BANK_TIMING: BankTiming[] = RAW.map((t) => {
+  const { brand, product } = splitName(t.name);
+  return {
+    ...t,
+    product: t.product ?? product,
+    // Сначала полное имя, потом бренд без продукта: «МТС Банк «Кешбокс»» —
+    // это всё ещё МТС, и лого у него то же.
+    bankId: (findBankByName(t.name) ?? findBankByName(brand))?.id,
+  };
+});
+
+/** «МТС Банк «Кешбокс»» → бренд «МТС Банк» + продукт «Кешбокс». */
+function splitName(name: string): { brand: string; product?: string } {
+  const m = name.match(/^(.*?)\s*«(.+)»$/);
+  return m ? { brand: m[1], product: m[2] } : { brand: name };
+}
+
+/** Название для карточки: бренд крупно, продукт второй строкой. */
+export function brandOf(t: BankTiming): string {
+  return splitName(t.name).brand;
+}
 
 export const OPEN_GROUPS: { key: OpenWhen; title: string; hint: string }[] = [
   {
