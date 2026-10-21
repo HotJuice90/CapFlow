@@ -2,6 +2,7 @@ import { type AppData, DEFAULT_RATES, emptyAppData, SCHEMA_VERSION } from './typ
 import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import { currentKeyRate, mergeKeyRateHistory, taxFreeLimitForYear } from '@/rates/keyRate';
 import { DEPOSIT_TAX_EXEMPT_YEARS } from '@/calc/tax';
+import { classifyLegacyWithdrawals } from '@/calc/engine';
 
 /** Экспортирована ради тестов: это единственное место, где старые сохранения
  *  приводятся к текущей форме, и ломаться ей нельзя — цена ошибки тут данные. */
@@ -44,6 +45,21 @@ export function migrate(data: AppData): AppData {
   const today = new Date();
   const payoutsSince = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   next.assets = next.assets.map((a) => (a.payoutsSince ? a : { ...a, payoutsSince }));
+
+  // Снятия раньше были без типа и всегда считались уменьшением тела — а
+  // проценты по НС часто выводят обычным снятием, и тело на главной «худело».
+  // Размечаем старые записи один раз (после этого у всех есть kind, и функция
+  // возвращает актив как есть). Ошибка в разметке не должна ронять загрузку
+  // данных — такой актив просто остаётся как был.
+  next.assets = next.assets.map((a) => {
+    const inst = next.instruments.find((i) => i.id === a.instrumentId);
+    if (!inst) return a;
+    try {
+      return classifyLegacyWithdrawals(a, inst);
+    } catch {
+      return a;
+    }
+  });
 
   // Смена фирменного цвета банка в реестре (src/domain/banks.ts) НЕ доходит до
   // уже заведённых площадок: цвет копируется в организацию в момент создания

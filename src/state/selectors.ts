@@ -1776,6 +1776,8 @@ export interface AssetTimelineEntry {
   taxWithheld?: number;
   /** только для 'payout' — что сделали с процентами. */
   payoutAction?: 'keep' | 'wallet';
+  /** см. BalanceAdjustment.kind — только для 'balance' */
+  withdrawalKind?: 'body' | 'interest';
 }
 
 /**
@@ -1809,8 +1811,10 @@ function balanceMovement(
   const point = points[index];
   if (!instrument || !params) return point.amount - points[index - 1].amount;
   const prior = points.slice(1, index).map((q, k) => {
-    const src = q as { date: string; amount: number; id?: string; isCorrection?: boolean };
-    return { id: src.id ?? `prior-${k}`, date: src.date, amount: src.amount, isCorrection: src.isCorrection };
+    const src = q as { date: string; amount: number; id?: string; isCorrection?: boolean; kind?: 'body' | 'interest' };
+    // Тип обязателен: без него вывод процентов посчитался бы снятием из тела,
+    // и движение следующей операции разошлось бы на сумму этих процентов.
+    return { id: src.id ?? `prior-${k}`, date: src.date, amount: src.amount, isCorrection: src.isCorrection, kind: src.kind };
   });
   const expected = calculate({ ...asset, balanceAdjustments: prior }, instrument, params, point.date, 0).balanceNow;
   return point.amount - expected;
@@ -1824,7 +1828,7 @@ export function assetTimeline(
 ): AssetTimelineEntry[] {
   const balancePoints = [
     { date: asset.openDate, amount: asset.amount },
-    ...(asset.balanceAdjustments ?? []).map((a) => ({ id: a.id, date: a.date, amount: a.amount, comment: a.comment, isCorrection: a.isCorrection, taxWithheld: a.taxWithheld })),
+    ...(asset.balanceAdjustments ?? []).map((a) => ({ id: a.id, date: a.date, amount: a.amount, comment: a.comment, isCorrection: a.isCorrection, taxWithheld: a.taxWithheld, kind: a.kind })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   const ratePoints = [
@@ -1837,13 +1841,36 @@ export function assetTimeline(
   ];
 
   for (let i = 1; i < balancePoints.length; i++) {
-    const p = balancePoints[i] as (typeof balancePoints)[number] & { id: string; comment?: string; isCorrection?: boolean; taxWithheld?: number };
+    const p = balancePoints[i] as (typeof balancePoints)[number] & {
+      id: string; comment?: string; isCorrection?: boolean; taxWithheld?: number; kind?: 'body' | 'interest';
+    };
+    // У счёта без капитализации вывод процентов хранится остатком «тело минус
+    // сумма», а тело при этом не меняется — показываем то, что на самом деле
+    // стало с телом, а не сырую запись (иначе «Доходный» показывал бы 992 664
+    // после вывода процентов при миллионе в банке).
+    const shownAmount =
+      p.kind === 'interest' && instrument && params
+        ? calculate(
+            {
+              ...asset,
+              balanceAdjustments: balancePoints.slice(1, i + 1).map((q) => {
+                const src = q as { id?: string; date: string; amount: number; isCorrection?: boolean; kind?: 'body' | 'interest' };
+                return { id: src.id ?? '', date: src.date, amount: src.amount, isCorrection: src.isCorrection, kind: src.kind };
+              }),
+            },
+            instrument,
+            params,
+            p.date,
+            0,
+          ).balanceNow
+        : p.amount;
     entries.push({
       type: 'balance',
       id: p.id,
       date: p.date,
       comment: p.comment,
-      amount: p.amount,
+      amount: shownAmount,
+      withdrawalKind: p.kind,
       amountDelta: balanceMovement(asset, balancePoints, i, instrument, params),
       isCorrection: p.isCorrection,
       taxWithheld: p.taxWithheld,

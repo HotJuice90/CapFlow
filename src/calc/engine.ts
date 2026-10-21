@@ -1,5 +1,6 @@
 import type {
   Asset,
+  BalanceAdjustment,
   CalcParams,
   CapitalizationMode,
   DerivedValues,
@@ -28,6 +29,8 @@ interface BalancePoint {
   amount: number;
   /** см. BalanceAdjustment.isCorrection — точка открытия им никогда не бывает */
   isCorrection?: boolean;
+  /** см. BalanceAdjustment.kind */
+  kind?: 'body' | 'interest';
 }
 
 interface RatePoint {
@@ -42,7 +45,9 @@ interface RatePoint {
 function balanceTimeline(asset: Asset): BalancePoint[] {
   const points: BalancePoint[] = [
     { date: asset.openDate, amount: asset.amount },
-    ...(asset.balanceAdjustments ?? []).map((a) => ({ date: a.date, amount: a.amount, isCorrection: a.isCorrection })),
+    ...(asset.balanceAdjustments ?? []).map((a) => ({
+      date: a.date, amount: a.amount, isCorrection: a.isCorrection, kind: a.kind,
+    })),
   ];
   return points.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -240,6 +245,15 @@ function buildRealisations(
     });
 }
 
+interface WalkState {
+  balanceNow: number;
+  accrued: number;
+  realised: number;
+  earnedInBody: number;
+  /** Сколько процентов сейчас лежит на счёте и может быть выведено «процентами». */
+  interestOnAccount: number;
+}
+
 function walkAccrualAt(
   balance: BalancePoint[],
   rates: RatePoint[],
@@ -248,12 +262,13 @@ function walkAccrualAt(
   samples: number[],
   tier?: RateTier,
   realisations: Realisation[] = [],
-): { balanceNow: number; accrued: number; realised: number; earnedInBody: number }[] {
+): WalkState[] {
   const lastIdx = samples[samples.length - 1];
-  const bal = balance.map((p) => ({ idx: dayIndex(p.date), amount: p.amount, isCorrection: p.isCorrection }));
+  const bal = balance.map((p) => ({ idx: dayIndex(p.date), amount: p.amount, isCorrection: p.isCorrection, kind: p.kind }));
   const rts = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
 
   const balanceAt = new Map(bal.map((p) => [p.idx, p.amount]));
+  const kindAt = new Map(bal.map((p) => [p.idx, p.kind]));
   const correctionAt = new Set(bal.filter((p) => p.isCorrection).map((p) => p.idx));
 
   const boundarySet = new Set<number>();
@@ -282,12 +297,27 @@ function walkAccrualAt(
   let realised = 0;         // выплаты, по которым решение уже принято
   let earnedInBody = 0;     // проценты, осевшие в самом теле (капитализация или «оставить»)
   let boundaryAccrued = 0;  // уровень дохода на прошлой границе периода выплат
+  // Проценты, которые банк уже выплатил НА СЧЁТ, но решение по ним не принято
+  // (границы до включения правила выплат). Они лежат на счёте рядом с телом, и
+  // снятие «процентами» забирает в первую очередь их.
+  let paidOnAccount = 0;
+  // При ежедневной выплате без капитализации на счёт уходит всё начисленное
+  // сразу — отдельных границ там нет, и «выплачено» равно «начислено».
+  const paidDaily = mode !== 'capitalize' && payout === 'daily';
+  const paidPool = () =>
+    mode === 'capitalize' ? 0 : paidDaily ? Math.max(0, accrued - realised) : paidOnAccount;
 
-  const out: { balanceNow: number; accrued: number; realised: number; earnedInBody: number }[] = [];
+  const out: WalkState[] = [];
   let sampleAt = 0;
   const flushSamples = (upTo: number) => {
     while (sampleAt < samples.length && samples[sampleAt] <= upTo) {
-      out.push({ balanceNow: principal + pending, accrued, realised, earnedInBody });
+      out.push({
+        balanceNow: principal + pending,
+        accrued,
+        realised,
+        earnedInBody,
+        interestOnAccount: paidPool() + earnedInBody + pending,
+      });
       sampleAt++;
     }
   };
@@ -295,26 +325,48 @@ function walkAccrualAt(
   for (let i = 0; i < checkpoints.length; i++) {
     const date = checkpoints[i];
     if (date > lastIdx) continue; // граница ещё не наступила — не учитываем вовсе
-    const explicitAmount = balanceAt.get(date);
-    if (explicitAmount !== undefined) {
-      // Факт из банка перекрывает и не свёрнутые в тело проценты модели.
-      principal = explicitAmount;
-      pending = 0;
-    }
     // Выплата: накопленное с прошлой выплаты либо ложится в тело («оставить»),
     // либо уходит из актива («в кошелёк»). В обоих случаях оно перестаёт
     // висеть сверху — иначе currentValue посчитает эти деньги дважды.
+    //
+    // Выплата идёт РАНЬШЕ операции того же дня: банк зачисляет проценты утром,
+    // и снятие в день выплаты видит их уже на счёте. Иначе вывод ровно
+    // выплаченных процентов 1-го числа не нашёл бы, откуда их взять.
     const real = realisationAt.get(date);
     if (real) {
       const amount = real.amount ?? Math.max(0, accrued - boundaryAccrued);
       boundaryAccrued = accrued;
-      if (real.action !== 'skip') {
+      if (real.action === 'skip') {
+        paidOnAccount += amount;
+      } else {
         realised += amount;
         if (real.action === 'keep') {
           principal += amount;
           earnedInBody += amount;
         }
       }
+    }
+    const explicitAmount = balanceAt.get(date);
+    if (explicitAmount !== undefined) {
+      const delta = principal + pending - explicitAmount;
+      if (kindAt.get(date) === 'interest' && delta > 0) {
+        // Вывод процентов: тело не трогаем. Сначала забираем выплаченное на
+        // счёт (оно не в теле), остаток — из процентов, осевших в теле.
+        // Тот же допуск, что в guessWithdrawalKind: банк и модель расходятся на
+        // копейки, и вывод ровно выплаченного не должен оставлять в теле
+        // «−0,38 ₽» — тело 999 999,62 вместо миллиона читается как поломка.
+        const pool = paidPool();
+        const fromPaid = mode === 'capitalize' ? 0 : delta <= pool * 1.01 + 1 ? delta : pool;
+        if (!paidDaily) paidOnAccount = Math.max(0, paidOnAccount - fromPaid);
+        realised += fromPaid;
+        const rest = delta - fromPaid;
+        earnedInBody = Math.max(0, earnedInBody + pending - rest);
+        principal = explicitAmount + fromPaid;
+      } else {
+        // Факт из банка перекрывает и не свёрнутые в тело проценты модели.
+        principal = explicitAmount;
+      }
+      pending = 0;
     }
     // Состояние на саму точку фиксируем ДО начисления за следующий отрезок:
     // на дату X доход накоплен по X, а не по X включительно вперёд.
@@ -366,7 +418,7 @@ function walkAccrual(
   now: string | Date,
   tier?: RateTier,
   realisations: Realisation[] = [],
-): { balanceNow: number; accrued: number; realised: number; earnedInBody: number } {
+): WalkState {
   return walkAccrualAt(balance, rates, mode, payout, [dayIndex(now)], tier, realisations)[0];
 }
 
@@ -428,6 +480,80 @@ export function accrualSeries(
       incomePerDay: started ? annualYield(balanceNow, rate, tier) / daysInYear(dates[k]) : 0,
     };
   });
+}
+
+/**
+ * «Ровная» сумма — кратная тысяче, без копеек. Так пользователь двигает тело
+ * (для визуальной чистоты), а проценты всегда приходят «с хвостом».
+ * Полрубля допуска — на плавающую точку в восстановленной из остатков дельте.
+ */
+export function isRoundSum(x: number): boolean {
+  return Math.abs(x - Math.round(x / 1000) * 1000) < 0.5;
+}
+
+/**
+ * Угадать, что это за снятие. Ровная сумма — тело. С хвостом и не больше
+ * процентов на счёте — вывод процентов. С хвостом, но больше процентов —
+ * всё равно тело: столько процентов там просто нет.
+ *
+ * Запас 1% + рубль сверху — модель считает проценты на копейки иначе, чем
+ * банк, а выведенная сумма взята из банка.
+ */
+export function guessWithdrawalKind(delta: number, interestOnAccount: number): 'body' | 'interest' {
+  if (delta <= 0 || isRoundSum(delta)) return 'body';
+  return delta <= interestOnAccount * 1.01 + 1 ? 'interest' : 'body';
+}
+
+/** Состояние актива на дату — с указанным набором операций. */
+function stateWith(
+  asset: Asset,
+  instrument: FinancialInstrument,
+  adjustments: BalanceAdjustment[],
+  iso: string,
+): WalkState {
+  const a = { ...asset, balanceAdjustments: adjustments };
+  const mode: CapitalizationMode = a.capitalization ?? instrument.capitalization ?? 'none';
+  const payout = a.payoutPeriod ?? instrument.payoutPeriod;
+  const idx = dayIndex(iso);
+  const realisations = buildRealisations(a, instrument, mode, iso, idx);
+  return walkAccrualAt(balanceTimeline(a), rateTimeline(a), mode, payout, [idx], tierOf(a), realisations)[0];
+}
+
+/**
+ * Разметить старые операции по счёту: тело или проценты (см. BalanceAdjustment.kind).
+ *
+ * Тип нельзя просто дописать к записи. Операция хранится НОВЫМ ОСТАТКОМ, а
+ * остаток у старой модели после вывода процентов занижен: она вычла проценты из
+ * тела. Все более поздние записи посчитаны от этого заниженного тела. Если
+ * поменять только смысл одной записи, тело вернётся на место, а следующая
+ * операция «съест» разницу обратно.
+ *
+ * Поэтому каждую запись пересчитываем в новую систему отсчёта: берём движение
+ * денег из старой модели (ровно то число, что пользователь видел в истории) и
+ * откладываем его от остатка новой модели на ту же дату. Пополнения и снятия
+ * сохраняют свою величину, меняется только то, от чего они отложены.
+ *
+ * Исправления под факт банка не трогаем — это факт остатка, а не движение.
+ * Вызывается миграцией один раз: после неё у всех операций тип есть.
+ */
+export function classifyLegacyWithdrawals(asset: Asset, instrument: FinancialInstrument): Asset {
+  const original = asset.balanceAdjustments ?? [];
+  if (!original.some((a) => !a.isCorrection && !a.kind)) return asset;
+  const sorted = [...original].sort((a, b) => a.date.localeCompare(b.date));
+  const done: BalanceAdjustment[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
+    if (a.isCorrection || a.kind) {
+      done.push(a);
+      continue;
+    }
+    const oldBefore = stateWith(asset, instrument, sorted.slice(0, i), a.date).balanceNow;
+    const delta = oldBefore - a.amount; // > 0 — снятие
+    const now = stateWith(asset, instrument, done, a.date);
+    const kind = guessWithdrawalKind(delta, now.interestOnAccount);
+    done.push({ ...a, amount: now.balanceNow - delta, kind });
+  }
+  return { ...asset, balanceAdjustments: done };
 }
 
 /**

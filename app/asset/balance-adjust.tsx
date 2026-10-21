@@ -10,6 +10,7 @@ import { useData } from '@/state/DataContext';
 import { assetTimeline, findAssetView } from '@/state/selectors';
 import { appAlert } from '@/lib/dialog';
 import { calcAssetTax } from '@/calc';
+import { guessWithdrawalKind } from '@/calc/engine';
 import type { BalanceAdjustment, CurrencyCode } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
 import { formatMoney } from '@/format';
@@ -35,6 +36,9 @@ interface TimelinePoint {
   comment?: string;
   isCorrection?: boolean;
   taxWithheld?: number;
+  kind?: 'body' | 'interest';
+  /** что показать остатком после операции — из assetTimeline (см. shownAmount там) */
+  shown?: number;
 }
 
 export default function BalanceAdjustSheet() {
@@ -52,6 +56,8 @@ export default function BalanceAdjustSheet() {
   const [date, setDate] = useState<string>(todayIso());
   const [comment, setComment] = useState('');
   const [fundFromFree, setFundFromFree] = useState(false);
+  // null — выбор не трогали, тип угадывается по сумме (см. withdrawKind ниже).
+  const [kindPicked, setKindPicked] = useState<'body' | 'interest' | null>(null);
 
   // Баланс свободных денег именно в валюте актива — см. asset/form.tsx.
   const freeBalanceInCurrency = useMemo(
@@ -63,16 +69,16 @@ export default function BalanceAdjustSheet() {
     if (!view) return [];
     // Движение берём из assetTimeline — один источник истины с историей на
     // карточке актива, иначе два экрана показывали бы разные цифры за одну операцию.
-    const movements = new Map(
-      assetTimeline(view.asset, view.instrument, data.params)
-        .filter((e) => e.type === 'balance' && e.id)
-        .map((e) => [e.id as string, e.amountDelta ?? 0]),
-    );
+    const balanceEntries = assetTimeline(view.asset, view.instrument, data.params)
+      .filter((e) => e.type === 'balance' && e.id);
+    const movements = new Map(balanceEntries.map((e) => [e.id as string, e.amountDelta ?? 0]));
+    const shown = new Map(balanceEntries.map((e) => [e.id as string, e.amount ?? 0]));
     const points: TimelinePoint[] = [
       { date: view.asset.openDate, amount: view.asset.amount },
       ...(view.asset.balanceAdjustments ?? []).map((a) => ({
         id: a.id, date: a.date, amount: a.amount, movement: movements.get(a.id),
         comment: a.comment, isCorrection: a.isCorrection, taxWithheld: a.taxWithheld,
+        kind: a.kind, shown: shown.get(a.id),
       })),
     ];
     return points.sort((a, b) => a.date.localeCompare(b.date));
@@ -103,6 +109,13 @@ export default function BalanceAdjustSheet() {
       : undefined;
   const suggestedTax = profitShare !== undefined ? calcAssetTax(profitShare, data.params, 0, true) : undefined;
 
+  // Тип снятия по умолчанию — по привычке пользователя: проценты снимаются «с
+  // хвостом», тело — ровными тысячами (см. guessWithdrawalKind). Процентов на
+  // счёте — разница «на счёте» и «вложено»: у счёта без капитализации туда
+  // попадает и ещё не выплаченное за текущий месяц, но для догадки это честная
+  // верхняя граница, а ошибку человек видит и переключает сам.
+  const withdrawKind = kindPicked ?? guessWithdrawalKind(delta ?? 0, Math.max(0, displayBalance - derived.invested));
+
   const canSave = isCorrection
     ? correctedAmount !== undefined && correctedAmount >= 0 && !!date
     : delta !== undefined && delta > 0 && newBalance >= 0 && !!date;
@@ -117,6 +130,7 @@ export default function BalanceAdjustSheet() {
       comment: comment.trim() || undefined,
       isCorrection: isCorrection || undefined,
       taxWithheld: !isCorrection && direction === 'withdraw' ? taxWithheld : undefined,
+      kind: isCorrection ? undefined : direction === 'withdraw' ? withdrawKind : 'body',
     };
     await updateAsset({
       ...asset,
@@ -213,6 +227,24 @@ export default function BalanceAdjustSheet() {
               onChange={setDelta}
               placeholder="0"
             />
+            {direction === 'withdraw' ? (
+              <>
+                <Segmented
+                  label="Что снимаешь"
+                  value={withdrawKind}
+                  options={[
+                    { label: 'Из тела', value: 'body' },
+                    { label: 'Проценты', value: 'interest' },
+                  ]}
+                  onChange={(v) => { tapBuzz(); setKindPicked(v); }}
+                />
+                <Text style={s.freeHint}>
+                  {withdrawKind === 'interest'
+                    ? 'Тело не изменится — уходят проценты, которые уже на счёте'
+                    : 'Тело уменьшится на эту сумму'}
+                </Text>
+              </>
+            ) : null}
             {direction === 'withdraw' ? (
               <NumberField
                 label="Из них налог (если банк удержал сам)"
@@ -377,7 +409,7 @@ function HistoryRow({
       <View style={{ flex: 1 }}>
         <Text style={s.histDate}>{formatDateShort(point.date)}</Text>
         <Text style={s.histSub} numberOfLines={1}>
-          {isFirst ? 'Открытие' : point.isCorrection ? (point.comment || 'Исправление под факт банка') : point.comment || (isUp ? 'Пополнение' : 'Снятие')}
+          {isFirst ? 'Открытие' : point.isCorrection ? (point.comment || 'Исправление под факт банка') : point.comment || (isUp ? 'Пополнение' : point.kind === 'interest' ? 'Вывод процентов' : 'Снятие')}
           {point.taxWithheld ? ` · налог ${formatMoney(point.taxWithheld, { currency, kopecks: 'hide' })}` : ''}
         </Text>
       </View>
@@ -387,7 +419,7 @@ function HistoryRow({
             {isUp ? '+' : '−'}{formatMoney(Math.abs(delta), { currency })}
           </Text>
         ) : null}
-        <Text style={s.histBalance}>{formatMoney(point.amount, { currency, kopecks: 'hide' })}</Text>
+        <Text style={s.histBalance}>{formatMoney(point.shown ?? point.amount, { currency, kopecks: 'hide' })}</Text>
       </View>
     </View>
   );

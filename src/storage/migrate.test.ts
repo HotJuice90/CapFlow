@@ -73,4 +73,34 @@ describe('migrate', () => {
     };
     expect(migrate(data).params.taxFreeLimit).toBe(999);
   });
+  it('размечает старые снятия: проценты с хвостом — процентами, ровные — телом', () => {
+    const data = {
+      ...emptyAppData(),
+      instruments: [{
+        id: 'i', organizationId: 'o', name: 'Доходный', typeId: 'savings',
+        behavior: 'perpetual', capitalization: 'none', payoutPeriod: 'monthly',
+      }],
+      assets: [{
+        id: 'a', instrumentId: 'i', amount: 1_000_000, currency: 'RUB', rate: 12.75,
+        openDate: '2026-08-11', status: 'active', payoutsSince: '2026-09-28',
+        balanceAdjustments: [
+          { id: 'w1', date: '2026-09-01', amount: 992_664 },
+          { id: 'w2', date: '2026-09-15', amount: 892_664 },
+        ],
+      }],
+    } as unknown as AppData;
+    const adj = migrate(data).assets[0].balanceAdjustments!;
+    expect(adj.map((a) => a.kind)).toEqual(['interest', 'body']);
+    // ровные 100 000 из тела отложены от нового, неурезанного тела
+    expect(adj[1].amount).toBeCloseTo(900_000, 2);
+  });
+
+  it('разметка не повторяется на следующей загрузке', () => {
+    const once = migrate({
+      ...emptyAppData(),
+      instruments: [{ id: 'i', organizationId: 'o', name: 'x', typeId: 'savings', behavior: 'perpetual', capitalization: 'none', payoutPeriod: 'monthly' }],
+      assets: [{ id: 'a', instrumentId: 'i', amount: 1_000_000, currency: 'RUB', rate: 12.75, openDate: '2026-08-11', status: 'active', balanceAdjustments: [{ id: 'w1', date: '2026-09-01', amount: 992_664 }] }],
+    } as unknown as AppData);
+    expect(migrate(once).assets[0]).toBe(once.assets[0]);
+  });
 });

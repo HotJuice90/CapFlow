@@ -749,7 +749,7 @@ function TimelineRow({
     ? 'Открытие'
     : entry.isCorrection
       ? (entry.comment || 'Исправление под факт банка')
-      : entry.comment || (isBalance ? (isUp ? 'Пополнение' : 'Снятие') : 'Изменение ставки'))
+      : entry.comment || (isBalance ? (isUp ? 'Пополнение' : entry.withdrawalKind === 'interest' ? 'Вывод процентов' : 'Снятие') : 'Изменение ставки'))
     + (entry.taxWithheld ? ` · налог ${formatMoney(entry.taxWithheld, { currency, kopecks: 'hide' })}` : '');
 
   const row = (
