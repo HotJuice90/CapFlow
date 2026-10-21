@@ -13,14 +13,15 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
 import { SkylineBars } from '@/components/SkylineBars';
+import { DepositChart, type DepositChartPoint } from '@/components/DepositChart';
 import { useData } from '@/state/DataContext';
 import { assetClosedDate, assetOutcome, assetValueSeries, assetTimeline, findAssetView, type AssetTimelineEntry } from '@/state/selectors';
 import { findBank } from '@/domain/banks';
-import type { CurrencyCode } from '@/domain/types';
+import type { Asset, CurrencyCode, FinancialInstrument } from '@/domain/types';
 import { tokens, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
-import { formatDateShort, pluralDays } from '@/format/date';
+import { formatDateShort, formatDateTiny, pluralDays } from '@/format/date';
 import { accrualSeries, calculate, diffDays, payoutBoundaryDates } from '@/calc';
 import { uid } from '@/utils/id';
 import { successBuzz, tapBuzz, warnBuzz } from '@/lib/haptics';
@@ -58,6 +59,14 @@ export default function AssetScreen() {
   // Мало и широко — скайлайн должен выглядеть слитными холмами, а не частоколом
   // тонких полосок (много точек на узкой ширине давало «тот же график, другой цвет»).
   const valueSeries = useMemo(() => assetValueSeries(data, id, 18), [data, id]);
+  // График срочного вклада на весь срок (см. DepositChart). Один проход
+  // accrualSeries по ~60 датам — calculate в цикле по дням нельзя (CLAUDE.md).
+  const deposit = useMemo(() => {
+    if (!view || view.asset.status !== 'active') return null;
+    const { asset, instrument } = view;
+    if (instrument.behavior !== 'term' || !asset.endDate) return null;
+    return depositSeries(asset, instrument);
+  }, [view]);
   // instrument+params обязательны: без них дельты в истории считаются наивно и
   // впитывают набежавшие проценты (см. balanceMovement в selectors).
   const baseTimeline = useMemo(
@@ -384,7 +393,16 @@ export default function AssetScreen() {
               </Pressable>
             </View>
 
-            {valueSeries.length >= 2 ? (
+            {deposit ? (
+              <View style={styles.heroGraphWrap}>
+                <DepositChart
+                  points={deposit.points}
+                  todayIndex={deposit.todayIndex}
+                  width={HERO_GRAPH_WIDTH}
+                  currency={cur}
+                />
+              </View>
+            ) : valueSeries.length >= 2 ? (
               <View style={styles.heroGraphWrap}>
                 {/* minSpanRatio: чтобы заполнить график, нужно изменение хотя бы
                     на 2% от баланса. Иначе счёт, выросший на 699 ₽ из миллиона,
@@ -657,6 +675,49 @@ function MiniTile({
   );
 }
 
+/**
+ * Ряд для графика вклада: ~60 равных шагов по сроку плюс ровно «сегодня».
+ *
+ * Значение — тело плюс ВСЁ начисленное, то есть та же величина, что в плитке
+ * «придёт» в конце срока. Без капитализации проценты уходят на карту, и сумма
+ * на самом вкладе не растёт, — но график про то, сколько вклад принёс, а не
+ * про остаток: иначе это была бы горизонтальная линия на весь экран. С
+ * капитализацией начисленное уже сидит в теле — берём его, а не складываем
+ * второй раз.
+ */
+function depositSeries(
+  asset: Asset,
+  instrument: FinancialInstrument,
+): { points: DepositChartPoint[]; todayIndex: number } | null {
+  const end = asset.endDate;
+  if (!end) return null;
+  const total = diffDays(asset.openDate, end);
+  if (total <= 0) return null;
+  const today = todayIso();
+  const [oy, om, od] = asset.openDate.split('-').map(Number);
+  const iso = (k: number) => {
+    const d = new Date(oy, om - 1, od + k);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const STEPS = Math.min(total, 60);
+  const set = new Set<string>();
+  for (let i = 0; i <= STEPS; i++) set.add(iso(Math.round((i / STEPS) * total)));
+  // «Сегодня» — точно, а не ближайший шаг: точка на линии должна совпадать
+  // с «на сегодня» в карточке ниже.
+  const todayClamped = today < asset.openDate ? asset.openDate : today > end ? end : today;
+  set.add(todayClamped);
+  const dates = [...set].sort();
+  const capitalize = (asset.capitalization ?? instrument.capitalization ?? 'none') === 'capitalize';
+  const series = accrualSeries(asset, instrument, dates);
+  return {
+    points: dates.map((d, i) => ({
+      iso: d,
+      value: capitalize ? series[i].balanceNow : series[i].balanceNow + series[i].accrued,
+    })),
+    todayIndex: dates.indexOf(todayClamped),
+  };
+}
+
 /** Выплата процентов на полосе срока (см. LifeBar). */
 interface Checkpoint {
   /** 0..1 — место на полосе срока. */
@@ -666,18 +727,6 @@ interface Checkpoint {
   date: string;
 }
 
-const SHORT_MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-/**
- * «30 окт» — под полосой места на полные месяцы не хватает.
- *
- * Пробел неразрывный: Android переносил подпись по пробелу, и вторая строка с
- * месяцем обрезалась высотой однострочной подписи — под полосой оставалось
- * одно «1» вместо «1 окт».
- */
-function shortDate(iso: string): string {
-  const [, m, d] = iso.split('-').map(Number);
-  return `${d}\u00A0${SHORT_MONTHS[m - 1]}`;
-}
 
 /** Дальше этого пилюли и треугольники слипаются — одна полоса с рисками. */
 const MAX_SEGMENTS = 24;
@@ -745,9 +794,9 @@ function LifeBar({
   const amountLeft = nextX !== undefined ? Math.min(Math.max(0, nextX - amountW / 2), w - amountW) : 0;
   const showAmount = w > 0 && !!nextAmount && nextX !== undefined;
   const showTopRight = !!topRight && (!showAmount || amountLeft + amountW < w - textW(topRight) - 8);
-  const startLabel = shortDate(openDate);
-  const endLabel = endDate ? shortDate(endDate) : undefined;
-  const midLabel = nextDate ? shortDate(nextDate) : undefined;
+  const startLabel = formatDateTiny(openDate);
+  const endLabel = endDate ? formatDateTiny(endDate) : undefined;
+  const midLabel = nextDate ? formatDateTiny(nextDate) : undefined;
   const midW = midLabel ? textW(midLabel) : 0;
   const midLeft = nextX !== undefined ? nextX - midW / 2 : 0;
   const showMid =

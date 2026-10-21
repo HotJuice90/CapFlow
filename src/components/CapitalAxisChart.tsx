@@ -12,7 +12,7 @@ import { font, tokens } from '@/theme';
  * следующего тира шаг остаётся прежним чуть дольше — просто на один-два
  * деления больше, а не резкий скачок в другой разряд.
  */
-function niceStep(maxValue: number, steps = 3): number {
+export function niceStep(maxValue: number, steps = 3): number {
   if (maxValue <= 0) return 1;
   const rough = maxValue / steps;
   const magnitude = 10 ** Math.floor(Math.log10(rough));
@@ -21,7 +21,7 @@ function niceStep(maxValue: number, steps = 3): number {
   return nice * magnitude;
 }
 
-function formatAxisLabel(value: number): string {
+export function formatAxisLabel(value: number): string {
   if (value >= 1_000_000) {
     // Сдвиг сетки на пол-шага (см. niceMin/niceMax ниже) даёт значения ровно
     // на границе .x5 млн (5.75/5.85/…) — toFixed(1) на таких числах печально
@@ -68,7 +68,7 @@ function downsampleForDisplay(data: number[]): number[] {
  * касательной на плато и лимитер перелёта (s>9) — не перестраховка, а
  * обязательное условие корректности при однодневных скачках капитала.
  */
-function monotonePath(points: { x: number; y: number }[]): string {
+export function monotonePath(points: { x: number; y: number }[]): string {
   const n = points.length;
   if (n < 2) return '';
   if (n === 2) {
@@ -125,26 +125,12 @@ function monotonePath(points: { x: number; y: number }[]): string {
 }
 
 /**
- * График капитала с осью (пунктирные линии сетки + подписи-таблетки). Шкала
- * опирается на «круглый» максимум (niceStep), а не на голый min/max ряда.
+ * Шкала оси: круглый шаг, сетка со сдвигом на пол-шага и запас сверху/снизу.
+ * Вынесена из CapitalAxisChart, чтобы график вклада на карточке актива
+ * стоял на той же оси, что и капитал в аналитике (подробности — в комментариях
+ * ниже, они про оба графика).
  */
-export function CapitalAxisChart({
-  data,
-  width,
-  height = 178,
-}: {
-  data: number[];
-  width: number;
-  height?: number;
-}) {
-  // Масштаб НЕ от нуля, а от фактического диапазона видимых данных — у
-  // портфеля в несколько миллионов дневное движение теряется на шкале 0..max,
-  // график выглядит «мёртвым» плоским хвостом у потолка. Вместо этого зумим
-  // на реальный min..max ряда (как биржевые графики), с минимальным запасом
-  // 2% от текущего значения — иначе на почти плоском участке шаг сетки уедет
-  // в рубли на миллионных суммах.
-  const rawMin = Math.min(...data);
-  const rawMax = Math.max(0, ...data);
+export function axisScale(rawMin: number, rawMax: number): { gridValues: number[]; axisMin: number; axisMax: number } {
   const minSpan = Math.max(rawMax * 0.04, 1);
   const effectiveMin = Math.min(rawMin, rawMax - minSpan);
   const step = niceStep(rawMax - effectiveMin || 1);
@@ -175,6 +161,30 @@ export function CapitalAxisChart({
   const axisMin = Math.max(0, niceMinRaw - step * 0.25);
   const axisMax = niceMax + step * 0.25;
 
+  return { gridValues: visibleGridValues, axisMin, axisMax };
+}
+
+/**
+ * График капитала с осью (пунктирные линии сетки + подписи-таблетки). Шкала
+ * опирается на «круглый» максимум (niceStep), а не на голый min/max ряда.
+ */
+export function CapitalAxisChart({
+  data,
+  width,
+  height = 178,
+}: {
+  data: number[];
+  width: number;
+  height?: number;
+}) {
+  // Масштаб НЕ от нуля, а от фактического диапазона видимых данных — у
+  // портфеля в несколько миллионов дневное движение теряется на шкале 0..max,
+  // график выглядит «мёртвым» плоским хвостом у потолка. Вместо этого зумим
+  // на реальный min..max ряда (как биржевые графики), с минимальным запасом
+  // 2% от текущего значения — иначе на почти плоском участке шаг сетки уедет
+  // в рубли на миллионных суммах.
+  const { gridValues: visibleGridValues, axisMin, axisMax } = axisScale(Math.min(...data), Math.max(0, ...data));
+
   const padTop = 16;
   // Запас снизу — чтобы низкие участки ряда не «прилипали» к плашке под
   // графиком: якорь минимума теперь не у самого края SVG.
@@ -184,6 +194,7 @@ export function CapitalAxisChart({
   const valueToY = (v: number) => padTop + innerH - ((v - axisMin) / axisSpan) * innerH;
 
   if (data.length < 2) return <View style={{ width, height }} />;
+
 
   const plotData = downsampleForDisplay(data);
 

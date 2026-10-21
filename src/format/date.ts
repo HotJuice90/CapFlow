@@ -30,6 +30,18 @@ export function formatDateShort(value: string | Date): string {
   return `${d.getDate()} ${MONTHS_GENITIVE[d.getMonth()]}`;
 }
 
+const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+/**
+ * «22 окт» — там, где на полный месяц нет места (полоса срока, тултип графика).
+ * Пробел неразрывный: Android переносил подпись по пробелу, и строка с месяцем
+ * обрезалась высотой однострочной подписи — оставалось одно «1».
+ */
+export function formatDateTiny(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${d}\u00A0${MONTHS_SHORT[m - 1]}`;
+}
+
 /** «31.07.2026» */
 export function formatDateFull(value: string | Date): string {
   const d = toDate(value);
