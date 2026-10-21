@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { Card } from '@/components/Card';
 import { OrgLogo } from '@/components/BankLogo';
@@ -444,15 +445,14 @@ export default function AssetScreen() {
             <LifeBar
               color={organization.color}
               openDate={asset.openDate}
-              endLabel={isTerm && asset.endDate ? formatDateShort(asset.endDate) : undefined}
+              endDate={isTerm ? asset.endDate : undefined}
               progress={isTerm && asset.endDate ? (derived.termProgress ?? 0) : undefined}
               checkpoints={checkpoints}
-              center={
+              nextAmount={nextPayout ? `+${formatMoney(nextPayout.amount, { currency: cur, kopecks: 'hide' })}` : undefined}
+              topRight={
                 isTerm && asset.endDate
                   ? progress >= 100
                     ? 'срок истёк'
-                    : nextPayout
-                      ? `выплата ${shortDate(nextPayout.date)} · +${formatMoney(nextPayout.amount, { currency: cur, kopecks: 'hide' })}`
                     : derived.daysRemaining !== undefined
                       ? `осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)}`
                       : undefined
@@ -529,9 +529,9 @@ export default function AssetScreen() {
             <LifeBar
               color={organization.color}
               openDate={asset.openDate}
-              endLabel={formatDateShort(closedIso ?? asset.endDate ?? asset.openDate)}
+              endDate={closedIso ?? asset.endDate ?? asset.openDate}
               progress={1}
-              center={`${outcome.days} ${pluralDays(outcome.days)}`}
+              topRight={`${outcome.days} ${pluralDays(outcome.days)}`}
             />
 
             <View style={styles.tilesRow}>
@@ -677,51 +677,134 @@ function shortDate(iso: string): string {
   return `${d} ${SHORT_MONTHS[m - 1]}`;
 }
 
-/** Дальше этого треугольники слипаются — рисуем тонкие риски. */
-const MAX_TRIANGLES = 24;
+/** Дальше этого пилюли и треугольники слипаются — одна полоса с рисками. */
+const MAX_SEGMENTS = 24;
+/** Зазор между пилюлями периодов. */
+const SEG_GAP = 4;
 
+/**
+ * Полоса жизни актива — один язык для всех состояний.
+ *
+ * Срочный вклад с выплатами нарезан на ПЕРИОДЫ: каждая выплата — своя пилюля,
+ * они заполняются по очереди, как раньше одна. Над стыками — скруглённые
+ * треугольники выплат: серые, пока выплата впереди, и цветом банка, когда она
+ * пришла. Конец срока — флажок, а не ещё один треугольник: финиш и
+ * промежуточная выплата не должны выглядеть одинаково.
+ *
+ * Сверху — то, что про БУДУЩЕЕ: сумма над ближайшим треугольником и сколько
+ * осталось справа. Снизу — только календарь, все даты в одном коротком формате.
+ *
+ * Бессрочный: полоса статичная, гаснет к «∞» — конца нет.
+ */
 function LifeBar({
   color,
   openDate,
-  endLabel,
+  endDate,
   progress,
-  center,
+  topRight,
   checkpoints = [],
+  nextAmount,
 }: {
   color: string;
   openDate: string;
-  /** Правый край: дата окончания/закрытия. Нет — бессрочный, рисуем «∞». */
-  endLabel?: string;
+  /** ISO окончания/закрытия. Нет — бессрочный, справа «∞». */
+  endDate?: string;
   /** 0..1 — заполнение. Нет — бессрочный: статичная полоса с затуханием. */
   progress?: number;
-  center?: string;
-  /**
-   * Выплаты процентов по сроку — треугольники над полосой. Пройденная горит
-   * цветом банка, ближайшая — вполсилы, остальные бледные: так полоса
-   * отвечает и «сколько до конца», и «когда следующие деньги».
-   */
+  /** Над полосой справа: сколько осталось / сколько проработал. */
+  topRight?: string;
+  /** Выплаты процентов по сроку (см. Checkpoint). */
   checkpoints?: Checkpoint[];
+  /** Сумма ближайшей выплаты — подписью над её треугольником. */
+  nextAmount?: string;
 }) {
-  const nextIdx = checkpoints.findIndex((c) => !c.reached);
-  const ticks = checkpoints.length > MAX_TRIANGLES;
+  const [w, setW] = useState(0);
+  const grey = hexToRgba(tokens.text.tertiary, 0.55);
+
+  // Последняя выплата обычно совпадает с концом срока — её место у флажка.
+  const inner = checkpoints.filter((c) => c.at < 0.999);
+  const segmented = progress !== undefined && inner.length > 0 && inner.length < MAX_SEGMENTS;
+  const ticks = progress !== undefined && inner.length >= MAX_SEGMENTS;
+  const bounds = segmented ? [0, ...inner.map((c) => c.at), 1] : [0, 1];
+  const n = bounds.length - 1;
+  // Середина зазора между пилюлями k и k+1 — туда и ставим треугольник.
+  const usable = w - (n - 1) * SEG_GAP;
+  const xAt = (k: number) => usable * bounds[k] + (k - 1) * SEG_GAP + SEG_GAP / 2;
+
+  const nextK = segmented ? inner.findIndex((c) => !c.reached) : -1;
+  const nextX = nextK >= 0 ? xAt(nextK + 1) : undefined;
+  const nextDate = nextK >= 0 ? inner[nextK].date : undefined;
+
+  // Подписи сверху не должны наезжать друг на друга, снизу — на края.
+  // Ширина — оценкой по символам: мерить каждую подпись ради этого избыточно.
+  const textW = (t: string) => t.length * 6.6 + 4;
+  const amountW = nextAmount ? textW(nextAmount) : 0;
+  const amountLeft = nextX !== undefined ? Math.min(Math.max(0, nextX - amountW / 2), w - amountW) : 0;
+  const showAmount = w > 0 && !!nextAmount && nextX !== undefined;
+  const showTopRight = !!topRight && (!showAmount || amountLeft + amountW < w - textW(topRight) - 8);
+  const startLabel = shortDate(openDate);
+  const endLabel = endDate ? shortDate(endDate) : undefined;
+  const midLabel = nextDate ? shortDate(nextDate) : undefined;
+  const midW = midLabel ? textW(midLabel) : 0;
+  const midLeft = nextX !== undefined ? nextX - midW / 2 : 0;
+  const showMid =
+    w > 0 &&
+    !!midLabel &&
+    midLeft > textW(startLabel) + 6 &&
+    midLeft + midW < w - (endLabel ? textW(endLabel) : 16) - 6;
+
   return (
-    <View style={styles.lifeWrap}>
-      {checkpoints.length > 0 ? (
-        <View style={styles.cpRow}>
-          {checkpoints.map((c, i) => {
-            const tone = c.reached ? color : hexToRgba(color, i === nextIdx ? 0.5 : 0.22);
-            return ticks ? (
-              <View key={c.date} style={[styles.cpTick, { left: `${c.at * 100}%`, backgroundColor: tone }]} />
-            ) : (
-              <View key={c.date} style={[styles.cpTriangle, { left: `${c.at * 100}%`, borderTopColor: tone }]} />
-            );
-          })}
-        </View>
-      ) : null}
+    <View style={styles.lifeWrap} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {progress !== undefined ? (
-        <View style={[styles.lifeTrack, { backgroundColor: hexToRgba(color, 0.14) }]}>
-          <View style={[styles.lifeFill, { width: `${Math.min(100, Math.max(0, progress * 100))}%`, backgroundColor: color }]} />
-        </View>
+        <>
+          <View style={styles.lifeTop}>
+            {showAmount ? (
+              <Text style={[styles.lifeAmount, { left: amountLeft, width: amountW }]} numberOfLines={1}>
+                {nextAmount}
+              </Text>
+            ) : null}
+            {showTopRight ? (
+              <Text style={styles.lifeRemain} numberOfLines={1}>
+                {topRight}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.lifeMarks}>
+            {w > 0 && segmented
+              ? inner.map((c, i) => (
+                  <View key={c.date} style={[styles.lifeTriangle, { left: xAt(i + 1) - 6 }]}>
+                    <Triangle color={c.reached ? color : grey} />
+                  </View>
+                ))
+              : null}
+            {ticks
+              ? inner.map((c) => (
+                  <View
+                    key={c.date}
+                    style={[styles.cpTick, { left: `${c.at * 100}%`, backgroundColor: c.reached ? color : grey }]}
+                  />
+                ))
+              : null}
+            <MaterialCommunityIcons
+              name="flag-variant"
+              size={14}
+              color={progress >= 1 ? color : grey}
+              style={styles.lifeFinish}
+            />
+          </View>
+          <View style={styles.lifeSegments}>
+            {Array.from({ length: n }, (_, k) => {
+              const a = bounds[k];
+              const b = bounds[k + 1];
+              const fill = Math.min(1, Math.max(0, (progress - a) / Math.max(1e-9, b - a)));
+              return (
+                <View key={k} style={[styles.lifeTrack, { flex: b - a, backgroundColor: hexToRgba(color, 0.14) }]}>
+                  <View style={[styles.lifeFill, { width: `${fill * 100}%`, backgroundColor: color }]} />
+                </View>
+              );
+            })}
+          </View>
+        </>
       ) : (
         <LinearGradient
           colors={[hexToRgba(color, 0.6), hexToRgba(color, 0)]}
@@ -731,8 +814,13 @@ function LifeBar({
         />
       )}
       <View style={styles.lifeLabels}>
-        <Text style={styles.lifeEdge}>{formatDateShort(openDate)}</Text>
-        <Text style={styles.lifeCenter} numberOfLines={1}>{center ?? ''}</Text>
+        <Text style={styles.lifeEdge}>{startLabel}</Text>
+        {showMid ? (
+          <Text style={[styles.lifeEdge, styles.lifeMid, { left: midLeft, width: midW }]} numberOfLines={1}>
+            {midLabel}
+          </Text>
+        ) : null}
+        <View style={{ flex: 1 }} />
         {endLabel ? (
           <Text style={[styles.lifeEdge, styles.lifeEdgeRight]}>{endLabel}</Text>
         ) : (
@@ -740,6 +828,15 @@ function LifeBar({
         )}
       </View>
     </View>
+  );
+}
+
+/** Треугольник выплаты остриём вниз — скруглённый: острых углов в приложении нет. */
+function Triangle({ color }: { color: string }) {
+  return (
+    <Svg width={12} height={10} viewBox="0 0 12 10">
+      <Path d="M2.5 2 L9.5 2 L6 8 Z" fill={color} stroke={color} strokeWidth={2.6} strokeLinejoin="round" />
+    </Svg>
   );
 }
 
@@ -947,27 +1044,25 @@ const styles = StyleSheet.create({
 
   lifeWrap: { marginTop: tokens.spacing.lg },
   lifeTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  lifeTop: { height: 16, marginBottom: 2 },
+  lifeAmount: {
+    position: 'absolute', top: 0, textAlign: 'center',
+    fontSize: tokens.typography.hint, lineHeight: 15, fontWeight: '600', color: tokens.value.forecast,
+  },
+  lifeRemain: {
+    position: 'absolute', top: 0, right: 0,
+    fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary,
+  },
+  lifeMarks: { height: 14, marginBottom: 3 },
+  lifeTriangle: { position: 'absolute', bottom: 0 },
+  lifeFinish: { position: 'absolute', right: -2, bottom: -1 },
+  lifeSegments: { flexDirection: 'row', gap: SEG_GAP },
+  lifeMid: { position: 'absolute', top: 0, textAlign: 'center' },
   lifeFill: { height: 8, borderRadius: 4 },
   lifeLabels: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   lifeEdge: { fontSize: tokens.typography.hint, lineHeight: 15, fontWeight: '500', color: tokens.text.secondary },
   lifeEdgeRight: { textAlign: 'right' },
-  lifeCenter: { flex: 1, textAlign: 'center', fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, paddingHorizontal: 6 },
-  cpRow: { height: 8, marginBottom: 4 },
-  // Треугольник остриём вниз — на полосу. Рамки вместо SVG: это один View, и
-  // цвет у него обычный стиль, без лишнего слоя.
-  cpTriangle: {
-    position: 'absolute',
-    top: 0,
-    marginLeft: -6,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  cpTick: { position: 'absolute', top: 1, marginLeft: -1, width: 2, height: 7, borderRadius: 1 },
+  cpTick: { position: 'absolute', bottom: 0, marginLeft: -1, width: 2, height: 8, borderRadius: 1 },
   lifeInfinity: { fontSize: 18, lineHeight: 18, fontWeight: '500', color: tokens.text.secondary },
 
   heroGraphWrap: { marginTop: tokens.spacing.xl },
