@@ -436,8 +436,10 @@ export default function AssetScreen() {
             {/* «На сегодня» — в заголовке, период — под числом тем же видом, что
                 у закрытого: «откуда → докуда · сколько дней». Отдельная строка
                 над суммой была лишней: заголовок и так говорит, что это. */}
+            {/* «+» — это доход, а не сумма на счёте: плюс у дохода и прогноза
+                дохода, без плюса — у фактических сумм (на счёте, придёт). */}
             <Text style={[styles.incomeValue, styles.bigValuePositive]} numberOfLines={1} adjustsFontSizeToFit>
-              {formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
+              {outcome.earned >= 0 ? '+' : ''}{formatMoney(outcome.earned, { currency: cur, kopecks: 'hide' })}
             </Text>
             {/* Дата открытия теперь на полосе ниже — тут только длительность. */}
             <Text style={styles.bigCaption}>за {outcome.days} {pluralDays(outcome.days)}</Text>
