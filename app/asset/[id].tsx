@@ -429,7 +429,7 @@ export default function AssetScreen() {
               <Text style={[styles.finTitle, { marginBottom: 0 }]}>Заработано</Text>
               {derived.incomePerDay > 0 ? (
                 <View style={styles.dayChip}>
-                  <Text style={styles.dayChipText}>+{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })} в день</Text>
+                  <Text style={styles.dayChipText}>+{formatMoney(derived.incomePerDay, { currency: cur, kopecks: 'hide' })}{t.common.perDay}</Text>
                 </View>
               ) : null}
             </View>

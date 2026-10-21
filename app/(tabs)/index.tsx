@@ -660,7 +660,7 @@ export default function HomeScreen() {
                     <Text style={styles.heroEventFootText}>
                       {idle.count > 1 ? `${idle.count} ${pluralAssets(idle.count)}: ` : ''}
                       {formatMoney(idle.total, { currency: cur, kopecks: 'hide' })} без ставки
-                      {' · '}теряете ~{formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })} в день
+                      {' · '}теряете ~{formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })}{t.common.perDay}
                     </Text>
                   </View>
                 ) : null}
