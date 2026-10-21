@@ -20,7 +20,7 @@ import { tokens, hexToRgba } from '@/theme';
 import { boxShadow } from '@/theme/shadow';
 import { formatMoney, formatPercent, formatPercentSigned } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
-import { calculate } from '@/calc';
+import { accrualSeries, calculate, diffDays, payoutBoundaryDates } from '@/calc';
 import { uid } from '@/utils/id';
 import { successBuzz, tapBuzz, warnBuzz } from '@/lib/haptics';
 import { openPayoutSheet } from '@/lib/payoutSheet';
@@ -221,6 +221,31 @@ export default function AssetScreen() {
   const isTerm = instrument.behavior === 'term';
   const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
   const progress = Math.round((derived.termProgress ?? 0) * 100);
+
+  // Чекпоинты выплат на полосе срока. Только у срочного с датой окончания:
+  // у бессрочного нет конца, к которому их раскладывать. Ежедневная выплата и
+  // выплата в конце срока дат не дают (payoutBoundaryDates пуст) — полоса
+  // остаётся как была.
+  const today = todayIso();
+  const checkpoints: Checkpoint[] =
+    isTerm && asset.endDate
+      ? payoutBoundaryDates(asset, instrument, asset.endDate).map((d) => ({
+          at: Math.min(1, Math.max(0, diffDays(asset.openDate, d) / Math.max(1, diffDays(asset.openDate, asset.endDate!)))),
+          reached: d <= today,
+          date: d,
+        }))
+      : [];
+  // Ближайшая выплата — её подпись встаёт под полосу. Последний чекпоинт —
+  // это конец срока, про него и так говорит плитка «придёт …».
+  const nextIdx = checkpoints.findIndex((c) => !c.reached);
+  const nextPayout =
+    nextIdx >= 0 && nextIdx < checkpoints.length - 1
+      ? (() => {
+          const prev = nextIdx > 0 ? checkpoints[nextIdx - 1].date : asset.openDate;
+          const [a, b] = accrualSeries(asset, instrument, [prev, checkpoints[nextIdx].date]);
+          return { date: checkpoints[nextIdx].date, amount: Math.max(0, b.accrued - a.accrued) };
+        })()
+      : undefined;
   const bankUrl = findBank(organization.logo)?.url;
   // Накопительные счета — всегда живые деньги; срочные — только если явно разрешено пополнение/снятие.
   const canAdjustBalance = !isTerm || instrument.allowTopUp || instrument.allowPartialWithdraw;
@@ -421,10 +446,13 @@ export default function AssetScreen() {
               openDate={asset.openDate}
               endLabel={isTerm && asset.endDate ? formatDateShort(asset.endDate) : undefined}
               progress={isTerm && asset.endDate ? (derived.termProgress ?? 0) : undefined}
+              checkpoints={checkpoints}
               center={
                 isTerm && asset.endDate
                   ? progress >= 100
                     ? 'срок истёк'
+                    : nextPayout
+                      ? `выплата ${shortDate(nextPayout.date)} · +${formatMoney(nextPayout.amount, { currency: cur, kopecks: 'hide' })}`
                     : derived.daysRemaining !== undefined
                       ? `осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)}`
                       : undefined
@@ -634,12 +662,31 @@ function MiniTile({
  * прозрачность к «∞» — конца нет, и счётчик ему не нужен. Закрытый: прожита
  * целиком, справа дата закрытия, посередине — сколько проработал.
  */
+interface Checkpoint {
+  /** 0..1 — место на полосе срока. */
+  at: number;
+  /** Выплата уже прошла — треугольник горит цветом банка. */
+  reached: boolean;
+  date: string;
+}
+
+const SHORT_MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+/** «30 окт» — под полосой места на полные месяцы не хватает. */
+function shortDate(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${d} ${SHORT_MONTHS[m - 1]}`;
+}
+
+/** Дальше этого треугольники слипаются — рисуем тонкие риски. */
+const MAX_TRIANGLES = 24;
+
 function LifeBar({
   color,
   openDate,
   endLabel,
   progress,
   center,
+  checkpoints = [],
 }: {
   color: string;
   openDate: string;
@@ -648,9 +695,29 @@ function LifeBar({
   /** 0..1 — заполнение. Нет — бессрочный: статичная полоса с затуханием. */
   progress?: number;
   center?: string;
+  /**
+   * Выплаты процентов по сроку — треугольники над полосой. Пройденная горит
+   * цветом банка, ближайшая — вполсилы, остальные бледные: так полоса
+   * отвечает и «сколько до конца», и «когда следующие деньги».
+   */
+  checkpoints?: Checkpoint[];
 }) {
+  const nextIdx = checkpoints.findIndex((c) => !c.reached);
+  const ticks = checkpoints.length > MAX_TRIANGLES;
   return (
     <View style={styles.lifeWrap}>
+      {checkpoints.length > 0 ? (
+        <View style={styles.cpRow}>
+          {checkpoints.map((c, i) => {
+            const tone = c.reached ? color : hexToRgba(color, i === nextIdx ? 0.5 : 0.22);
+            return ticks ? (
+              <View key={c.date} style={[styles.cpTick, { left: `${c.at * 100}%`, backgroundColor: tone }]} />
+            ) : (
+              <View key={c.date} style={[styles.cpTriangle, { left: `${c.at * 100}%`, borderTopColor: tone }]} />
+            );
+          })}
+        </View>
+      ) : null}
       {progress !== undefined ? (
         <View style={[styles.lifeTrack, { backgroundColor: hexToRgba(color, 0.14) }]}>
           <View style={[styles.lifeFill, { width: `${Math.min(100, Math.max(0, progress * 100))}%`, backgroundColor: color }]} />
@@ -885,6 +952,22 @@ const styles = StyleSheet.create({
   lifeEdge: { fontSize: tokens.typography.hint, lineHeight: 15, fontWeight: '500', color: tokens.text.secondary },
   lifeEdgeRight: { textAlign: 'right' },
   lifeCenter: { flex: 1, textAlign: 'center', fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary, paddingHorizontal: 6 },
+  cpRow: { height: 8, marginBottom: 4 },
+  // Треугольник остриём вниз — на полосу. Рамки вместо SVG: это один View, и
+  // цвет у него обычный стиль, без лишнего слоя.
+  cpTriangle: {
+    position: 'absolute',
+    top: 0,
+    marginLeft: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  cpTick: { position: 'absolute', top: 1, marginLeft: -1, width: 2, height: 7, borderRadius: 1 },
   lifeInfinity: { fontSize: 18, lineHeight: 18, fontWeight: '500', color: tokens.text.secondary },
 
   heroGraphWrap: { marginTop: tokens.spacing.xl },
