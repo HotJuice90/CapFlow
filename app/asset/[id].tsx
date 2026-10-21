@@ -665,10 +665,16 @@ interface Checkpoint {
 }
 
 const SHORT_MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-/** «30 окт» — под полосой места на полные месяцы не хватает. */
+/**
+ * «30 окт» — под полосой места на полные месяцы не хватает.
+ *
+ * Пробел неразрывный: Android переносил подпись по пробелу, и вторая строка с
+ * месяцем обрезалась высотой однострочной подписи — под полосой оставалось
+ * одно «1» вместо «1 окт».
+ */
 function shortDate(iso: string): string {
   const [, m, d] = iso.split('-').map(Number);
-  return `${d} ${SHORT_MONTHS[m - 1]}`;
+  return `${d}\u00A0${SHORT_MONTHS[m - 1]}`;
 }
 
 /** Дальше этого пилюли и треугольники слипаются — одна полоса с рисками. */
@@ -809,7 +815,7 @@ function LifeBar({
         />
       )}
       <View style={styles.lifeLabels}>
-        <Text style={styles.lifeEdge}>{startLabel}</Text>
+        <Text style={styles.lifeEdge} numberOfLines={1}>{startLabel}</Text>
         {showMid ? (
           <Text style={[styles.lifeEdge, styles.lifeMid, { left: midLeft, width: midW }]} numberOfLines={1}>
             {midLabel}
@@ -817,7 +823,7 @@ function LifeBar({
         ) : null}
         <View style={{ flex: 1 }} />
         {endLabel ? (
-          <Text style={[styles.lifeEdge, styles.lifeEdgeRight]}>{endLabel}</Text>
+          <Text style={[styles.lifeEdge, styles.lifeEdgeRight]} numberOfLines={1}>{endLabel}</Text>
         ) : (
           <Text style={styles.lifeInfinity}>∞</Text>
         )}
@@ -1058,7 +1064,7 @@ const styles = StyleSheet.create({
   lifeMid: { position: 'absolute', top: 0, textAlign: 'center' },
   lifeFill: { height: 8, borderRadius: 4 },
   lifeLabels: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  lifeEdge: { fontSize: tokens.typography.hint, lineHeight: 15, fontWeight: '500', color: tokens.text.secondary },
+  lifeEdge: { flexShrink: 0, fontSize: tokens.typography.hint, lineHeight: 15, fontWeight: '500', color: tokens.text.secondary },
   lifeEdgeRight: { textAlign: 'right' },
   cpTick: { position: 'absolute', bottom: 0, marginLeft: -1, width: 2, height: 8, borderRadius: 1 },
   lifeInfinity: { fontSize: 18, lineHeight: 18, fontWeight: '500', color: tokens.text.secondary },
