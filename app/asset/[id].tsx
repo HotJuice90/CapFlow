@@ -454,7 +454,7 @@ export default function AssetScreen() {
                   ? progress >= 100
                     ? 'срок истёк'
                     : derived.daysRemaining !== undefined
-                      ? `осталось ${derived.daysRemaining} ${pluralDays(derived.daysRemaining)}`
+                      ? `${derived.daysRemaining} ${pluralDays(derived.daysRemaining)}`
                       : undefined
                   : undefined
               }
@@ -655,13 +655,7 @@ function MiniTile({
   );
 }
 
-/**
- * Полоса жизни актива — один язык для всех состояний. Слева всегда дата
- * открытия. Срочный: полоса заполняется по сроку, справа дата окончания,
- * посередине — сколько осталось. Бессрочный: полоса статичная, гаснет в
- * прозрачность к «∞» — конца нет, и счётчик ему не нужен. Закрытый: прожита
- * целиком, справа дата закрытия, посередине — сколько проработал.
- */
+/** Выплата процентов на полосе срока (см. LifeBar). */
 interface Checkpoint {
   /** 0..1 — место на полосе срока. */
   at: number;
@@ -679,8 +673,9 @@ function shortDate(iso: string): string {
 
 /** Дальше этого пилюли и треугольники слипаются — одна полоса с рисками. */
 const MAX_SEGMENTS = 24;
-/** Зазор между пилюлями периодов. */
-const SEG_GAP = 4;
+/** Зазор между пилюлями периодов. Концы пилюль скруглены до полукруга, поэтому
+ *  стык читается и при совсем узком зазоре. */
+const SEG_GAP = 2;
 
 /**
  * Полоса жизни актива — один язык для всех состояний.
@@ -691,8 +686,8 @@ const SEG_GAP = 4;
  * пришла. Конец срока — флажок, а не ещё один треугольник: финиш и
  * промежуточная выплата не должны выглядеть одинаково.
  *
- * Сверху — то, что про БУДУЩЕЕ: сумма над ближайшим треугольником и сколько
- * осталось справа. Снизу — только календарь, все даты в одном коротком формате.
+ * Сверху — то, что про БУДУЩЕЕ: сумма над ближайшим треугольником и число
+ * дней до конца справа, у флажка — слово «осталось» там лишнее. Снизу — только календарь, все даты в одном коротком формате.
  *
  * Бессрочный: полоса статичная, гаснет к «∞» — конца нет.
  */
@@ -711,7 +706,7 @@ function LifeBar({
   endDate?: string;
   /** 0..1 — заполнение. Нет — бессрочный: статичная полоса с затуханием. */
   progress?: number;
-  /** Над полосой справа: сколько осталось / сколько проработал. */
+  /** Над полосой справа, у флажка: дней до конца / сколько проработал. */
   topRight?: string;
   /** Выплаты процентов по сроку (см. Checkpoint). */
   checkpoints?: Checkpoint[];
@@ -854,21 +849,24 @@ function TaxLine({
   period?: string;
   extra?: string;
 }) {
+  // Сумма — справа, как у остальных чисел карточки, а не внутри предложения:
+  // фразу «~ Налог 435 ₽ за весь срок · по уведомлению ФНС» глаз читал целиком,
+  // чтобы найти число. «~» — прямо у суммы, но тоном прогноза, чтобы само
+  // число оставалось чистым.
   return (
     <View style={styles.taxLine}>
       <View style={styles.taxIcon}>
         <MaterialCommunityIcons name="percent" size={13} color={tokens.value.tax} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        {/* Неразрывный пробел перед «·»: иначе на переносе точка повисает в
-            начале второй строки. «Уже удержано» — своей строкой, а не третьим
-            звеном цепочки через точки. */}
-        <Text style={styles.taxText}>
-          {approx ? '~ Налог ' : 'Налог '}<Text style={styles.taxAmount}>{amount}</Text>
-          {period ? ` ${period}` : ''}{'\u00A0'}· {who}
-        </Text>
+        <Text style={styles.taxTitle} numberOfLines={1}>Налог{period ? ` ${period}` : ''}</Text>
+        <Text style={styles.taxWho} numberOfLines={1}>{who}</Text>
         {extra ? <Text style={styles.taxExtra}>{extra}</Text> : null}
       </View>
+      <Text style={styles.taxValue} numberOfLines={1}>
+        {approx ? <Text style={styles.taxApprox}>~ </Text> : null}
+        {amount}
+      </Text>
     </View>
   );
 }
@@ -1128,9 +1126,11 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.value.tax, 0.14),
     alignItems: 'center', justifyContent: 'center',
   },
-  taxText: { fontSize: 12, lineHeight: 16, color: tokens.text.secondary },
+  taxTitle: { fontSize: 13, lineHeight: 16, color: tokens.text.secondary },
+  taxWho: { fontSize: 12, lineHeight: 15, color: tokens.text.tertiary, marginTop: 1 },
+  taxValue: { fontSize: 16, lineHeight: 20, fontWeight: '700', color: tokens.value.tax },
+  taxApprox: { fontWeight: '500', color: tokens.value.forecast },
   taxExtra: { fontSize: 12, lineHeight: 16, color: tokens.text.tertiary, marginTop: 2 },
-  taxAmount: { fontWeight: '700', color: tokens.value.tax },
   historyCard: { paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   historyHeader: { paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   histRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, backgroundColor: tokens.surface.white },
