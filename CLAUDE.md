@@ -37,8 +37,13 @@ ETF, облигации-флоатеры, структурные продукт�
 - Android-only, без EAS
 - Сборка релиза: `gradlew :app:assembleRelease` в `android/`
 - Релизы: `gh release create vX.Y.Z app-release.apk --title "..." --notes "..."`
-- Версии бампать в `app.json` (`version`) + `android/app/build.gradle` (`versionCode` + `versionName`)
+- Версии бампать в `app.json` (`version`) + `android/app/build.gradle` (`versionCode` + `versionName`).
+  В `app.json` есть ещё `android.versionCode` — держать равным `build.gradle`, иначе разъедется
+  (сейчас в обоих 0.9.89; в `package.json` стоит старый 0.3.3 — это не версия приложения).
+- Самопроверка тулинга: `npm run typecheck`, `npm test`, `npm run doctor` (скрипты в `package.json`).
 - OTA-обновления через GitHub Releases (Настройки → О приложении). Модуль `src/update/`:
+  `config.ts` — репозиторий `HotJuice90/CapFlow` (публичный, токен не нужен), проверка не чаще
+  раза в 6 ч (лимит GitHub API без токена — 60 запросов/час на IP).
   `checkUpdate` (сравнение тега релиза с `app.json` version), `installUpdate`
   (скачивание APK в кэш + передача системному установщику), `useUpdate`
   (`useUpdateFlow` для экрана, `useUpdateBadge` — тихая проверка раз в 6 ч
@@ -67,7 +72,14 @@ Metro регулярно отваливался и терял времени б�
 откатится на дефолт (требует Metro) и опять будет «сплеш висит» без видимой причины.
 
 Дев-клиент с живым Metro (fast refresh) остаётся резервным вариантом, если нужен
-именно live-reload — но по умолчанию не используем.
+именно live-reload — но по умолчанию не используем. В `DEV_RESTART.md` и
+`dev-restart.bat` он описан как основной сценарий — это устарело, читать оттуда только
+рецепт «сплеш висит».
+
+Ещё одна правка в gitignored `android/`, о которой легко забыть при пересоздании:
+`org.gradle.vfs.watch=false` в `android/gradle.properties`. Включённый вотчер держал
+файлы во время CMake-сборки нативных модулей, и ninja бесконечно видел `build.ninja`
+«грязным» (`still dirty after 100 tries`).
 
 ## Бренд
 
@@ -135,10 +147,32 @@ Metro регулярно отваливался и терял времени б�
 
 ## Ключевые модули (короткие пометки, читать сам файл при правке)
 
-- **Шиты**: нативный `formSheet` (`presentation: 'formSheet'`) + `animation: 'none'` —
+- **Где что лежит (иерархия, а не перечисление)**: `app/` — маршруты expo-router
+  (экраны + нативные шиты). `src/state/DataContext.tsx` — состояние и персист;
+  сами мутации разложены по `src/state/actions/*` (`useAssetActions`, `useCatalogActions`,
+  `useFreeCapitalActions`, `useGoalActions`, `useRatesActions`, `useSettingsActions`,
+  общий `persist.ts`). `src/state/selectors.ts` — производные и агрегаты. `src/calc/` —
+  движок (`engine.ts`, `tax.ts`, `dayCount.ts`). `src/domain/` — типы и справочники
+  (`types.ts`, `banks.ts`, `goalIcons.ts`, `keyRateHistory.ts`, `keyRateMeetings.ts`,
+  `bankTiming.ts`). `src/storage/` — схема `AppData` и репозиторий + миграции.
+  `src/format/`, `src/i18n/`, `src/theme/` — правила представления.
+- **Типографика строки актива — `src/theme/rowText.ts`**, одна на главную, календарь
+  и аналитику: заголовок 15/lh17/−0.15/500, подзаголовок 13/lh15 с `marginTop: 4`.
+  Не заводить копии в StyleSheet экрана — копии уже расходились тихо.
+- **Типы данных читать в `src/domain/types.ts`**, а не по памяти: там самая плотная
+  семантика проекта, которой нет ни в одном экране. В частности
+  `BalanceAdjustment.amount` — абсолютный баланс (не дельта!), `PayoutRecord`,
+  `rateCapAmount`/`rateAboveCap` (надбавка только до суммы), `taxWithheldByBank`,
+  `GoalKind` (`amount` / `incomeRate` / `capital`), `FreeCapitalEntry` (дельта, наоборот).
+
+- **Шиты**: `app/_layout.tsx` — реестр `SHEET_ROUTES` из 13 маршрутов. Нативный
+  `formSheet` (`presentation: 'formSheet'`) + `animation: 'none'` —
   затемнение фона ОС просто проявляется, не едет со шитом. Грабер рисуем свой
   (`sheetGrabberVisible: false`). Образец: `app/currency-picker.tsx`.
   Мост между экранами: `src/lib/currencyPicker.ts` (`openCurrencyPicker(cb, current)`).
+  Подъём `sheetAllowedDetents` с `fitToContents` на `[0.92]` — для `asset/balance-adjust`
+  и `asset/rate-adjust`: они растут вместе с историей операций и легко становятся выше экрана,
+  им нужен гарантированный скролл.
 - **Логотипы банков**: `src/components/BankLogo.tsx` — `<OrgLogo color logo size />` ВЕЗДЕ,
   где показываем организацию (список, активы, поиск, инструменты). Лого банков в
   `assets/banks/<id>.svg` + `<id>-w.svg`. Реестр: `src/domain/banks.ts`.
@@ -238,10 +272,51 @@ Metro регулярно отваливался и терял времени б�
     уже оборачивает всё приложение в `app/_layout.tsx`.
   - Образец: `app/(tabs)/index.tsx` — слайдер целей (`goalPos`, `GoalDot`, `goalPan`).
 
+- **Один экран за раз. Не сканировать репо.** Задача про конвертер — значит
+  открыть `app/(tabs)/converter.tsx`, поправить, проверить tsc. Не читать
+  DataContext/selectors/AssetRow «на всякий случай». Сквозные правки — только когда
+  явно сказано.
+
+## Документация и порядок в репо
+
+- **`AGENTS.md`** — операционное соглашение (скоуп задачи, когда спрашивать, что
+  нельзя без разрешения). Расходится с этим файлом в двух местах, и приоритет у
+  `CLAUDE.md`: коммиты (там «только по явной просьбе», здесь — в рамках обычного цикла)
+  и обязательная пара `typecheck` + `npm test -- --runInBand` после правок в общих слоях
+  (`src/calc`, `src/state`, `src/storage`).
+- **`DEV_RESTART.md` и `dev-restart.bat`** — сценарий живого Metro (резервный, не основной).
+  Внутри всё ещё старый путь `C:\Users\hooot\YandexDisk\...` — при правке заменить на
+  `D:\Capital Flow app`.
+- **`README.md`** — установка/скрипты/структура, тоже описывает dev-client + Metro.
+- **`.memora/`** — локальная база памяти, в гит не идёт. `coverage/` — тоже (артефакт).
+- **`.claude/`** (`settings.local.json`, `skills/react-native-best-practices`, `worktrees/`)
+  в `.gitignore` НЕТ — при коммите не прихватывать без нужды.
+- **`CapFlow_Specification-5.md`** и **`CapFlow_Decisions.md`** — продукт и журнал решений;
+  решение #4 в Decisions устарело (свободный капитал давно реализован лентой).
+- **Память (Memora)** — MCP-сервер через `.mcp.json` (SQLite в `.memora/`, в `.gitignore`).
+  Содержит только решения/вкус/баг-классы — не структуру кода; источник истины — этот
+  файл и код. В начале задачи по уже решённой теме сначала `memoryDigest`, после
+  нетривиального решения — `memoryAbsorb` с тегом `capflow`.
+- **`.lazyweb/`** — локальные отчёты/референсы скилла, тоже не в гите.
+
+## Заметки, которые не попадают в APK
+
+- **НЕ подставлять цвета вслепую**: `src/state/selectors.ts` держит `CURRENCY_COLOR`
+  хардкодом (RUB `#62709C`, USD, EUR, …). Это не токены — если цвет валюты понадобится
+  где-то ещё, переносить в `tokens`, а не копировать оттуда строку.
+- **Тесты**: рядом с кодом, `*.test.ts` (`engine.test.ts`, `withdrawals.test.ts`,
+  `selectors.test.ts`, `migrate.test.ts`, `heroState.test.ts`, `keyRate.test.ts`,
+  `bankTiming.test.ts`, `keyRateMeetings.test.ts`). Для замеров производительности
+  временный `__bench.test.ts` не хранится в репо — образец в коммите 0.9.23.
+
+## Релиз и публикация
+
+- **НЕ собирать/публиковать молча.** Новый тег и релиз через `gh` — только по явной
+  просьбе, с текущим `GH_TOKEN` от пользователя (не хранить). Версия бампается под
+  конкретную сборку, а не «на всякий случай».
+
 ## DO NOT (грабли)
 
-- **НЕ запускать** `npx expo prebuild --clean` — затирает `android/app/debug.keystore`,
-  ломает подпись → OTA-обновления перестают ставиться (signature mismatch).
 - **НЕ возвращать** эмодзи-флаги — на Android они не рендерятся (RU вместо 🇷🇺).
   Использовать `<Flag code={code} />`.
 - **НЕ возвращать** системный `Alert.alert` — только `appAlert` из `@/lib/dialog`.
@@ -275,8 +350,8 @@ Metro регулярно отваливался и терял времени б�
   чем в тарболе, это НЕ баг пакета, а обрезанная установка: удалить каталог
   пакета и переставить. `npm ls --depth=0` такое не видит — он сверяет версии,
   а не файлы.
-- **Память Gradle: `org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m`**
-  в `android/gradle.properties`. С прежними 2048m/512m сборка на RN 0.86 падает
+- **`org.gradle.jvmargs`** = `-Xmx4096m -XX:MaxMetaspaceSize=1024m` в `android/gradle.properties`.
+  С прежними 2048m/512m сборка на RN 0.86 падает
   с `Failed to notify build model lifecycle listener > Metaspace` — сообщение
   про код ничего не говорит, легко принять за поломку апгрейда. Третья правка
   в gitignored `android/`, которую не завезёт `git clone` (первые две —
@@ -321,7 +396,9 @@ Metro регулярно отваливался и терял времени б�
   закоммитится пачкой с очередными правками кода.
 - Прямо в `main`, без feature-веток и PR. Тег `vX.Y.Z`, релиз через `gh`.
 - GH_TOKEN — пользователь даёт per-session, не хранить.
-- TypeScript-чек обязателен перед сборкой: `npx tsc --noEmit`.
+- **TypeScript-чек обязателен перед сборкой:** `npx tsc --noEmit` (алиас — `npm run typecheck`).
+  `package.json` содержит ещё и `npm test` (jest, `jest-expo`) — гонять после правок в
+  расчётах/селекторах/хранилище.
 
 ## Текущая работа
 
@@ -335,7 +412,9 @@ Metro регулярно отваливался и терял времени б�
   - Аналитика (`app/(tabs)/analytics.tsx`) — по Фигме готовы «Темп дохода»
     (`CompareDonut`) и «Размещение капитала» (+карточка свободного капитала),
     остальные блоки экрана ещё старые.
-- **На паузе, не начато**: псевдосчёт для свободного капитала (см. решение #4 в
-  `CapFlow_Decisions.md` — устарело, дораскрыть смысл с пользователем на свежую голову
-  перед реализацией).
+- **На паузе, не начато**: псевдосчёт для свободного капитала — сама лента движений
+  (`FreeCapitalEntry`, `app/settings/capital.tsx`, `free-capital-entry.tsx`) уже есть,
+  а вот «псевдосчёт» (воображаемый доход на деньги вне активов) не сделан. Решение #4
+  в `CapFlow_Decisions.md` («свободный капитал вне MVP») устарело: дораскрыть смысл с
+  пользователем на свежую голову перед реализацией.
 - На очереди: остальные блоки главного/аналитики по мере выдачи макетов.
