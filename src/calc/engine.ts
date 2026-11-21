@@ -23,11 +23,12 @@ export const ENGINE_VERSION = '1.2.0';
  */
 export interface YearSegment {
   year: number;
-  /** Границы внутри года (ISO): max(открытие, 1 янв) … min(окончание, 31 дек). */
+  /** Окно внутри года (ISO), `to` — исключающая граница: 1 января следующего
+   *  года, у последнего сегмента — день после окончания. */
   from: string;
   to: string;
-  /** Доход именно этого года: accrued(to) − accrued(from), та же формула, что
-   *  в monthlyIncomeHistory и computeTaxYearRecord — поэтому числа сходятся с фактом. */
+  /** Доход этого года ПО ВЫПЛАТАМ (налоговая база по НК): paidIncomeSeries на
+   *  границах окна — та же база, что в computeTaxYearRecord и налоге календаря. */
   income: number;
   /** Год уже закончился — доход в нём ФАКТ, а не прогноз. */
   past: boolean;
@@ -598,15 +599,78 @@ export function classifyLegacyWithdrawals(asset: Asset, instrument: FinancialIns
 }
 
 /**
- * Разбивка срочного актива по календарным годам — см. YearSegment.
+ * Сколько процентов ВЫПЛАЧЕНО (капитализировано) к каждой дате — выплатами,
+ * датированными СТРОГО раньше неё. Налоговая база по НК — по дате выплаты, а не
+ * начисления: проценты за 31 декабря, выплаченные 1 января, — доход нового года;
+ * у вклада с выплатой в конце срока весь доход — в год окончания.
  *
- * Границы считаются accrued'ом на стыках годов, а не «сумма × ставка × дни/365»:
- * внутри сегмента остаются все эффекты движка (капитализация, смена ставки, порог
- * `rateCapAmount`). Для простого процента результат совпадает с линейным счётом
- * до копеек, а на границе года доли сходятся точно.
+ * График выплат:
+ *  - ежедневно — выплата d покрывает предыдущий день: выплачено к d = accrued(d − 1);
+ *  - помесячно/поквартально/… — на границах payoutBoundaryDates: к d выплачено
+ *    accrued последней границы раньше d;
+ *  - окончание срока и закрытие (`closedAt`) — последняя выплата: всё начисленное;
+ *  - бессрочный без графика выплат — считаем по начислению (выплату не знаем).
  *
- * Возвращает один сегмент, если срок вкладывается в один год — тогда разбивки
- * не нужно и вызывающий показывает одно число («за весь срок»).
+ * Окно [from, to) по этой функции: paid(to) − paid(from). Для года — [1 янв, 1 янв
+ * следующего), выплата 1 января уходит в новый год. Один проход accrualSeries.
+ */
+export function paidIncomeSeries(
+  asset: Asset,
+  instrument: FinancialInstrument,
+  dates: (string | Date)[],
+  closedAt?: string | Date,
+): number[] {
+  if (dates.length === 0) return [];
+  const isos = dates.map(isoAny);
+  const open = asset.openDate;
+  const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
+  const isTerm = instrument.behavior === 'term' && !!asset.endDate;
+  const closedIso = closedAt ? isoAny(closedAt) : undefined;
+  let finalIso = isTerm ? asset.endDate : undefined;
+  if (closedIso && (!finalIso || closedIso < finalIso)) finalIso = closedIso;
+
+  const maxIso = isos.reduce((m, x) => (x > m ? x : m), open);
+  const step = payout ? PAYOUT_STEP_MONTHS[payout] : undefined;
+  const boundaries = step
+    ? payoutBoundaryDates(asset, instrument, finalIso && finalIso < maxIso ? finalIso : maxIso)
+    : [];
+
+  // До какой даты начисленное уже выплачено к дате d.
+  const paidThrough = (d: string): string => {
+    if (d <= open) return open;
+    if (finalIso && d > finalIso) return finalIso;
+    if (payout === 'daily') {
+      const prev = addDays(d, -1);
+      return prev > open ? prev : open;
+    }
+    if (step) {
+      let last = open;
+      for (const b of boundaries) {
+        if (b < d) last = b;
+        else break;
+      }
+      return last;
+    }
+    // Без графика: срочный платит только в конце, бессрочный — по начислению.
+    return isTerm ? open : d;
+  };
+
+  const through = isos.map(paidThrough);
+  const uniq = Array.from(new Set(through)).sort();
+  const byIso = new Map<string, number>();
+  accrualSeries(asset, instrument, uniq).forEach((pt, k) => byIso.set(uniq[k], pt.accrued));
+  return through.map((t) => (t === open ? 0 : byIso.get(t) ?? 0));
+}
+
+/**
+ * Разбивка срочного актива по календарным годам ВЫПЛАТ — см. YearSegment.
+ *
+ * Доход года — проценты, выплаченные в этом году (paidIncomeSeries), а не
+ * начисленные: у вклада с выплатой в конце весь доход в году окончания, у
+ * ежедневной выплаты проценты за 31.12 уходят в новый год. `dates.to` — дата
+ * последней выплаты (окончание), ВКЛЮЧИТЕЛЬНО: выплата в этот день — доход её года.
+ *
+ * Отдаёт и годы с нулевой выплатой: вызывающий решает, показывать ли их.
  */
 export function yearSegments(
   asset: Asset,
@@ -616,27 +680,27 @@ export function yearSegments(
   now: string | Date = new Date(),
 ): YearSegment[] {
   const from = isoAny(dates.from);
-  const to = isoAny(dates.to);
-  if (!from || !to || from >= to) return [];
+  const last = isoAny(dates.to);
+  if (!from || !last || from >= last) return [];
 
   const fromYear = parseInt(from.slice(0, 4), 10);
-  const toYear = parseInt(to.slice(0, 4), 10);
+  const toYear = parseInt(last.slice(0, 4), 10);
   if (!Number.isFinite(fromYear) || !Number.isFinite(toYear)) return [];
 
+  // Окна [from, to): конец — 1 января следующего года, у последнего — день
+  // после последней выплаты. Так окна стыкуются без общих/потерянных суток.
+  const lastExclusive = addDays(last, 1);
   const bounds: { year: number; from: string; to: string }[] = [];
   for (let y = fromYear; y <= toYear; y++) {
     const segFrom = y === fromYear ? from : `${y}-01-01`;
-    // Конец сегмента — первое число следующего года, а не 31 декабря: так
-    // окна стыкуются без общих/потерянных суток (та же грабля в monthlyIncomeHistory).
-    const segTo = y === toYear ? to : `${y + 1}-01-01`;
+    const segTo = y === toYear ? lastExclusive : `${y + 1}-01-01`;
     if (segFrom < segTo) bounds.push({ year: y, from: segFrom, to: segTo });
   }
 
-  // Один проход на все границы сразу: calculate в цикле по годам — тот же
-  // квадрат, что и в цикле по дням (см. CLAUDE.md).
   const isoDates = Array.from(new Set(bounds.flatMap((b) => [b.from, b.to])));
+  const paid = paidIncomeSeries(asset, instrument, isoDates);
   const byIso = new Map<string, number>();
-  accrualSeries(asset, instrument, isoDates).forEach((p, k) => byIso.set(isoDates[k], p.accrued));
+  isoDates.forEach((d, k) => byIso.set(d, paid[k]));
 
   const thisYear = parseInt(isoAny(now).slice(0, 4), 10);
   return bounds.map((b) => ({
@@ -742,40 +806,40 @@ export function calculate(
 
     // Простой процент (по умолчанию): доход линеен по дням, по текущей ставке.
     const incomeTotalTerm = annualYield(asset.amount, currentRate, tier) * (termDays / 365);
-    // Сегменты по годам — только если срок реально вылезает за год. Проверка
-    // по строкам дат заранее: calculate зовут и в циклах (календарь), лишний
-    // проход accrualSeries у однолетнего вклада ни к чему.
-    // Окончание 1 января следующего года — ещё один год (граница исключающая).
+    // Налог — по годам ВЫПЛАТ, у каждого года свой доход и свой лимит. Если все
+    // выплаты (включая финальную в день окончания) в одном году — быстрый путь
+    // без лишнего прохода accrualSeries: calculate зовут и в циклах (календарь).
+    const nowYear = parseInt(isoAny(now).slice(0, 4), 10);
     const openYear = parseInt(asset.openDate.slice(0, 4), 10);
     const endYear = parseInt(asset.endDate.slice(0, 4), 10);
-    const crossesYear = endYear > openYear + 1
-      || (endYear === openYear + 1 && asset.endDate.slice(5) !== '01-01');
-    const segments = crossesYear
+    const taxed = endYear > openYear
       ? yearSegments(asset, instrument, { from: asset.openDate, to: asset.endDate }, now)
-      : [];
-    const yearSegmentsOut = segments.length > 1
-      ? segments.map((seg) => withSegmentTax(seg, params, asset, isoAny(now), limitAlreadyUsed, taxYears))
-      : undefined;
+          .map((seg) => withSegmentTax(seg, params, asset, isoAny(now), limitAlreadyUsed, taxYears))
+      : [withSegmentTax(
+          {
+            year: openYear, from: asset.openDate, to: addDays(asset.endDate, 1),
+            income: incomeTotalTerm,
+            past: openYear < nowYear,
+            current: openYear === nowYear,
+          },
+          params, asset, isoAny(now), limitAlreadyUsed, taxYears,
+        )];
+    // Карточке разбивка нужна, только если выплаты реально в разных годах.
+    const paidYears = taxed.filter((seg) => seg.income > 0);
+    const yearSegmentsOut = paidYears.length > 1 ? paidYears : undefined;
     // «Уже заработано» — посегментно, чтобы честно учитывать пополнения/снятия И смену ставки.
     const accrualNow = diffDays(asset.openDate, now) > termDays ? asset.endDate : now;
     const { accrued: earnedSoFar } = walkAccrual(timeline, rates, mode, payout, accrualNow, tier, realisations);
     const remainingToEarn = Math.max(0, incomeTotalTerm - earnedSoFar);
 
-    // Налог — по календарным годам: у каждого года свой доход и свой лимит.
-    // Срок в пределах одного года — как раньше, на доход всего срока.
-    const tax = yearSegmentsOut
-      ? yearSegmentsOut.reduce((sum, seg) => sum + (seg.tax ?? 0), 0)
-      : calcAssetTax(incomeTotalTerm, params, limitAlreadyUsed, asset.taxWithheldByBank);
-    // Налог «на месяц» у такого вклада — по эффективной ставке ТЕКУЩЕГО года
-    // (его сегмента), а не по годовому темпу с лимитом, будто вклад живёт в
-    // одном году. До открытия — по первому сегменту, после — по последнему.
-    let termMonthlyTax = monthlyTax;
-    if (yearSegmentsOut) {
-      const nowYear = parseInt(isoAny(now).slice(0, 4), 10);
-      const seg = yearSegmentsOut.find((s) => s.year === nowYear)
-        ?? (nowYear < yearSegmentsOut[0].year ? yearSegmentsOut[0] : yearSegmentsOut[yearSegmentsOut.length - 1]);
-      termMonthlyTax = seg.income > 0 ? incomePerMonth * ((seg.tax ?? 0) / seg.income) : 0;
-    }
+    const tax = taxed.reduce((sum, seg) => sum + (seg.tax ?? 0), 0);
+    // Налог «на месяц» у вклада через год — по средней эффективной ставке срока:
+    // доход месяца облагается в год ВЫПЛАТЫ, а не в текущем, и лимит текущего
+    // года к нему может не иметь отношения. В пределах года — как раньше.
+    const paidTotal = taxed.reduce((sum, seg) => sum + seg.income, 0);
+    const termMonthlyTax = endYear > openYear
+      ? (paidTotal > 0 ? incomePerMonth * (tax / paidTotal) : 0)
+      : monthlyTax;
     const net = incomeTotalTerm - tax;
     const finalAmount = asset.amount + net;
 

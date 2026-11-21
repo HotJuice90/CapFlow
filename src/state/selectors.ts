@@ -1,5 +1,5 @@
 import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, PayoutRecord, Snapshot, TaxYearRecord } from '@/domain/types';
-import { accrualSeries, calculate, payoutBoundaryDates, yearSegments, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
+import { accrualSeries, calculate, paidIncomeSeries, payoutBoundaryDates, yearSegments, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
@@ -475,6 +475,12 @@ export interface AssetYearIncome {
   remaining: number;
   /** fact + remaining — доход за календарный год. */
   annual: number;
+  /** Налоговая база года (НК: проценты, ВЫПЛАЧЕННЫЕ в этом году) — с 1 января
+   *  по сегодня. Отличается от fact: у вклада с выплатой в конце срока доход
+   *  начисляется сейчас, а облагается в году выплаты. */
+  taxableFact: number;
+  /** Налоговая база за весь календарный год (выплаты до 31 декабря включительно). */
+  taxableAnnual: number;
   /** Налог платишь сам (актив делит необлагаемый лимит). */
   self: boolean;
   /** Актив уже закрыт/архивирован — в этом году он больше ничего не заработает. */
@@ -521,19 +527,12 @@ export function assetYearIncomes(data: AppData, now: Date = new Date()): AssetYe
     if (!closedAt) {
       const endDate = asset.endDate ? parseLocal(asset.endDate) : null;
       const upper = endDate && endDate < yearEnd ? endDate : yearEnd;
-      if (instrument.behavior === 'term' && asset.endDate) {
-        // Прогноз года — из годового сегмента движка (то же число, что карточка
-        // актива показывает «~ в 2026»), минус уже начисленное с начала сегмента.
-        const seg = yearSegments(asset, instrument, { from: asset.openDate, to: asset.endDate }, now)
-          .find((x) => x.year === now.getFullYear());
-        if (seg && parseLocal(seg.to) > now) {
-          const segFrom = parseLocal(seg.from);
-          let earnedInSeg = 0;
-          if (now > segFrom) {
-            const [p0, p1] = accrualSeries(asset, instrument, [segFrom, now]);
-            earnedInSeg = Math.max(0, p1.accrued - p0.accrued);
-          }
-          remaining = convert(Math.max(0, seg.income - earnedInSeg), asset.currency, data);
+      if (instrument.behavior === 'term' && endDate) {
+        // Доход (начисление) до конца года или срока. Налоговая база — отдельно,
+        // по выплатам (taxableAnnual ниже).
+        if (upper > now) {
+          const [p0, p1] = accrualSeries(asset, instrument, [now, upper]);
+          remaining = convert(Math.max(0, p1.accrued - p0.accrued), asset.currency, data);
         }
       } else {
         const derived = calculate(asset, instrument, data.params, now, 0);
@@ -542,9 +541,16 @@ export function assetYearIncomes(data: AppData, now: Date = new Date()): AssetYe
       }
     }
 
-    if (fact <= 0 && remaining <= 0) continue;
+    // Налоговая база — выплаты: факт до сегодня и весь год. Закрытый платит
+    // всё в день закрытия; у бессрочного будущие выплаты — по текущему балансу.
+    const [paid0, paidNow, paidYear] = paidIncomeSeries(asset, instrument, [yearStart, now, yearEnd], closedAt ?? undefined);
+    const taxableFact = convert(Math.max(0, paidNow - paid0), asset.currency, data);
+    const taxableAnnual = convert(Math.max(0, paidYear - paid0), asset.currency, data);
+
+    if (fact <= 0 && remaining <= 0 && taxableAnnual <= 0) continue;
     out.push({
       asset, instrument, fact, remaining, annual: fact + remaining,
+      taxableFact, taxableAnnual,
       self: !asset.taxWithheldByBank,
       closed: !!closedAt,
     });
@@ -592,7 +598,7 @@ export interface TaxByInstrumentRow {
 export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByInstrumentRow[] {
   const rate = data.params.taxRate / 100;
   return assetYearIncomes(data, now)
-    .filter((r) => r.annual > 0)
+    .filter((r) => r.taxableAnnual > 0)
     .map((r) => {
       // «Зафиксирован» — когда доход за год уже не изменится: срочный с
       // известным сроком либо уже закрытый актив.
@@ -602,14 +608,14 @@ export function taxByInstrument(data: AppData, now: Date = new Date()): TaxByIns
         name: r.asset.title ? `${r.instrument.name} · ${r.asset.title}` : r.instrument.name,
         typeId: r.instrument.typeId,
         organizationId: r.instrument.organizationId,
-        tax: r.annual * rate,
+        tax: r.taxableAnnual * rate,
         // Факт «на сегодня» — ТОЛЬКО для бессрочных. У срочного набежавшее не
         // соответствует ничему реальному: забрать эти деньги посреди срока без
         // потери процентов нельзя, поэтому показывать «уже набежало» нечестно.
         // У бессрочного наоборот: снял в любой день — банк начислил на эту
         // сумму, и её надо знать. У срочного значима одна цифра — итоговая,
         // она известна заранее и не меняется (замочек в UI).
-        taxToDate: !fixed && r.fact > 0 ? r.fact * rate : undefined,
+        taxToDate: !fixed && r.taxableFact > 0 ? r.taxableFact * rate : undefined,
         fixed,
         closed: r.closed,
       };
@@ -727,12 +733,14 @@ export function analyticsSummary(data: AppData, now: Date = new Date()): Analyti
   // buildAssetViews, закрытые через снимки) и расходился с фактом.
   let selfAnnual = 0;
   let withheldAnnual = 0;
+  // Доход года — начисление (столбик «за год»), налог года — по выплатам (НК).
   for (const r of assetYearIncomes(data, now)) {
-    if (r.self) selfAnnual += r.annual;
-    else withheldAnnual += r.annual;
+    incomePerYear += r.annual;
+    if (r.self) selfAnnual += r.taxableAnnual;
+    else withheldAnnual += r.taxableAnnual;
   }
-  incomePerYear = selfAnnual + withheldAnnual;
-  const selfAccrued = year.months.reduce((sum, m) => sum + m.earnedSelf, 0);
+  // Съеденный лимит — выплаченное с 1 января, а не начисленное.
+  const selfAccrued = year.months.reduce((sum, m) => sum + m.paidSelf, 0);
   // accrued тоже за год: держать в одном объекте две разные оконности («за всю
   // жизнь» и «за год») — верный способ снова получить несходящиеся экраны.
   accrued = year.totalEarned;
@@ -1682,22 +1690,21 @@ export function monthlyTaxForecast(data: AppData, year: number, month: number): 
     const end = asset.endDate ? parseLocal(asset.endDate) : null;
     // За окна до открытия/после окончания движок сам даёт нулевые дельты,
     // но незачем гонять его на заведомо мёртвых отрезках.
-    if (open >= monthEnd || (end && end <= monthStart)) continue;
+    // Выплата в день окончания — ещё доход этого месяца, поэтому строго «<».
+    if (open >= monthEnd || (end && end < monthStart)) continue;
 
-    const [from, to] = accrualSeries(asset, instrument, [monthStart, monthEnd]);
-    const delta = convert(Math.max(0, to.accrued - from.accrued), asset.currency, data);
+    // Налоговая база — проценты, ВЫПЛАЧЕННЫЕ в этом месяце (НК: по дате
+    // выплаты), а не начисленные: вклад с выплатой в конце срока даёт налог
+    // целиком в месяце окончания. Один проход на все три границы.
+    const [p0, pFrom, pTo] = paidIncomeSeries(asset, instrument, [yearStart, monthStart, monthEnd]);
+    const delta = convert(Math.max(0, pTo - pFrom), asset.currency, data);
     if (asset.taxWithheldByBank) {
       withheldIncome += delta;
       continue;
     }
     selfIncome += delta;
-
-    // Накопленное с 1 января по конец этого месяца — для ступеньки лимита.
-    const yearFrom = open > yearStart ? open : yearStart;
-    if (monthEnd > yearFrom) {
-      const [y0, y1] = accrualSeries(asset, instrument, [yearFrom, monthEnd]);
-      selfIncomeFromYearStart += convert(Math.max(0, y1.accrued - y0.accrued), asset.currency, data);
-    }
+    // Выплачено с 1 января по конец этого месяца — для ступеньки лимита.
+    selfIncomeFromYearStart += convert(Math.max(0, pTo - p0), asset.currency, data);
   }
 
   // Лимит — на весь самостоятельный доход года; берём срез «январь … этот месяц»
@@ -2192,6 +2199,10 @@ export interface MonthIncomeRow {
   taxSelfFlat: number;
   /** Доход месяца по активам, налог с которых платишь САМ (они делят лимит). */
   earnedSelf: number;
+  /** Проценты, ВЫПЛАЧЕННЫЕ в этом месяце, — налоговая база по НК (по дате
+   *  выплаты). От неё считаются все tax* этой строки; earned — начисление. */
+  paidSelf: number;
+  paidWithheld: number;
   /** сколько активов было живо в этом месяце */
   assets: number;
 }
@@ -2210,10 +2221,24 @@ export interface MonthIncomeYear {
 export function monthlyIncomeHistory(data: AppData, year: number, now: Date = new Date()): MonthIncomeYear {
   const { items } = buildHistoryItems(data, now);
   const rate = data.params.taxRate / 100;
-  const limit = data.params.taxFreeLimit;
+  // Лимит именно этого года: у прошедших — по истории ключевой, как в годовом
+  // расчёте (computeTaxYearRecord), иначе прошлый год считался бы по нынешнему.
+  const limit = year < now.getFullYear() && !data.params.taxFreeLimitManual
+    ? taxFreeLimitForYear(data.keyRateHistory, year)
+    : data.params.taxFreeLimit;
 
   const lastMonth = year === now.getFullYear() ? now.getMonth() : 11;
   const months: MonthIncomeRow[] = [];
+
+  // Налоговая база месяца — ВЫПЛАЧЕННЫЕ в нём проценты (НК), а столбик дохода —
+  // начисленные. Выплаты — одним проходом на все границы месяцев сразу.
+  const monthEdges: Date[] = [];
+  for (let m = 0; m <= lastMonth + 1; m++) {
+    const edge = new Date(year, m, 1);
+    monthEdges.push(edge > now ? now : edge);
+  }
+  const paidByItem = items.map(({ asset, instrument, closedAt }) =>
+    paidIncomeSeries(asset, instrument, monthEdges, closedAt ?? undefined));
 
   // Нарастающие итоги для раскладки лимита по месяцам.
   let cumSelf = 0;
@@ -2233,9 +2258,15 @@ export function monthlyIncomeHistory(data: AppData, year: number, now: Date = ne
 
     let earnedSelf = 0;
     let earnedWithheld = 0;
+    let paidSelf = 0;
+    let paidWithheld = 0;
     let alive = 0;
 
-    for (const { asset, instrument, openDate, closedAt } of items) {
+    for (let k = 0; k < items.length; k++) {
+      const { asset, instrument, openDate, closedAt } = items[k];
+      const paidDelta = convert(Math.max(0, paidByItem[k][m + 1] - paidByItem[k][m]), asset.currency, data);
+      if (asset.taxWithheldByBank) paidWithheld += paidDelta;
+      else paidSelf += paidDelta;
       const assetEnd = closedAt && closedAt < end ? closedAt : end;
       if (assetEnd < start || openDate > assetEnd) continue;
       const from = openDate > start ? openDate : start;
@@ -2249,21 +2280,23 @@ export function monthlyIncomeHistory(data: AppData, year: number, now: Date = ne
 
     const earned = earnedSelf + earnedWithheld;
 
-    cumSelf += earnedSelf;
-    const cumSelfTaxNow = Math.max(0, cumSelf - limit) * rate;
+    cumSelf += paidSelf;
+    const cumSelfTaxNow = DEPOSIT_TAX_EXEMPT_YEARS.has(year) ? 0 : Math.max(0, cumSelf - limit) * rate;
     const selfTaxThisMonth = cumSelfTaxNow - cumSelfTax;
     cumSelfTax = cumSelfTaxNow;
 
-    const taxWithheld = earnedWithheld * rate;
+    const taxWithheld = paidWithheld * rate;
     months.push({
       month: m,
       earned,
-      tax: earned * rate,
+      tax: (paidSelf + paidWithheld) * rate,
       taxWithLimit: selfTaxThisMonth + taxWithheld,
       taxWithheld,
       taxSelf: selfTaxThisMonth,
-      taxSelfFlat: earnedSelf * rate,
+      taxSelfFlat: paidSelf * rate,
       earnedSelf,
+      paidSelf,
+      paidWithheld,
       assets: alive,
     });
   }
@@ -2403,7 +2436,10 @@ function keyRateAt(history: KeyRatePoint[], at: string): number {
  */
 export function computeTaxYearRecord(data: AppData, year: number): TaxYearRecord {
   const jan1 = `${year}-01-01`;
-  const dec31 = `${year}-12-31`;
+  // Конец года — 1 января СЛЕДУЮЩЕГО: accrued на дату не включает сам этот
+  // день, и с «31 декабря» последний день года терялся (на 10 млн под 18% —
+  // ~4 900 ₽ дохода). Так же стыкуются monthlyIncomeHistory и yearSegments.
+  const dec31 = `${year + 1}-01-01`;
   const yearParams = { ...data.params };
 
   const instrById = new Map(data.instruments.map((i) => [i.id, i]));
@@ -2414,8 +2450,12 @@ export function computeTaxYearRecord(data: AppData, year: number): TaxYearRecord
     if (asset.isDemo) continue;
     const instrument = instrById.get(asset.instrumentId);
     if (!instrument) continue;
-    const before = calculate(asset, instrument, yearParams, jan1).earnedSoFar;
-    const after = calculate(asset, instrument, yearParams, dec31).earnedSoFar;
+    // Доход года — проценты, ВЫПЛАЧЕННЫЕ в этом году (НК: по дате выплаты).
+    // Закрытый актив выплачивает всё начисленное в день закрытия.
+    const closedIso = asset.status !== 'active'
+      ? asset.closedDate ?? closedDateFallback(data, asset.id)
+      : undefined;
+    const [before, after] = paidIncomeSeries(asset, instrument, [jan1, dec31], closedIso);
     const income = convert(Math.max(0, after - before), asset.currency, data);
     if (income <= 0) continue;
     if (asset.taxWithheldByBank) withheldIncome += income;

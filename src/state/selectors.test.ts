@@ -39,7 +39,7 @@ describe('computeTaxYearRecord', () => {
     keyRateHistory: [{ date: '2020-01-01', rate: 16 }],
   };
 
-  const expectedIncome = 5_000_000 * 0.12 * (diffDays('2025-01-01', '2025-12-31') / 365);
+  const expectedIncome = 5_000_000 * 0.12 * (diffDays('2025-01-01', '2026-01-01') / 365);
 
   test('лимит года — по ключевой ставке (1 млн × ставка), а не из текущих настроек', () => {
     const rec = computeTaxYearRecord(baseData, 2025);
@@ -48,7 +48,7 @@ describe('computeTaxYearRecord', () => {
     expect(rec.taxFreeLimit).toBeCloseTo(160_000, 2);
   });
 
-  test('доход за год = заработанное между 1 января и 31 декабря', () => {
+  test('доход за год = заработанное с 1 января по 31 декабря включительно', () => {
     const rec = computeTaxYearRecord(baseData, 2025);
     expect(rec.taxableIncome).toBeCloseTo(expectedIncome, 2);
   });
@@ -850,7 +850,7 @@ describe('assetOutcome', () => {
   });
 });
 
-describe('monthlyTaxForecast: длинный вклад не завышает налог месяца', () => {
+describe('monthlyTaxForecast: налог месяца — по выплатам этого месяца', () => {
   const asset: Asset = {
     id: 'mt1',
     instrumentId: 'i0',
@@ -860,6 +860,7 @@ describe('monthlyTaxForecast: длинный вклад не завышает н
     openDate: '2026-01-01',
     endDate: '2029-01-01',
     status: 'active',
+    payoutPeriod: 'monthly',
   };
   const data = {
     ...emptyAppData(),
@@ -868,19 +869,138 @@ describe('monthlyTaxForecast: длинный вклад не завышает н
   };
   const rate = data.params.taxRate / 100;
   const limit = data.params.taxFreeLimit;
+  const perDay = (2_000_000 * 0.2) / 365;
 
-  test('налог месяца не больше ставки × доход месяца, а за год — ставка × (доход года − лимит)', () => {
+  test('за год — ставка × (выплачено в году − лимит); декабрь уходит в следующий год', () => {
     let total = 0;
-    for (let m = 0; m < 12; m++) {
-      const tax = monthlyTaxForecast(data, 2026, m);
-      const monthIncome = 2_000_000 * 0.2 * (new Date(2026, m + 1, 0).getDate() / 365);
-      expect(tax).toBeLessThanOrEqual(monthIncome * rate + 1e-6);
-      total += tax;
-    }
-    expect(total).toBeCloseTo((400_000 - limit) * rate, 2);
+    for (let m = 0; m < 12; m++) total += monthlyTaxForecast(data, 2026, m);
+    // Выплаты 1 фев … 1 дек покрывают январь–ноябрь (334 дня).
+    expect(total).toBeCloseTo((perDay * 334 - limit) * rate, 2);
   });
 
-  test('пока лимит не исчерпан — налога в месяце нет', () => {
+  test('в январе выплат ещё не было — налога нет', () => {
     expect(monthlyTaxForecast(data, 2026, 0)).toBe(0);
+  });
+
+  test('выплата в конце срока — налог весь в месяце окончания', () => {
+    const atEnd = { ...data, assets: [{ ...asset, payoutPeriod: undefined, endDate: '2027-02-01' }] };
+    for (let m = 0; m < 12; m++) expect(monthlyTaxForecast(atEnd, 2026, m)).toBe(0);
+    const total = perDay * diffDays('2026-01-01', '2027-02-01');
+    expect(monthlyTaxForecast(atEnd, 2027, 1)).toBeCloseTo((total - limit) * rate, 2);
+  });
+});
+
+describe('переход через Новый год: налог по дате выплаты, прогноз = факт', () => {
+  // Вклад 2026-07-01 → 2027-02-01, проценты ежемесячно 1-го числа.
+  const deposit: Asset = {
+    id: 'ny1',
+    instrumentId: 'i0',
+    amount: 10_000_000,
+    currency: 'RUB',
+    rate: 18,
+    openDate: '2026-07-01',
+    endDate: '2027-02-01',
+    status: 'active',
+    payoutPeriod: 'monthly',
+  };
+  // Ключевая: в 2026 максимум 21% (лимит 210 000), с ноября — 16%.
+  const keyRateHistory = [
+    { date: '2025-10-01', rate: 21 },
+    { date: '2026-11-01', rate: 16 },
+  ];
+  const data = {
+    ...emptyAppData(),
+    organizations: [{ id: 'o1', name: 'Тест-Банк', type: 'Банк', color: '#000000' } as Organization],
+    instruments: [depositInstrument],
+    assets: [deposit],
+    keyRateHistory,
+    params: { taxRate: 13, keyRate: 16, taxFreeLimit: 210_000 },
+  };
+  const janData = { ...data, params: { ...data.params, taxFreeLimit: 160_000 } };
+  const nov = new Date(2026, 10, 22);
+  const jan = new Date(2027, 0, 15);
+  const perDay = (10_000_000 * 0.18) / 365;
+  // Выплаты 1 авг … 1 дек — июль–ноябрь (153 дня); 1 янв и 1 фев — декабрь и январь.
+  const paid2026 = perDay * 153;
+  const paid2027 = perDay * 62;
+
+  test('в ноябре: доход по годам выплат, 2027 оценён по текущей ключевой', () => {
+    const [v] = buildAssetViews(data, nov);
+    const [s26, s27] = v.derived.yearSegments!;
+    expect(s26.income).toBeCloseTo(paid2026, 2);
+    expect(s27.income).toBeCloseTo(paid2027, 2);
+    expect(s26.tax).toBeCloseTo((paid2026 - 210_000) * 0.13, 2);
+    expect(s27.tax).toBeCloseTo((paid2027 - 160_000) * 0.13, 2);
+    expect(s27.limitByCurrentRate).toBe(true);
+  });
+
+  test('прогноз 2026 из ноября = годовой налоговый расчёт 2026 (доход и налог)', () => {
+    const [v] = buildAssetViews(data, nov);
+    const rec = computeTaxYearRecord(janData, 2026);
+    expect(rec.taxableIncome).toBeCloseTo(v.derived.yearSegments![0].income, 2);
+    expect(rec.taxToPaySelf).toBeCloseTo(v.derived.yearSegments![0].tax!, 2);
+  });
+
+  test('аналитика: налоговая база года = сегмент карточки, доход года — по начислению', () => {
+    const [row] = assetYearIncomes(data, nov);
+    expect(row.taxableAnnual).toBeCloseTo(paid2026, 2);
+    expect(row.annual).toBeCloseTo(perDay * 184, 2);
+  });
+
+  test('помесячная история 2026: столбики — начисление, налог — по выплатам = годовой расчёт', () => {
+    const hist = monthlyIncomeHistory(janData, 2026, jan);
+    expect(hist.totalEarned).toBeCloseTo(perDay * 184, 2);
+    expect(hist.months.reduce((acc, m) => acc + m.paidSelf, 0)).toBeCloseTo(paid2026, 2);
+    // Прошлый год — лимит 2026 из истории (210 000), а не нынешние 160 000.
+    expect(hist.totalTaxSelf).toBeCloseTo(computeTaxYearRecord(janData, 2026).taxToPaySelf, 2);
+  });
+
+  test('налог месяца в календаре за 2026 в сумме = налог года', () => {
+    let total = 0;
+    for (let m = 0; m < 12; m++) total += monthlyTaxForecast(data, 2026, m);
+    expect(total).toBeCloseTo((paid2026 - 210_000) * 0.13, 2);
+  });
+
+  test('в январе: 2026 прошлый (лимит из истории), 2027 текущий (лимит из настроек)', () => {
+    const [v] = buildAssetViews(janData, jan);
+    const [s26, s27] = v.derived.yearSegments!;
+    expect(s26.past).toBe(true);
+    expect(s27.current).toBe(true);
+    expect(s27.limitByCurrentRate).toBe(false);
+    expect(s26.tax).toBeCloseTo((paid2026 - 210_000) * 0.13, 2);
+    expect(s27.tax).toBeCloseTo((paid2027 - 160_000) * 0.13, 2);
+  });
+
+  test('доход по годам не зависит от того, когда смотришь', () => {
+    const [vNov] = buildAssetViews(data, nov);
+    const [vJan] = buildAssetViews(janData, jan);
+    vNov.derived.yearSegments!.forEach((seg, i) => {
+      expect(vJan.derived.yearSegments![i].income).toBeCloseTo(seg.income, 6);
+    });
+  });
+
+  test('выплата в конце срока: в 2026 налоговой базы нет, всё в 2027', () => {
+    const atEnd = { ...janData, assets: [{ ...deposit, payoutPeriod: undefined }] };
+    expect(computeTaxYearRecord(atEnd, 2026).taxableIncome).toBe(0);
+    expect(computeTaxYearRecord(atEnd, 2027).taxableIncome).toBeCloseTo(perDay * 215, 2);
+    const [v] = buildAssetViews({ ...data, assets: atEnd.assets }, nov);
+    expect(v.derived.yearSegments).toBeUndefined();
+    expect(v.derived.tax).toBeCloseTo((perDay * 215 - 160_000) * 0.13, 2);
+  });
+
+  test('ежедневная выплата: проценты за 31 декабря — в 2027', () => {
+    const daily = { ...janData, assets: [{ ...deposit, payoutPeriod: 'daily' as const }] };
+    expect(computeTaxYearRecord(daily, 2026).taxableIncome).toBeCloseTo(perDay * 183, 2);
+    expect(computeTaxYearRecord(daily, 2027).taxableIncome).toBeCloseTo(perDay * 32, 2);
+  });
+
+  test('два вклада через год: каждый год занят только выплатами этого года', () => {
+    const second: Asset = { ...deposit, id: 'ny2', amount: 1_000_000, openDate: '2026-09-01', endDate: '2027-03-01' };
+    const views = buildAssetViews({ ...data, assets: [deposit, second] }, nov);
+    const [s26, s27] = views.find((v) => v.asset.id === 'ny2')!.derived.yearSegments!;
+    // Первый вклад уже выбрал лимит 2026 → у второго налог со всей выплаты 2026.
+    expect(s26.tax).toBeCloseTo(s26.income * 0.13, 2);
+    // Лимит 2027 первый занял на paid2027 (больше 160 000) → у второго налог со всего.
+    expect(s27.tax).toBeCloseTo(s27.income * 0.13, 2);
   });
 });

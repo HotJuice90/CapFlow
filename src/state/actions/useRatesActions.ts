@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import type { CurrencyCode } from '@/domain/types';
 import type { AppData, RateSnapshot } from '@/storage/types';
 import { fetchCbrRates, fetchCbrHistory } from '@/rates/cbr';
-import { currentKeyRate, fetchKeyRateHistory, mergeKeyRateHistory, EARLIEST_DATE } from '@/rates/keyRate';
+import { currentKeyRate, fetchKeyRateHistory, mergeKeyRateHistory, taxFreeLimitForYear, EARLIEST_DATE } from '@/rates/keyRate';
 import { KEY_RATE_HISTORY } from '@/domain/keyRateHistory';
 import type { Persist } from './persist';
 
@@ -96,7 +96,16 @@ export function useRatesActions(data: AppData, persist: Persist): RatesActions {
         ...prev,
         keyRateHistory: merged,
         keyRateUpdatedAt: new Date().toISOString(),
-        params: { ...prev.params, keyRate: currentKeyRate(merged) },
+        params: {
+          ...prev.params,
+          keyRate: currentKeyRate(merged),
+          // Лимит текущего года — производная от той же истории (как в migrate).
+          // Без этого новая ставка меняла оценку следующего года сразу, а лимит
+          // текущего — только после перезапуска приложения.
+          ...(prev.params.taxFreeLimitManual
+            ? {}
+            : { taxFreeLimit: taxFreeLimitForYear(merged, new Date().getFullYear()) }),
+        },
       };
     });
   }, [data.keyRateHistory, persist]);
