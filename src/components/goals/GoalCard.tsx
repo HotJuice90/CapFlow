@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
-import { tokens, font, hexToRgba } from '@/theme';
+import { tokens, font, hexToRgba, blockText } from '@/theme';
 import { formatMoney } from '@/format';
 import { formatDurationApprox, pluralDays } from '@/format/date';
 import type { CurrencyCode, GoalKind } from '@/domain/types';
@@ -222,8 +222,8 @@ const styles = StyleSheet.create({
   doneBadgeText: { fontFamily: font.semibold, fontSize: tokens.typography.micro, color: tokens.semantic.positive },
 
   mainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md },
-  remainLabel: { fontFamily: font.regular, fontSize: tokens.typography.hint, color: tokens.text.tertiary },
-  remainValue: { fontFamily: font.semibold, fontSize: 22, color: tokens.text.primary, letterSpacing: -0.2, marginTop: 4 },
+  remainLabel: blockText.label,
+  remainValue: blockText.value,
   deltaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   deltaText: { fontFamily: font.medium, fontSize: tokens.typography.hint, color: tokens.semantic.positive },
   etaBadge: {

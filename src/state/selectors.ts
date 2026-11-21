@@ -1480,6 +1480,16 @@ export function eventsToday(data: AppData, now: Date = new Date()): (NearestEven
 }
 
 export function nearestEvent(data: AppData, now: Date = new Date()): NearestEvent | null {
+  return upcomingEvents(data, now, 1)[0] ?? null;
+}
+
+/**
+ * Несколько ближайших событий — для блока «Дальше» на главной. Порядок тот же,
+ * что у nearestEvent: сначала ВСЕ просрочки (самая давняя первой — она дороже
+ * всего стоит), затем будущие окончания и выплаты по дате. При равной дате
+ * окончание идёт раньше выплаты: за ним следует решение, за выплатой — нет.
+ */
+export function upcomingEvents(data: AppData, now: Date = new Date(), limit = 3): NearestEvent[] {
   const today = isoDate(now);
   const viewById = new Map(buildAssetViews(data, now).map((v) => [v.asset.id, v]));
 
@@ -1500,15 +1510,15 @@ export function nearestEvent(data: AppData, now: Date = new Date()): NearestEven
     if (at < 0) return null;
     return parseLocal(at > 0 ? all[at - 1] : v.asset.openDate);
   };
-  let best: NearestEvent | null = null;
+  const future: NearestEvent[] = [];
   const take = (e: NearestEvent) => {
     if (e.date < today) return;
-    if (!best || e.date < best.date) best = e;
+    future.push(e);
   };
 
   // Просроченные — отдельным проходом и с приоритетом: обычный `take`
   // отбрасывает всё, что раньше сегодня, а тут прошедшая дата и есть суть.
-  let overdue: NearestEvent | null = null;
+  const overdue: NearestEvent[] = [];
   for (const e of calendarEvents(data, now)) {
     if (e.date >= today) continue;
     const candidate: NearestEvent = {
@@ -1521,9 +1531,8 @@ export function nearestEvent(data: AppData, now: Date = new Date()): NearestEven
       daysRemaining: -diffDays(parseLocal(e.date), now),
       progress: 1,
     };
-    if (!overdue || candidate.date < overdue.date) overdue = candidate;
+    overdue.push(candidate);
   }
-  if (overdue) return overdue;
 
   for (const e of calendarEvents(data, now)) {
     take({
@@ -1556,7 +1565,10 @@ export function nearestEvent(data: AppData, now: Date = new Date()): NearestEven
       });
     }
   }
-  return best;
+  // sort стабилен: при равной дате окончание (добавлено раньше) идёт перед выплатой.
+  overdue.sort((a, b) => a.date.localeCompare(b.date));
+  future.sort((a, b) => a.date.localeCompare(b.date));
+  return [...overdue, ...future].slice(0, limit);
 }
 
 export interface ForecastDayChange {

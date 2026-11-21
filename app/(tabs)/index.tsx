@@ -28,7 +28,6 @@ import { ScreenBackground } from '@/components/ScreenBackground';
 import { HeroField } from '@/components/hero/HeroField';
 import { heroState } from '@/components/hero/heroState';
 import { Card } from '@/components/Card';
-import { TypeCardsRow } from '@/components/TypeCardsRow';
 import { Donut } from '@/components/Donut';
 import { AssetRow } from '@/components/AssetRow';
 import { OrgLogo } from '@/components/BankLogo';
@@ -37,21 +36,23 @@ import { useData } from '@/state/DataContext';
 import {
   buildAssetViews,
   portfolioSummary,
-  groupByInstrumentType,
   incomeRunRateSeries,
   freeCapitalBalance,
   analyticsSummary,
   liquidity,
   goalsProgress,
   idleCapital,
-  nearestEvent as nearestEventOf,
+  upcomingEvents,
   eventsToday,
   standaloneGoalsProgress,
   type GoalProgress,
   type GoalMetric,
+  type NearestEvent,
 } from '@/state/selectors';
 import type { AssetView, Goal } from '@/domain/types';
 import { tokens, font, hexToRgba } from '@/theme';
+import { rowText } from '@/theme/rowText';
+import { blockText } from '@/theme/blockText';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
 import { tapBuzz, successBuzz } from '@/lib/haptics';
@@ -69,12 +70,11 @@ import { t } from '@/i18n';
  * «+1 718», хотя по невидимому ключу (349 против 158 в день) всё верно.
  * Доход за день теперь живёт в календаре, поэтому и сортировки по нему тут нет.
  */
-type SortKey = 'earned' | 'amount' | 'rate' | 'end' | 'added';
+type SortKey = 'earned' | 'amount' | 'rate' | 'added';
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'earned', label: 'по заработанному' },
   { key: 'amount', label: 'по сумме' },
   { key: 'rate', label: 'по ставке' },
-  { key: 'end', label: 'по сроку' },
   { key: 'added', label: 'по добавлению' },
 ];
 
@@ -91,7 +91,6 @@ function sortViews(views: AssetView[], key: SortKey): AssetView[] {
     // разные числа, а сортировать надо по показанному.
     case 'amount': return v.sort((a, b) => investedOf(b) - investedOf(a));
     case 'rate': return v.sort((a, b) => b.derived.currentRate - a.derived.currentRate);
-    case 'end': return v.sort((a, b) => (a.derived.daysRemaining ?? Infinity) - (b.derived.daysRemaining ?? Infinity));
     default: return v;
   }
 }
@@ -143,27 +142,6 @@ function HeroTile({
       </View>
     </Pressable>
   );
-}
-
-/** Прогресс срока (0..1) для активов с датой окончания — для мини-кольца в списке событий. */
-function termProgress(view: AssetView): number {
-  const { asset, derived } = view;
-  if (!asset.endDate || derived.daysRemaining === undefined) return 0;
-  const totalDays = Math.max(
-    1,
-    Math.round((new Date(asset.endDate).getTime() - new Date(asset.openDate).getTime()) / 86_400_000),
-  );
-  return Math.min(1, Math.max(0, 1 - derived.daysRemaining / totalDays));
-}
-
-/** Подписи под числами в плитке «В работе» — именительный падеж, не «на 3 площадках». */
-function pluralPlatform(n: number): string {
-  const t = n % 100;
-  if (t >= 11 && t <= 14) return 'площадок';
-  const d = n % 10;
-  if (d === 1) return 'площадка';
-  if (d >= 2 && d <= 4) return 'площадки';
-  return 'площадок';
 }
 
 function pluralAccounts(n: number): string {
@@ -238,14 +216,18 @@ export default function HomeScreen() {
       return () => { statusBarVeil.value = 1; };
     }, [scrollY]),
   );
-  const assetsSectionRef = useRef<View>(null);
 
   const views = useMemo(() => buildAssetViews(data), [data]);
   const summary = useMemo(() => portfolioSummary(data), [data]);
-  const grouped = useMemo(() => groupByInstrumentType(data), [data]);
   const runRate = useMemo(() => incomeRunRateSeries(data, 30), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
-  const nearestEvent = useMemo(() => nearestEventOf(data), [data]);
+  // «Дальше» — несколько ближайших событий одним списком (раньше было
+  // ближайшее событие плашкой под hero и отдельно «Ближайшие события»,
+  // и один вклад показывался в обоих).
+  const nextEvents = useMemo(() => upcomingEvents(data), [data]);
+  // Свёрнут по умолчанию: на главной нужен ответ «сколько без налога / сколько
+  // доплатить», полоса и разбивка — по запросу.
+  const [taxOpen, setTaxOpen] = useState(false);
   // События СЕГОДНЯ (кроме просрочки — она не праздник, а повод действовать):
   // герой переключается на них, поле вспыхивает. См. heroState → celebration.
   // Их может быть несколько: счета обычно платят первого числа все разом, и
@@ -308,27 +290,19 @@ export default function HomeScreen() {
   const liqTotal = liq.liquid + liq.frozen;
   const liqLiquidShare = liqTotal > 0 ? liq.liquid / liqTotal : 0;
 
-  const upcoming = useMemo(
-    () =>
-      views
-        .filter((v) => v.instrument.behavior === 'term' && v.asset.endDate && v.derived.daysRemaining !== undefined)
-        .sort((a, b) => (a.derived.daysRemaining ?? 0) - (b.derived.daysRemaining ?? 0))
-        .slice(0, 3),
-    [views],
-  );
-
-  /**
-   * Ближайшее событие — строка под плитками. Не только окончание срока:
-   * у бессрочного портфеля их не бывает вовсе, а начисление процентов —
-   * тоже событие, просто за ним не следует обязательного действия.
-   */
   const idle = useMemo(() => idleCapital(data), [data]);
-  // Просроченное — единственное, что требует действия, поэтому и цветом
-  // отличается от спокойных «скоро выплата» / «скоро конец срока».
-  const eventTone = nearestEvent?.kind === 'overdue' ? tokens.semantic.warning : tokens.accent.base;
 
   const sort = SORTS[sortIdx];
-  const sortedViews = useMemo(() => sortViews(views, sort.key), [views, sort.key]);
+  // Активы делятся по ликвидности: «можно снять сейчас» (бессрочные и срочные с
+  // вышедшим сроком — тот же признак, что в liquidity()) и «освободятся по
+  // сроку». Вторая группа всегда по дате разморозки — в этом её смысл; выбранная
+  // сортировка действует на первую.
+  const isFrozen = (v: AssetView) => v.instrument.behavior === 'term' && (v.derived.daysRemaining ?? 0) > 0;
+  const availableViews = useMemo(() => sortViews(views.filter((v) => !isFrozen(v)), sort.key), [views, sort.key]);
+  const frozenViews = useMemo(
+    () => views.filter(isFrozen).sort((a, b) => (a.derived.daysRemaining ?? 0) - (b.derived.daysRemaining ?? 0)),
+    [views],
+  );
 
   // Цели — водопад по всем активным, но на Главной показываем только «голову
   // очереди» (первую незаполненную) — остальные ждут своей очереди, отдельно
@@ -415,18 +389,11 @@ export default function HomeScreen() {
   const hasAssets = views.length > 0;
   const hasArchived = data.assets.some((a) => a.status !== 'active');
   const cur = data.settings.defaultCurrency;
-  const orgCount = new Set(views.map((v) => v.organization.id)).size;
-
-  // Тап по «Активов в работе» — якорь вниз, к списку активов на этом же
-  // экране (не отдельный роут). measureLayout — координаты цели относительно
-  // ScrollView, а не окна, поэтому не зависит от текущей позиции скролла.
-  const scrollToAssets = () => {
-    assetsSectionRef.current?.measureLayout(
-      scrollRef.current as unknown as React.ComponentRef<typeof View>,
-      (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true }),
-    );
-  };
-
+  // В день события герой уже рассказывает о нём — в «Дальше» его не повторяем.
+  const shownEvents = heroEvent
+    ? nextEvents.filter((e) => !(e.kind !== 'overdue' && e.daysRemaining === 0))
+    : nextEvents;
+  const orgOf = (assetId: string) => views.find((v) => v.asset.id === assetId)?.organization.name;
   // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
   // те, где банк удерживает налог сам, в этом дележе не участвуют вообще.
@@ -561,6 +528,9 @@ export default function HomeScreen() {
 
         {hasAssets ? (
           <>
+            {/* Одна плитка вместо двух: «6 активов» повторяла заголовок списка
+                ниже, а «Капитал в работе» — единственное число, которого больше
+                нигде на экране нет. */}
             <View style={styles.heroStatsRow}>
               <HeroTile
                 icon="wallet-outline"
@@ -568,105 +538,35 @@ export default function HomeScreen() {
                 value={formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
                 onPress={() => router.push('/analytics')}
               />
-              {/* Два числа стопкой, а не фразой «4 на 3 площадках»: фраза
-                  читается как предложение, которое надо разобрать, а тут глазу
-                  сразу видно два независимых факта. */}
-              <HeroTile
-                icon="layers-outline"
-                label={['В работе']}
-                value={`${views.length} ${pluralAssets(views.length)}`}
-                sub={`${orgCount} ${pluralPlatform(orgCount)}`}
-                onPress={scrollToAssets}
-              />
             </View>
-
-            {/* Здесь был «Лидер дохода» — он менялся раз в полгода, ничего не
-                предлагал сделать и повторял отсортированный список активов.
-                Событие — окончание срока ИЛИ ближайшая выплата процентов
-                (см. nearestEvent): только окончаний мало, у бессрочного
-                портфеля их не бывает вовсе и строка пустовала бы всегда.
-                Подпись разная нарочно — за выплатой, в отличие от срока,
-                никакого обязательного действия не следует. */}
-            {nearestEvent && !heroEvent ? (
-              <Pressable
-                style={[styles.heroEventPill, nearestEvent.kind === 'overdue' && styles.heroEventPillAlert]}
-                onPress={() => router.push(`/asset/${nearestEvent.assetId}`)}
-              >
-                <View style={styles.heroEventRow}>
-                  {/* Кольцо обратного отсчёта — как в списке событий: для срока
-                      это доля пройденного срока, для выплаты — доля периода
-                      начисления. Иконка типа события внутри кольца, чтобы не
-                      занимать ещё одно место в строке. */}
-                  <View style={styles.heroEventRing}>
-                    <Donut
-                      segments={[
-                        { value: nearestEvent.progress, color: eventTone },
-                        { value: 1 - nearestEvent.progress, color: tokens.surface.neutral },
-                      ]}
-                      size={40}
-                      strokeWidth={4.5}
-                    />
-                    <View style={styles.heroEventRingIcon} pointerEvents="none">
-                      <MaterialCommunityIcons
-                        name={
-                          nearestEvent.kind === 'overdue'
-                            ? 'alert-circle-outline'
-                            : nearestEvent.kind === 'maturity'
-                              ? 'flag-outline'
-                              : 'cash'
-                        }
-                        size={15}
-                        color={eventTone}
-                      />
-                    </View>
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.heroEventLabel, nearestEvent.kind === 'overdue' && { color: eventTone }]}>
-                      {nearestEvent.kind === 'overdue'
-                        ? 'Срок истёк — деньги не работают'
-                        : nearestEvent.kind === 'maturity'
-                          ? 'Окончание срока'
-                          : 'Выплата процентов'}
-                    </Text>
-                    <Text style={styles.heroEventName} numberOfLines={1}>{nearestEvent.name}</Text>
-                    {nearestEvent.amount > 0.5 ? (
-                      <Text style={styles.heroEventAmount} numberOfLines={1}>
-                        {nearestEvent.kind === 'payout' ? '+' : ''}
-                        {formatMoney(nearestEvent.amount, { currency: nearestEvent.currency, kopecks: 'hide' })}
-                        {nearestEvent.kind === 'payout' ? '' : ' освободится'}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.heroEventWhen}>
-                    <Text style={[styles.heroEventDate, { color: eventTone }]}>
-                      {formatDateShort(nearestEvent.date)}
-                    </Text>
-                    <Text style={styles.heroEventDays}>
-                      {nearestEvent.daysRemaining === 0
-                        ? 'сегодня'
-                        : nearestEvent.daysRemaining < 0
-                          ? `${-nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)} назад`
-                          : `${nearestEvent.daysRemaining} ${pluralDays(nearestEvent.daysRemaining)}`}
-                    </Text>
-                  </View>
+            {shownEvents.length > 0 ? (
+              <>
+                <View style={styles.sectionRow}>
+                  <Text style={styles.sectionTitleInline}>Дальше</Text>
+                  <Pressable onPress={() => router.push('/calendar')} hitSlop={8}>
+                    <Text style={styles.link}>Календарь</Text>
+                  </Pressable>
                 </View>
-
-                {/* Карточка события ДИНАМИЧЕСКАЯ: в состоянии «срок истёк» она
-                    же говорит, сколько денег стоит без ставки и чего это стоит
-                    в день. Отдельный блок про простой рассказывал бы то же
-                    самое в том же месте экрана. */}
-                {nearestEvent.kind === 'overdue' && idle.total > 0 ? (
-                  <View style={styles.heroEventFoot}>
-                    <Text style={styles.heroEventFootText}>
-                      {idle.count > 1 ? `${idle.count} ${pluralAssets(idle.count)}: ` : ''}
-                      {formatMoney(idle.total, { currency: cur, kopecks: 'hide' })} без ставки
-                      {' · '}теряете ~{formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })}{t.common.perDay}
-                    </Text>
+                <Card padded={false}>
+                  <View style={styles.listInner}>
+                    {shownEvents.map((e, i) => (
+                      <NextEventRow
+                        key={`${e.kind}-${e.assetId}-${e.date}`}
+                        e={e}
+                        org={orgOf(e.assetId)}
+                        divider={i > 0}
+                        idleText={
+                          e.kind === 'overdue' && idle.total > 0
+                            ? `${idle.count > 1 ? `${idle.count} ${pluralAssets(idle.count)}: ` : ''}${formatMoney(idle.total, { currency: cur, kopecks: 'hide' })} без ставки · теряете ~${formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })}${t.common.perDay}`
+                            : undefined
+                        }
+                        onPress={() => router.push(`/asset/${e.assetId}`)}
+                      />
+                    ))}
                   </View>
-                ) : null}
-              </Pressable>
+                </Card>
+              </>
             ) : null}
-
             {/* marginBottom:0, когда есть слайдер — его карточка сама даёт 14px
                 сверху через paddingVertical у goalSlidePage (нужен и для отступа
                 снизу тоже), обычные 14 от sectionRow добавились бы поверх этого,
@@ -740,79 +640,17 @@ export default function HomeScreen() {
               </Pressable>
             )}
 
-            {liq.frozen > 0 ? (
-              <>
-                <Text style={styles.sectionTitle}>Ликвидность</Text>
-                <Card>
-                  <View>
-                    <Text style={styles.liqLabel}>Доступно сейчас</Text>
-                    <Text style={[styles.liqValue, { color: tokens.semantic.positive }]}>
-                      {formatMoney(liq.liquid, { currency: cur, kopecks: 'hide' })}
-                    </Text>
-                  </View>
-
-                  <View style={styles.liqBarWrap}>
-                    <View style={styles.liqTrack}>
-                      <LinearGradient
-                        colors={[hexToRgba(tokens.semantic.positive, 0.5), tokens.semantic.positive]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[styles.liqFill, { width: `${Math.min(Math.max(liqLiquidShare * 100, 0), 100)}%` }]}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.liqMeta}>
-                    <Text style={styles.liqMetaBigValue}>{Math.round(liqLiquidShare * 100)}%</Text>
-                    <View style={styles.liqMetaInlineRow}>
-                      <MaterialIcons name="lock" size={14} color={tokens.text.tertiary} />
-                      <Text style={[styles.liqMetaBigValue, { color: tokens.text.tertiary }]}>
-                        {formatMoney(liq.frozen, { currency: cur, kopecks: 'hide' })}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.liqSep} />
-                  {liq.frozenItems.map((it, i) => (
-                    <View key={it.assetId}>
-                      {i > 0 ? <View style={styles.liqItemSep} /> : null}
-                      <Pressable
-                        style={({ pressed }) => [styles.liqRow, pressed && styles.liqRowPressed]}
-                        onPress={() => router.push(`/asset/${it.assetId}`)}
-                      >
-                        <View style={styles.liqRing}>
-                          <View style={[styles.liqLockCircle, { backgroundColor: hexToRgba(tokens.category[it.typeId] ?? tokens.accent.base, 0.16) }]}>
-                            <MaterialIcons name="lock" size={15} color={tokens.category[it.typeId] ?? tokens.accent.base} />
-                          </View>
-                          <Donut
-                            segments={[
-                              { value: it.termProgress, color: tokens.category[it.typeId] ?? tokens.accent.base },
-                              { value: 1 - it.termProgress, color: tokens.surface.neutral },
-                            ]}
-                            size={38}
-                            strokeWidth={4.5}
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.liqRowName} numberOfLines={1}>
-                            {it.orgName} · {it.title ? `${it.instrumentName} · ${it.title}` : it.instrumentName}
-                          </Text>
-                          <Text style={styles.liqRowSub} numberOfLines={1}>
-                            {formatDateShort(it.unlockDate)} · {it.daysRemaining} {pluralDays(it.daysRemaining)}
-                          </Text>
-                        </View>
-                        <Text style={styles.liqRowValue}>{formatMoney(it.amountBase, { currency: cur, kopecks: 'hide' })}</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </Card>
-              </>
-            ) : null}
-
-            <Text style={styles.sectionTitle}>Капитал по инструментам</Text>
-            <TypeCardsRow groups={grouped.groups} currency={cur} />
-
-            <Text style={styles.sectionTitle}>Необлагаемый лимит</Text>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitleInline}>Необлагаемый лимит</Text>
+              <Pressable
+                style={styles.sortBtn}
+                onPress={() => { tapBuzz(); setTaxOpen((v) => !v); }}
+                hitSlop={8}
+              >
+                <Text style={styles.link}>{taxOpen ? 'Свернуть' : 'Подробнее'}</Text>
+                <MaterialIcons name={taxOpen ? 'expand-less' : 'expand-more'} size={18} color={tokens.accent.base} />
+              </Pressable>
+            </View>
             {/* Герой меняет смысл вместе с состоянием: пока доход по вкладам в
                 лимите — крупно, сколько ещё можно заработать без налога; лимит
                 пробит — на его место встаёт сумма к доплате. Колонки внизу — для
@@ -837,6 +675,8 @@ export default function HomeScreen() {
                   {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
                 </Text>
                 {taxLimitEta ? <Text style={styles.txEta}>{taxLimitEta}</Text> : null}
+                {taxOpen ? (
+                <>
                 <View style={styles.txTrack}>
                   {taxBarPct > 0 ? (
                     <LinearGradient
@@ -894,59 +734,18 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 ) : null}
+                </>
+                ) : null}
               </Card>
             </Pressable>
 
-            {upcoming.length > 0 ? (
-              <>
-                <View style={styles.sectionRow}>
-                  <Text style={styles.sectionTitleInline}>Ближайшие события</Text>
-                  <Pressable onPress={() => router.push('/calendar')} hitSlop={8}>
-                    <Text style={styles.link}>Календарь</Text>
-                  </Pressable>
-                </View>
-                <Card padded={false}>
-                  <View style={styles.listInner}>
-                    {upcoming.map((v, i) => {
-                      const progress = termProgress(v);
-                      const daysRemaining = v.derived.daysRemaining ?? 0;
-                      return (
-                        <View key={v.asset.id}>
-                          {i > 0 && <View style={styles.divider} />}
-                          <Pressable style={styles.eventRow} onPress={() => router.push(`/asset/${v.asset.id}`)}>
-                            <Donut
-                              segments={[
-                                { value: progress, color: tokens.accent.base },
-                                { value: 1 - progress, color: tokens.surface.neutral },
-                              ]}
-                              size={38}
-                              strokeWidth={4.5}
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.eventName} numberOfLines={1}>{v.instrument.name}</Text>
-                              <Text style={styles.eventSub}>
-                                {formatDateShort(v.asset.endDate as string)} · {daysRemaining} {pluralDays(daysRemaining)}
-                              </Text>
-                            </View>
-                            <Text style={styles.eventAmount}>
-                              {formatMoney(v.derived.finalAmount ?? v.asset.amount, { currency: v.asset.currency })}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </Card>
-              </>
-            ) : null}
-
-            <View style={styles.sectionRow} ref={assetsSectionRef}>
+            <View style={styles.sectionRow}>
               <View style={styles.sectionTitleWrap}>
                 <Text style={styles.sectionTitleInline}>{t.home.assets}</Text>
                 {/* Счётчик только от двух: при одном активе цифра «1» ничего не
                     сообщает, её и так видно. */}
-                {sortedViews.length > 1 ? (
-                  <Text style={styles.sectionCount}>{sortedViews.length}</Text>
+                {views.length > 1 ? (
+                  <Text style={styles.sectionCount}>{views.length}</Text>
                 ) : null}
               </View>
               <Pressable
@@ -961,13 +760,63 @@ export default function HomeScreen() {
             {/* Каждый актив — независимая карточка, а не строка в общей: так у
                 него есть свои границы и воздух вокруг, и список перестаёт
                 читаться однородной плитой. */}
+            {/* Ликвидность — шапка списка, а не отдельный блок: раньше замороженные
+                вклады шли её строками, потом ещё раз в событиях и в третий раз
+                здесь. Теперь её строки — это сами карточки активов в группах. */}
+            {liq.frozen > 0 ? (
+              <Card style={styles.liqCard}>
+                <Text style={styles.liqLabel}>Доступно сейчас</Text>
+                <Text style={styles.liqValue}>
+                  {formatMoney(liq.liquid, { currency: cur, kopecks: 'hide' })}
+                </Text>
+                <View style={styles.liqBarWrap}>
+                  <View style={styles.liqTrack}>
+                    <LinearGradient
+                      colors={[hexToRgba(tokens.semantic.positive, 0.5), tokens.semantic.positive]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.liqFill, { width: `${Math.min(Math.max(liqLiquidShare * 100, 0), 100)}%` }]}
+                    />
+                  </View>
+                </View>
+                <View style={styles.liqMeta}>
+                  <Text style={styles.liqMetaBigValue}>{Math.round(liqLiquidShare * 100)}%</Text>
+                  <View style={styles.liqMetaInlineRow}>
+                    <MaterialIcons name="lock" size={14} color={tokens.text.tertiary} />
+                    <Text style={[styles.liqMetaBigValue, { color: tokens.text.tertiary }]}>
+                      {formatMoney(liq.frozen, { currency: cur, kopecks: 'hide' })}
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            ) : null}
+            {frozenViews.length > 0 && availableViews.length > 0 ? (
+              <Text style={styles.groupTitle}>Можно снять сейчас · {availableViews.length}</Text>
+            ) : null}
             <View style={styles.assetCards}>
-              {sortedViews.map((v) => (
+              {availableViews.map((v) => (
                 <Card key={v.asset.id}>
                   <AssetRow view={v} />
                 </Card>
               ))}
             </View>
+            {frozenViews.length > 0 ? (
+              <>
+                <View style={styles.groupTitleRow}>
+                  <MaterialIcons name="lock" size={13} color={tokens.text.tertiary} />
+                  <Text style={[styles.groupTitle, styles.groupTitleInRow]}>
+                    Освободятся по сроку · {frozenViews.length}
+                  </Text>
+                </View>
+                <View style={styles.assetCards}>
+                  {frozenViews.map((v) => (
+                    <Card key={v.asset.id}>
+                      <AssetRow view={v} />
+                    </Card>
+                  ))}
+                </View>
+              </>
+            ) : null}
             {hasArchived ? (
               <Pressable style={styles.archiveLink} onPress={() => router.push('/archive')} hitSlop={8}>
                 <MaterialCommunityIcons name="archive-outline" size={15} color={tokens.text.tertiary} />
@@ -980,6 +829,84 @@ export default function HomeScreen() {
         )}
       </Animated.ScrollView>
     </ScreenBackground>
+  );
+}
+
+/**
+ * Строка блока «Дальше»: окончание срока, выплата или просрочка. Кольцо —
+ * обратный отсчёт (доля срока или периода начисления), иконка типа внутри.
+ * Сумма выплаты — прогноз дохода: «+» у числа, тон прогноза, «~» в подписи.
+ * Сумма к окончанию — то, что придёт, без «+».
+ */
+function NextEventRow({
+  e,
+  org,
+  divider,
+  idleText,
+  onPress,
+}: {
+  e: NearestEvent;
+  org?: string;
+  divider: boolean;
+  idleText?: string;
+  onPress: () => void;
+}) {
+  // Просроченное — единственное, что требует действия, поэтому и цветом
+  // отличается от спокойных «скоро выплата» / «скоро конец срока».
+  const tone = e.kind === 'overdue' ? tokens.semantic.warning : tokens.accent.base;
+  const label = e.kind === 'overdue'
+    ? 'Срок истёк — деньги не работают'
+    : e.kind === 'maturity' ? 'Окончание срока' : '~ выплата процентов';
+  const when = e.daysRemaining === 0
+    ? 'сегодня'
+    : e.daysRemaining < 0
+      ? `${-e.daysRemaining} ${pluralDays(e.daysRemaining)} назад`
+      : `${e.daysRemaining} ${pluralDays(e.daysRemaining)}`;
+  return (
+    <View>
+      {divider ? <View style={styles.divider} /> : null}
+      <Pressable style={({ pressed }) => [styles.eventRow, pressed && styles.rowPressed]} onPress={onPress}>
+        <View style={styles.heroEventRing}>
+          <Donut
+            segments={[
+              { value: e.progress, color: tone },
+              { value: 1 - e.progress, color: tokens.surface.neutral },
+            ]}
+            size={38}
+            strokeWidth={4.5}
+          />
+          <View style={styles.heroEventRingIcon} pointerEvents="none">
+            <MaterialCommunityIcons
+              name={e.kind === 'overdue' ? 'alert-circle-outline' : e.kind === 'maturity' ? 'flag-outline' : 'cash'}
+              size={15}
+              color={tone}
+            />
+          </View>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={rowText.title} numberOfLines={1}>{e.name}</Text>
+          <Text style={[rowText.subtitle, e.kind === 'overdue' && { color: tone }]} numberOfLines={1}>
+            {org ? `${label} · ${org}` : label}
+          </Text>
+        </View>
+        <View style={styles.nextRight}>
+          {e.amount > 0.5 ? (
+            <Text style={[styles.nextAmount, e.kind === 'payout' && { color: tokens.value.forecast }]} numberOfLines={1}>
+              {e.kind === 'payout' ? '+' : ''}
+              {formatMoney(e.amount, { currency: e.currency, kopecks: 'hide' })}
+            </Text>
+          ) : null}
+          <Text style={[rowText.subtitle, { color: tone }]} numberOfLines={1}>
+            {formatDateShort(e.date)} · {when}
+          </Text>
+        </View>
+      </Pressable>
+      {idleText ? (
+        <View style={styles.heroEventFoot}>
+          <Text style={styles.heroEventFootText}>{idleText}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -1027,7 +954,6 @@ const styles = StyleSheet.create({
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 40, marginBottom: 14 },
   // Отступы/паддинг — канон заголовков секций, устоявшийся в аналитике
   // (см. CLAUDE.md → «Канон экранов»): 40 сверху, 14 снизу, 8 слева.
-  sectionTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: 40, marginBottom: 14, paddingLeft: 8 },
   sectionTitleInline: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, paddingLeft: 8 },
   // baseline, а не center: мелкая цифра рядом с 20-пунктовым заголовком должна
   // стоять на его строке, иначе висит в воздухе по центру высоты.
@@ -1043,16 +969,29 @@ const styles = StyleSheet.create({
   // → styles.list): карточки отдельные, но раздел читается цельным, а не
   // рассыпается на пять независимых блоков.
   assetCards: { gap: 4 },
+  liqCard: { marginBottom: tokens.spacing.sm },
+  // Подзаголовок группы внутри раздела «Активы» — мельче заголовка секции.
+  groupTitle: {
+    fontSize: tokens.typography.caption,
+    lineHeight: tokens.typography.caption + 2,
+    fontFamily: font.medium,
+    color: tokens.text.tertiary,
+    paddingLeft: 8,
+    marginTop: tokens.spacing.lg,
+    marginBottom: tokens.spacing.sm,
+  },
+  groupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8, marginTop: tokens.spacing.lg, marginBottom: tokens.spacing.sm },
+  groupTitleInRow: { paddingLeft: 0, marginTop: 0, marginBottom: 0 },
+  nextRight: { alignItems: 'flex-end', maxWidth: '45%' },
+  nextAmount: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
+  rowPressed: { opacity: 0.6 },
   divider: { height: 1, backgroundColor: tokens.surface.hairline },
   archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing.chip, paddingVertical: tokens.spacing.md },
   archiveLinkText: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, fontWeight: '500' },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md },
-  eventName: { fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.primary },
-  eventSub: { fontSize: tokens.typography.micro, color: tokens.text.tertiary, marginTop: 2 },
-  eventAmount: { fontSize: tokens.typography.label, fontWeight: '700', color: tokens.text.primary },
   infoLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   txHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
-  txHeroLabel: { fontSize: tokens.typography.label, lineHeight: 17, color: tokens.text.secondary, flexShrink: 1 },
+  txHeroLabel: { ...blockText.label, flexShrink: 1 },
   txRatePill: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: hexToRgba(tokens.value.tax, 0.12),
@@ -1060,7 +999,7 @@ const styles = StyleSheet.create({
     paddingLeft: tokens.spacing.tight, paddingRight: tokens.spacing.chip, paddingVertical: 6,
   },
   txRateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
-  txBig: { fontSize: 26, lineHeight: 30, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.5, marginTop: 4 },
+  txBig: blockText.value,
   txEta: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.value.forecast, marginTop: 2 },
   txTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden', marginTop: tokens.spacing.md },
   txFill: { height: 8, borderRadius: 4 },
@@ -1088,23 +1027,14 @@ const styles = StyleSheet.create({
   txCellSep: { width: 1, backgroundColor: hexToRgba(tokens.value.tax, 0.15), marginHorizontal: tokens.spacing.md },
   txCellLabel: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.text.secondary },
   txCellValue: { fontSize: 18, lineHeight: 22, fontWeight: '600', marginTop: 4 },
-  liqLabel: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.medium, color: tokens.text.tertiary },
-  liqValue: { fontSize: tokens.typography.header, lineHeight: 26, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.24, marginTop: 10 },
+  liqLabel: blockText.label,
+  liqValue: blockText.value,
   liqBarWrap: { marginTop: tokens.spacing.lg },
   liqTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden', backgroundColor: hexToRgba('#909497', 0.18) },
   liqFill: { height: '100%', borderRadius: tokens.radius.pill },
   liqMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
   liqMetaInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   liqMetaBigValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
-  liqSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: tokens.spacing.sheet },
-  liqItemSep: { height: 1, backgroundColor: tokens.surface.hairline, marginVertical: 10 },
-  liqRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  liqRowPressed: { opacity: 0.6 },
-  liqRing: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  liqLockCircle: { position: 'absolute', width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  liqRowName: { fontSize: tokens.typography.label, lineHeight: 16, fontFamily: font.regular, color: tokens.text.secondary, letterSpacing: -0.14 },
-  liqRowSub: { fontSize: tokens.typography.hint, lineHeight: 14, fontFamily: font.regular, color: tokens.text.tertiary, letterSpacing: -0.12, marginTop: 2 },
-  liqRowValue: { fontSize: tokens.typography.body, lineHeight: 18, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
@@ -1192,14 +1122,6 @@ const styles = StyleSheet.create({
   // Тонирована акцентом, в отличие от белых плиток фактов над ней: плитки
   // сообщают состояние, а эта строка — единственное, что может потребовать
   // действия, и должна отличаться от них не только содержанием.
-  heroEventPillAlert: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.12) },
-  heroEventPill: {
-    backgroundColor: hexToRgba(tokens.accent.base, 0.07),
-    borderRadius: tokens.radius.md,
-    paddingHorizontal: 14, paddingVertical: 14,
-    marginTop: tokens.spacing.sm,
-  },
-  heroEventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
   heroEventFoot: {
     marginTop: tokens.spacing.md,
     paddingTop: tokens.spacing.tight,
@@ -1214,12 +1136,6 @@ const styles = StyleSheet.create({
   },
   heroEventRing: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   heroEventRingIcon: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  heroEventLabel: { fontSize: tokens.typography.micro, lineHeight: tokens.typography.micro + 2, fontFamily: font.regular, color: tokens.text.tertiary },
-  heroEventName: { fontSize: tokens.typography.labelLg, lineHeight: tokens.typography.labelLg + 2, fontFamily: font.semibold, color: tokens.text.primary, marginTop: 2 },
-  heroEventAmount: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.medium, color: tokens.text.secondary, marginTop: 2 },
-  heroEventWhen: { alignItems: 'flex-end' },
-  heroEventDate: { fontSize: tokens.typography.labelLg, lineHeight: tokens.typography.labelLg + 2, fontFamily: font.semibold, color: tokens.accent.base },
-  heroEventDays: { fontSize: tokens.typography.micro, fontFamily: font.regular, color: tokens.text.tertiary, marginTop: 1 },
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH, overflow: 'hidden' },
   goalTrack: { flexDirection: 'row' },
   goalSlidePage: { width: SLIDE_W, paddingHorizontal: tokens.spacing.screenH, paddingVertical: 14 },
