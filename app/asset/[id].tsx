@@ -80,6 +80,8 @@ export default function AssetScreen() {
   const closedIso = view ? assetClosedDate(data, view.asset) : undefined;
   // Все деньги по активу — из одного места (см. assetOutcome): раньше деталка,
   // архив и диалог закрытия считали их каждый по-своему и расходились.
+  // Годовые сегменты — есть только у срочного, срок которого выходит за год.
+  const yearSegs = view?.derived.yearSegments;
   const outcome = useMemo(
     () => (view ? assetOutcome(view, data.params, closedIso ?? todayIso()) : undefined),
     [view, data.params, closedIso],
@@ -505,6 +507,30 @@ export default function AssetScreen() {
               </View>
             )}
 
+            {/* Срок через Новый год: доход и налог — по календарным годам, потому
+                что налог платится за год и откладывать на него надо по годам.
+                «придёт» выше остаётся одной суммой — там человек ждёт одно число. */}
+            {isTerm && yearSegs ? (
+              <Text style={styles.yearSplit} numberOfLines={1} adjustsFontSizeToFit>
+                ~ {yearSegs.map((seg) => `в ${seg.year}: ${formatMoney(seg.income, { currency: cur, kopecks: 'hide' })}`).join(' · ')}
+              </Text>
+            ) : null}
+
+            {isTerm && yearSegs ? (
+              yearSegs.map((seg, i) => (
+                <TaxLine
+                  key={seg.year}
+                  amount={formatMoney(seg.tax ?? 0, { currency: cur, kopecks: 'hide' })}
+                  approx
+                  period={`за ${seg.year}`}
+                  who={
+                    (outcome.withheld ? 'удержит площадка' : 'по уведомлению ФНС')
+                    + (seg.limitByCurrentRate ? ' · ~ по текущей ставке' : '')
+                  }
+                  extra={i === 0 && outcome.taxPaid > 0 ? `Уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : undefined}
+                />
+              ))
+            ) : (
             <TaxLine
               amount={formatMoney(
                 isTerm && outcome.termTax !== undefined ? outcome.termTax : Math.max(0, outcome.tax - outcome.taxPaid),
@@ -517,6 +543,7 @@ export default function AssetScreen() {
               who={outcome.withheld ? 'удержит площадка' : 'по уведомлению ФНС'}
               extra={outcome.taxPaid > 0 ? `Уже удержано ${formatMoney(outcome.taxPaid, { currency: cur, kopecks: 'hide' })}` : undefined}
             />
+            )}
           </Card>
         ) : null}
 
@@ -1187,6 +1214,8 @@ const styles = StyleSheet.create({
   taxWho: { fontSize: 12, lineHeight: 15, color: tokens.text.tertiary, marginTop: 1 },
   taxValue: { fontSize: 16, lineHeight: 20, fontWeight: '700', color: tokens.value.tax },
   taxApprox: { fontWeight: '500', color: tokens.value.forecast },
+  // Разбивка дохода по годам — прогноз, поэтому тоном прогноза и без «+».
+  yearSplit: { fontSize: 13, lineHeight: 15, color: tokens.value.forecast, marginTop: tokens.spacing.sm, paddingHorizontal: 4 },
   taxExtra: { fontSize: 12, lineHeight: 16, color: tokens.text.tertiary, marginTop: 2 },
   historyCard: { paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },
   historyHeader: { paddingTop: tokens.spacing.lg, paddingBottom: tokens.spacing.sm },

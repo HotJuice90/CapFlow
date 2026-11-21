@@ -1,5 +1,5 @@
 import type { Asset, AssetView, CurrencyCode, FinancialInstrument, Goal, Organization, PayoutRecord, Snapshot, TaxYearRecord } from '@/domain/types';
-import { accrualSeries, calculate, payoutBoundaryDates, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
+import { accrualSeries, calculate, payoutBoundaryDates, yearSegments, calcAssetTax, calcTax, daysInYear, diffDays, DEPOSIT_TAX_EXEMPT_YEARS, parseLocal, periodsPerYear } from '@/calc';
 import type { AppData } from '@/storage/types';
 import type { KeyRatePoint } from '@/domain/keyRateHistory';
 import { tokens } from '@/theme';
@@ -108,19 +108,67 @@ function buildAssetViewsUncached(data: AppData, now: Date): AssetView[] {
     const d = a.asset.openDate.localeCompare(b.asset.openDate);
     return d !== 0 ? d : a.asset.id.localeCompare(b.asset.id);
   });
+  // Лимит делится ПО ГОДАМ: у срочного с переходом через год свой доход в
+  // каждом году (годовой сегмент), и каждый год занимает лимит только своего
+  // года. Иначе вклад 2026—2027 занимал бы лимит дважды (годовую ставку целиком
+  // в каждом из годов). Бессрочный — «сумма × ставка» в любом году.
+  const nowYear = now.getFullYear();
   const limitUsedById = new Map<string, number>();
-  let runningLimitUsed = 0;
-  for (const { asset } of byOpenDate) {
-    limitUsedById.set(asset.id, runningLimitUsed);
-    runningLimitUsed += convert((asset.amount * asset.rate) / 100, asset.currency, data);
+  const limitUsedByYearById = new Map<string, Record<number, number>>();
+  let perpetualUsed = 0;
+  const termUsedByYear = new Map<number, number>();
+  for (const { asset, instrument } of byOpenDate) {
+    const incomes = annualIncomesByYear(asset, instrument, data, now);
+    const usedAt = (y: number) => perpetualUsed + (termUsedByYear.get(y) ?? 0);
+    limitUsedById.set(asset.id, usedAt(nowYear));
+    if (incomes) {
+      const byYear: Record<number, number> = {};
+      for (const y of incomes.keys()) byYear[y] = usedAt(y);
+      limitUsedByYearById.set(asset.id, byYear);
+      for (const [y, inc] of incomes) termUsedByYear.set(y, (termUsedByYear.get(y) ?? 0) + inc);
+    } else {
+      perpetualUsed += convert((asset.amount * asset.rate) / 100, asset.currency, data);
+    }
+  }
+  // Лимиты прошедших лет — по истории ключевой (текущий берётся из params,
+  // будущий движок оценит по текущей ставке сам).
+  const limitForYear: Record<number, number> = {};
+  if (!data.params.taxFreeLimitManual) {
+    for (const byYear of limitUsedByYearById.values()) {
+      for (const y of Object.keys(byYear).map(Number)) {
+        if (y < nowYear && limitForYear[y] === undefined) limitForYear[y] = taxFreeLimitForYear(data.keyRateHistory, y);
+      }
+    }
   }
 
   return active.map(({ asset, instrument, organization }) => ({
     asset,
     instrument,
     organization,
-    derived: calculate(asset, instrument, data.params, now, limitUsedById.get(asset.id) ?? 0),
+    derived: calculate(asset, instrument, data.params, now, limitUsedById.get(asset.id) ?? 0, {
+      limitUsedByYear: limitUsedByYearById.get(asset.id),
+      limitForYear,
+    }),
   }));
+}
+
+/**
+ * Доход срочного актива по календарным годам (год → доход в базовой валюте) —
+ * годовые сегменты движка (yearSegments), а не «ставка × дни/365». Для
+ * бессрочного undefined: у него нет срока, доход любого года — «сумма × ставка».
+ */
+function annualIncomesByYear(
+  asset: Asset,
+  instrument: FinancialInstrument,
+  data: AppData,
+  now: Date,
+): Map<number, number> | undefined {
+  if (instrument.behavior !== 'term' || !asset.endDate) return undefined;
+  const out = new Map<number, number>();
+  for (const seg of yearSegments(asset, instrument, { from: asset.openDate, to: asset.endDate }, now)) {
+    out.set(seg.year, convert(seg.income, asset.currency, data));
+  }
+  return out;
 }
 
 /**
@@ -473,11 +521,19 @@ export function assetYearIncomes(data: AppData, now: Date = new Date()): AssetYe
     if (!closedAt) {
       const endDate = asset.endDate ? parseLocal(asset.endDate) : null;
       const upper = endDate && endDate < yearEnd ? endDate : yearEnd;
-      if (instrument.behavior === 'term' && endDate) {
-        if (upper > now) {
-          const a1 = calculate(asset, instrument, data.params, upper, 0).accrued;
-          const a0 = calculate(asset, instrument, data.params, now, 0).accrued;
-          remaining = convert(a1 - a0, asset.currency, data);
+      if (instrument.behavior === 'term' && asset.endDate) {
+        // Прогноз года — из годового сегмента движка (то же число, что карточка
+        // актива показывает «~ в 2026»), минус уже начисленное с начала сегмента.
+        const seg = yearSegments(asset, instrument, { from: asset.openDate, to: asset.endDate }, now)
+          .find((x) => x.year === now.getFullYear());
+        if (seg && parseLocal(seg.to) > now) {
+          const segFrom = parseLocal(seg.from);
+          let earnedInSeg = 0;
+          if (now > segFrom) {
+            const [p0, p1] = accrualSeries(asset, instrument, [segFrom, now]);
+            earnedInSeg = Math.max(0, p1.accrued - p0.accrued);
+          }
+          remaining = convert(Math.max(0, seg.income - earnedInSeg), asset.currency, data);
         }
       } else {
         const derived = calculate(asset, instrument, data.params, now, 0);
@@ -1595,36 +1651,62 @@ export function monthlyIncomeForecast(data: AppData, year: number, month: number
 }
 
 /**
- * Примерный налог за месяц (не факт, тот же дух, что и monthlyIncomeForecast) —
- * доход месяца по каждому активу, поделённый на «доплатить самому»/«удержит банк»
- * (см. calcAssetTax), лимит на самостоятельную группу берём «с нуля» (не учитывает,
- * сколько лимита уже съедено в другие месяцы года) — оценка, не точный расчёт.
+ * Примерный налог за месяц (не факт, тот же дух, что и monthlyIncomeForecast).
+ *
+ * Считается по доходу ИМЕННО этого месяца, а не долей от налога за весь срок:
+ * раньше внутри шёл `calculate` на каждый день, а у него в срочной ветке налог
+ * берётся от `incomeTotalTerm` (весь срок). Доля месяца от трёхлетнего налога
+ * завышала месячную оценку в разы — чем длиннее вклад, тем сильнее.
+ *
+ * Доход месяца — одним проходом accrualSeries по границам месяца (тот же приём, что
+ * в monthlyIncomeHistory): дельта accrued между 1-м и 1-м следующего — ровно то,
+ * что попадёт в годовой расчёт. Лимит применяется к накопленному С НАЧАЛА ГОДА
+ * самостоятельному доходу, а не «с нуля» на каждый месяц — иначе льгота
+ * применялась бы 12 раз за год.
  */
 export function monthlyTaxForecast(data: AppData, year: number, month: number): number {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const instrById = new Map(data.instruments.map((i) => [i.id, i]));
   const assets = data.assets.filter((a) => a.status === 'active');
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 1);
+  const yearStart = new Date(year, 0, 1);
 
   let selfIncome = 0;
   let withheldIncome = 0;
+  let selfIncomeFromYearStart = 0;
 
-  for (let d = 1; d <= daysInMonth; d++) {
-    const day = new Date(year, month, d);
-    for (const asset of assets) {
-      const instrument = instrById.get(asset.instrumentId);
-      if (!instrument) continue;
-      const open = parseLocal(asset.openDate);
-      const end = asset.endDate ? parseLocal(asset.endDate) : null;
-      if (open > day || (end && day > end)) continue;
+  for (const asset of assets) {
+    const instrument = instrById.get(asset.instrumentId);
+    if (!instrument) continue;
+    const open = parseLocal(asset.openDate);
+    const end = asset.endDate ? parseLocal(asset.endDate) : null;
+    // За окна до открытия/после окончания движок сам даёт нулевые дельты,
+    // но незачем гонять его на заведомо мёртвых отрезках.
+    if (open >= monthEnd || (end && end <= monthStart)) continue;
 
-      const derived = calculate(asset, instrument, data.params, day);
-      const incDay = convert(derived.incomePerDay, asset.currency, data);
-      if (asset.taxWithheldByBank) withheldIncome += incDay;
-      else selfIncome += incDay;
+    const [from, to] = accrualSeries(asset, instrument, [monthStart, monthEnd]);
+    const delta = convert(Math.max(0, to.accrued - from.accrued), asset.currency, data);
+    if (asset.taxWithheldByBank) {
+      withheldIncome += delta;
+      continue;
+    }
+    selfIncome += delta;
+
+    // Накопленное с 1 января по конец этого месяца — для ступеньки лимита.
+    const yearFrom = open > yearStart ? open : yearStart;
+    if (monthEnd > yearFrom) {
+      const [y0, y1] = accrualSeries(asset, instrument, [yearFrom, monthEnd]);
+      selfIncomeFromYearStart += convert(Math.max(0, y1.accrued - y0.accrued), asset.currency, data);
     }
   }
 
-  return calcTax(selfIncome, data.params, 0) + calcAssetTax(withheldIncome, data.params, 0, true);
+  // Лимит — на весь самостоятельный доход года; берём срез «январь … этот месяц»
+  // и вычитаем то, что уже было начислено к началу месяца. Разница — вклад
+  // именно этого месяца сверх льготы.
+  const taxToDate = calcTax(selfIncomeFromYearStart, data.params);
+  const priorMonths = selfIncomeFromYearStart - selfIncome;
+  const taxBefore = calcTax(Math.max(0, priorMonths), data.params);
+  return Math.max(0, taxToDate - taxBefore) + calcAssetTax(withheldIncome, data.params, 0, true);
 }
 
 export interface DayContribution {

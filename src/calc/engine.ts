@@ -7,11 +7,52 @@ import type {
   FinancialInstrument,
   PayoutPeriod,
 } from '@/domain/types';
-import { calcAssetTax } from './tax';
+import { calcAssetTax, DEPOSIT_TAX_EXEMPT_YEARS } from './tax';
 import { addDays, clamp, dayIndex, daysInMonth, daysInYear, diffDays, parseLocal } from './dayCount';
 
 /** Версия движка — пишется в Snapshot, чтобы история не «плыла» при смене формул. */
-export const ENGINE_VERSION = '1.1.0';
+export const ENGINE_VERSION = '1.2.0';
+
+/**
+ * Годовой сегмент: кусок жизни срочного актива внутри одного календарного года.
+ *
+ * Нужен потому, что срок вклада больше не укладывается в год: вклад с 2026-07-01
+ * по 2027-02-01 живёт в двух налоговых периодах, а налог считается по году. При
+ * этом `incomeTotalTerm` остаётся «весь срок одной суммой» — его показывает
+ * плитка «придёт …», где человек ждёт одно число.
+ */
+export interface YearSegment {
+  year: number;
+  /** Границы внутри года (ISO): max(открытие, 1 янв) … min(окончание, 31 дек). */
+  from: string;
+  to: string;
+  /** Доход именно этого года: accrued(to) − accrued(from), та же формула, что
+   *  в monthlyIncomeHistory и computeTaxYearRecord — поэтому числа сходятся с фактом. */
+  income: number;
+  /** Год уже закончился — доход в нём ФАКТ, а не прогноз. */
+  past: boolean;
+  /** Год идёт сейчас — часть дохода факт, часть прогноз. */
+  current: boolean;
+  /** Налог этого года: доход сегмента сверх необлагаемого лимита ЭТОГО года.
+   *  Заполняет calculate (yearSegments сам по себе параметров налога не знает). */
+  tax?: number;
+  /** Лимит года ещё не известен (год не начался) и взят по ТЕКУЩЕЙ ключевой
+   *  ставке — UI подписывает «~ по текущей ставке». С началом года пересчитается. */
+  limitByCurrentRate?: boolean;
+}
+
+/**
+ * Налоговый контекст по годам для calculate — нужен только срочным с
+ * переходом через год. Ключ — календарный год.
+ *  - `limitUsedByYear`: сколько лимита года уже заняли другие активы портфеля;
+ *  - `limitForYear`: необлагаемый лимит года (для прошедших — по истории ключевой).
+ * Чего нет в контексте, движок досчитывает сам: текущий год — `params.taxFreeLimit`
+ * и `limitAlreadyUsed`, будущий — 1 млн × `params.keyRate`, занято — 0.
+ */
+export interface TaxYearsContext {
+  limitUsedByYear?: Record<number, number>;
+  limitForYear?: Record<number, number>;
+}
 
 export function periodsPerYear(period: PayoutPeriod | undefined): number {
   switch (period) {
@@ -557,7 +598,86 @@ export function classifyLegacyWithdrawals(asset: Asset, instrument: FinancialIns
 }
 
 /**
+ * Разбивка срочного актива по календарным годам — см. YearSegment.
+ *
+ * Границы считаются accrued'ом на стыках годов, а не «сумма × ставка × дни/365»:
+ * внутри сегмента остаются все эффекты движка (капитализация, смена ставки, порог
+ * `rateCapAmount`). Для простого процента результат совпадает с линейным счётом
+ * до копеек, а на границе года доли сходятся точно.
+ *
+ * Возвращает один сегмент, если срок вкладывается в один год — тогда разбивки
+ * не нужно и вызывающий показывает одно число («за весь срок»).
+ */
+export function yearSegments(
+  asset: Asset,
+  instrument: FinancialInstrument,
+  dates: { from: string | Date; to: string | Date },
+  /** «Сегодня» для флагов past/current — тот же момент, от которого считает вызывающий. */
+  now: string | Date = new Date(),
+): YearSegment[] {
+  const from = isoAny(dates.from);
+  const to = isoAny(dates.to);
+  if (!from || !to || from >= to) return [];
 
+  const fromYear = parseInt(from.slice(0, 4), 10);
+  const toYear = parseInt(to.slice(0, 4), 10);
+  if (!Number.isFinite(fromYear) || !Number.isFinite(toYear)) return [];
+
+  const bounds: { year: number; from: string; to: string }[] = [];
+  for (let y = fromYear; y <= toYear; y++) {
+    const segFrom = y === fromYear ? from : `${y}-01-01`;
+    // Конец сегмента — первое число следующего года, а не 31 декабря: так
+    // окна стыкуются без общих/потерянных суток (та же грабля в monthlyIncomeHistory).
+    const segTo = y === toYear ? to : `${y + 1}-01-01`;
+    if (segFrom < segTo) bounds.push({ year: y, from: segFrom, to: segTo });
+  }
+
+  // Один проход на все границы сразу: calculate в цикле по годам — тот же
+  // квадрат, что и в цикле по дням (см. CLAUDE.md).
+  const isoDates = Array.from(new Set(bounds.flatMap((b) => [b.from, b.to])));
+  const byIso = new Map<string, number>();
+  accrualSeries(asset, instrument, isoDates).forEach((p, k) => byIso.set(isoDates[k], p.accrued));
+
+  const thisYear = parseInt(isoAny(now).slice(0, 4), 10);
+  return bounds.map((b) => ({
+    year: b.year,
+    from: b.from,
+    to: b.to,
+    income: Math.max(0, (byIso.get(b.to) ?? 0) - (byIso.get(b.from) ?? 0)),
+    past: b.year < thisYear,
+    current: b.year === thisYear,
+  }));
+}
+
+/**
+ * Налог одного годового сегмента. Лимит года: из контекста, иначе текущий год —
+ * `params.taxFreeLimit`, будущий — 1 млн × текущая ключевая (оценка, помечается
+ * `limitByCurrentRate`). Ручной лимит (`taxFreeLimitManual`) — один на все годы.
+ * Годы полного освобождения процентов по вкладам (2021–2022) — без налога.
+ */
+function withSegmentTax(
+  seg: YearSegment,
+  params: CalcParams,
+  asset: Asset,
+  nowIso: string,
+  limitAlreadyUsed: number,
+  ctx: TaxYearsContext,
+): YearSegment {
+  const nowYear = parseInt(nowIso.slice(0, 4), 10);
+  const future = seg.year > nowYear;
+  if (!asset.taxWithheldByBank && DEPOSIT_TAX_EXEMPT_YEARS.has(seg.year)) {
+    return { ...seg, tax: 0, limitByCurrentRate: false };
+  }
+  const fromCtx = ctx.limitForYear?.[seg.year];
+  const limit = params.taxFreeLimitManual
+    ? params.taxFreeLimit
+    : fromCtx ?? (future ? (1_000_000 * params.keyRate) / 100 : params.taxFreeLimit);
+  const used = ctx.limitUsedByYear?.[seg.year] ?? (seg.year === nowYear ? limitAlreadyUsed : 0);
+  const tax = calcAssetTax(seg.income, { ...params, taxFreeLimit: limit }, used, asset.taxWithheldByBank);
+  return { ...seg, tax, limitByCurrentRate: future && !params.taxFreeLimitManual && fromCtx === undefined };
+}
+
+/**
  * Главная функция движка. Возвращает производные значения для актива.
  * `now` — текущий момент (по умолчанию устройство).
  */
@@ -568,6 +688,8 @@ export function calculate(
   now: string | Date = new Date(),
   /** сколько необлагаемого лимита уже занято другими активами портфеля (см. buildAssetViews) */
   limitAlreadyUsed = 0,
+  /** лимиты по годам — для срочного, срок которого выходит за год (см. TaxYearsContext) */
+  taxYears: TaxYearsContext = {},
 ): DerivedValues {
   const mode: CapitalizationMode =
     asset.capitalization ?? instrument.capitalization ?? 'none';
@@ -620,13 +742,40 @@ export function calculate(
 
     // Простой процент (по умолчанию): доход линеен по дням, по текущей ставке.
     const incomeTotalTerm = annualYield(asset.amount, currentRate, tier) * (termDays / 365);
+    // Сегменты по годам — только если срок реально вылезает за год. Проверка
+    // по строкам дат заранее: calculate зовут и в циклах (календарь), лишний
+    // проход accrualSeries у однолетнего вклада ни к чему.
+    // Окончание 1 января следующего года — ещё один год (граница исключающая).
+    const openYear = parseInt(asset.openDate.slice(0, 4), 10);
+    const endYear = parseInt(asset.endDate.slice(0, 4), 10);
+    const crossesYear = endYear > openYear + 1
+      || (endYear === openYear + 1 && asset.endDate.slice(5) !== '01-01');
+    const segments = crossesYear
+      ? yearSegments(asset, instrument, { from: asset.openDate, to: asset.endDate }, now)
+      : [];
+    const yearSegmentsOut = segments.length > 1
+      ? segments.map((seg) => withSegmentTax(seg, params, asset, isoAny(now), limitAlreadyUsed, taxYears))
+      : undefined;
     // «Уже заработано» — посегментно, чтобы честно учитывать пополнения/снятия И смену ставки.
     const accrualNow = diffDays(asset.openDate, now) > termDays ? asset.endDate : now;
     const { accrued: earnedSoFar } = walkAccrual(timeline, rates, mode, payout, accrualNow, tier, realisations);
     const remainingToEarn = Math.max(0, incomeTotalTerm - earnedSoFar);
 
-    // Налог считается на доход всего срока (проценты по вкладу облагаются в год выплаты).
-    const tax = calcAssetTax(incomeTotalTerm, params, limitAlreadyUsed, asset.taxWithheldByBank);
+    // Налог — по календарным годам: у каждого года свой доход и свой лимит.
+    // Срок в пределах одного года — как раньше, на доход всего срока.
+    const tax = yearSegmentsOut
+      ? yearSegmentsOut.reduce((sum, seg) => sum + (seg.tax ?? 0), 0)
+      : calcAssetTax(incomeTotalTerm, params, limitAlreadyUsed, asset.taxWithheldByBank);
+    // Налог «на месяц» у такого вклада — по эффективной ставке ТЕКУЩЕГО года
+    // (его сегмента), а не по годовому темпу с лимитом, будто вклад живёт в
+    // одном году. До открытия — по первому сегменту, после — по последнему.
+    let termMonthlyTax = monthlyTax;
+    if (yearSegmentsOut) {
+      const nowYear = parseInt(isoAny(now).slice(0, 4), 10);
+      const seg = yearSegmentsOut.find((s) => s.year === nowYear)
+        ?? (nowYear < yearSegmentsOut[0].year ? yearSegmentsOut[0] : yearSegmentsOut[yearSegmentsOut.length - 1]);
+      termMonthlyTax = seg.income > 0 ? incomePerMonth * ((seg.tax ?? 0) / seg.income) : 0;
+    }
     const net = incomeTotalTerm - tax;
     const finalAmount = asset.amount + net;
 
@@ -642,8 +791,8 @@ export function calculate(
       accrued: earnedSoFar,
       tax,
       net,
-      monthlyTax,
-      monthlyNet,
+      monthlyTax: termMonthlyTax,
+      monthlyNet: incomePerMonth - termMonthlyTax,
       finalAmount,
       earnedSoFar,
       remainingToEarn,
@@ -651,6 +800,7 @@ export function calculate(
       termProgress,
       currentRate,
       premiumToKeyRate,
+      yearSegments: yearSegmentsOut,
     };
   }
 

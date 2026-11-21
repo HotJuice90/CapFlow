@@ -3,6 +3,8 @@
  * Архитектура строится вокруг ПОВЕДЕНИЯ инструмента, а не его названия.
  */
 
+import type { YearSegment } from '@/calc/engine';
+
 export type CurrencyCode =
   | 'RUB' | 'USD' | 'EUR' | 'TRY' | 'KZT' | 'BYN'
   | 'CNY' | 'INR' | 'AED' | 'BRL';
@@ -261,6 +263,12 @@ export interface DerivedValues {
   /** прогноз для бессрочных «если ничего не менять» */
   forecastNextMonth?: number;
   forecastNextYear?: number;
+  /**
+   * Разбивка срочного актива по КАЛЕНДАРНЫМ годам (см. YearSegment в calc/engine).
+   * Есть только у срочного, срок которого выходит за год. Налог и лимит
+   * режутся по этим сегментам — чтобы «отложить на налог» было по каждому году.
+   */
+  yearSegments?: YearSegment[];
 }
 
 /** Снимок состояния актива на момент закрытия/архивации (решение #8). */

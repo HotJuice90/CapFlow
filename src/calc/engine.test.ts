@@ -1,5 +1,5 @@
 import type { Asset, CalcParams, FinancialInstrument } from '@/domain/types';
-import { accrualSeries, calculate } from './engine';
+import { accrualSeries, calculate, yearSegments } from './engine';
 import { diffDays, daysInYear, isLeapYear } from './dayCount';
 
 const params: CalcParams = { taxRate: 13, taxFreeLimit: 210_000, keyRate: 16 };
@@ -562,5 +562,70 @@ describe('выплаты процентов: оставить или забра�
     const d = calculate(account, savingsInstrument, params, '2027-01-01');
     expect(pt.accrued).toBeCloseTo(d.accrued, 6);
     expect(pt.currentValue).toBeCloseTo(d.currentValue, 6);
+  });
+});
+
+describe('годовые сегменты: вклад через Новый год', () => {
+  const base: Asset = {
+    id: 'ys1',
+    instrumentId: 'i1',
+    amount: 1_000_000,
+    currency: 'RUB',
+    rate: 18,
+    openDate: '2026-07-01',
+    endDate: '2027-02-01',
+    status: 'active',
+  };
+  const now = '2026-11-21';
+  const termDays = diffDays(base.openDate, base.endDate!);
+
+  test('границы стыкуются без потерянных суток', () => {
+    const segs = yearSegments(base, depositInstrument, { from: base.openDate, to: base.endDate! }, now);
+    expect(segs.map((s) => [s.year, s.from, s.to])).toEqual([
+      [2026, '2026-07-01', '2027-01-01'],
+      [2027, '2027-01-01', '2027-02-01'],
+    ]);
+    const days = segs.reduce((sum, s) => sum + diffDays(s.from, s.to), 0);
+    expect(days).toBe(termDays);
+    expect(segs[0].current).toBe(true);
+    expect(segs[1].past || segs[1].current).toBe(false);
+  });
+
+  test('простой процент: сумма сегментов = incomeTotalTerm, сам он не изменился', () => {
+    const d = calculate(base, depositInstrument, params, now);
+    expect(d.yearSegments).toHaveLength(2);
+    const sum = d.yearSegments!.reduce((acc, s) => acc + s.income, 0);
+    expect(d.incomeTotalTerm).toBeCloseTo(1_000_000 * 0.18 * (termDays / 365), 6);
+    expect(sum).toBeCloseTo(d.incomeTotalTerm!, 4);
+    expect(d.yearSegments![0].income).toBeCloseTo(1_000_000 * 0.18 * (184 / 365), 4);
+    expect(d.yearSegments![1].income).toBeCloseTo(1_000_000 * 0.18 * (31 / 365), 4);
+  });
+
+  test('капитализация: сумма сегментов = начислено к концу срока; incomeTotalTerm по-прежнему простой', () => {
+    const cap: Asset = { ...base, capitalization: 'capitalize', payoutPeriod: 'monthly' };
+    const d = calculate(cap, depositInstrument, params, now);
+    const sum = d.yearSegments!.reduce((acc, s) => acc + s.income, 0);
+    const [atEnd] = accrualSeries(cap, depositInstrument, [cap.endDate!]);
+    expect(sum).toBeCloseTo(atEnd.accrued, 4);
+    expect(sum).toBeGreaterThan(d.incomeTotalTerm!);
+    expect(d.incomeTotalTerm).toBeCloseTo(1_000_000 * 0.18 * (termDays / 365), 6);
+  });
+
+  test('налог режется по годам: свой доход и свой лимит у каждого года', () => {
+    const big: Asset = { ...base, amount: 10_000_000 };
+    const d = calculate(big, depositInstrument, params, now);
+    const [y26, y27] = d.yearSegments!;
+    // 2026 — текущий год, лимит из настроек (210 000).
+    expect(y26.tax).toBeCloseTo(Math.max(0, y26.income - 210_000) * 0.13, 4);
+    expect(y26.limitByCurrentRate).toBe(false);
+    // 2027 ещё не начался — лимит по текущей ключевой (1 млн × 16% = 160 000).
+    expect(y27.tax).toBeCloseTo(Math.max(0, y27.income - 160_000) * 0.13, 4);
+    expect(y27.limitByCurrentRate).toBe(true);
+    expect(d.tax).toBeCloseTo((y26.tax ?? 0) + (y27.tax ?? 0), 4);
+  });
+
+  test('срок в пределах года (до 1 января включительно) — без сегментов', () => {
+    const oneYear: Asset = { ...base, openDate: '2026-01-01', endDate: '2027-01-01' };
+    expect(calculate(oneYear, depositInstrument, params, now).yearSegments).toBeUndefined();
   });
 });

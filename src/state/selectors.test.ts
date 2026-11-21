@@ -1,6 +1,6 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
-import { assetOutcome, findAssetView, idleCapital, computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent } from './selectors';
+import { assetOutcome, findAssetView, idleCapital, computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent, monthlyTaxForecast } from './selectors';
 import { calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
@@ -847,5 +847,40 @@ describe('assetOutcome', () => {
     expect(Math.round(o.termIncome!)).toBe(48_048);
     expect(Math.round(o.atMaturity!)).toBe(2_548_048);
     expect(o.earned).toBeLessThan(o.termIncome!);
+  });
+});
+
+describe('monthlyTaxForecast: длинный вклад не завышает налог месяца', () => {
+  const asset: Asset = {
+    id: 'mt1',
+    instrumentId: 'i0',
+    amount: 2_000_000,
+    currency: 'RUB',
+    rate: 20,
+    openDate: '2026-01-01',
+    endDate: '2029-01-01',
+    status: 'active',
+  };
+  const data = {
+    ...emptyAppData(),
+    instruments: [depositInstrument],
+    assets: [asset],
+  };
+  const rate = data.params.taxRate / 100;
+  const limit = data.params.taxFreeLimit;
+
+  test('налог месяца не больше ставки × доход месяца, а за год — ставка × (доход года − лимит)', () => {
+    let total = 0;
+    for (let m = 0; m < 12; m++) {
+      const tax = monthlyTaxForecast(data, 2026, m);
+      const monthIncome = 2_000_000 * 0.2 * (new Date(2026, m + 1, 0).getDate() / 365);
+      expect(tax).toBeLessThanOrEqual(monthIncome * rate + 1e-6);
+      total += tax;
+    }
+    expect(total).toBeCloseTo((400_000 - limit) * rate, 2);
+  });
+
+  test('пока лимит не исчерпан — налога в месяце нет', () => {
+    expect(monthlyTaxForecast(data, 2026, 0)).toBe(0);
   });
 });
