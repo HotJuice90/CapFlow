@@ -1048,7 +1048,9 @@ const styles = StyleSheet.create({
   },
   heroStatLabel: textRole.blockLabel,
   heroTileValueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.xs, marginTop: 14 },
-  heroStatValue: { ...textRole.blockValue, color: tokens.text.primary, fontVariant: ['tabular-nums'] },
+  // Без tabular-nums: у Onest табличные цифры широкие и разреженные, суммы
+  // выглядели набранными моноширинным шрифтом (0.9.93).
+  heroStatValue: { ...textRole.blockValue, color: tokens.text.primary },
   heroTileShareRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: 10 },
   heroTileTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: hexToRgba('#909497', 0.18) },
   heroTileFill: { height: '100%', borderRadius: 3, backgroundColor: tokens.semantic.positive },

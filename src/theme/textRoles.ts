@@ -54,7 +54,8 @@ export const textRole = {
   /** Заголовок внутри карточки. */
   cardTitle: role(17, '600', { color: tokens.text.primary }),
   /** Название в строке списка. */
-  rowTitle: role(14, '500', { color: tokens.text.primary }),
+  // 15, а не 14: на шаг меньше названия в карточке актива читались мелко (0.9.93).
+  rowTitle: role(15, '500', { color: tokens.text.primary }),
   /** Подпись под названием в строке. */
   rowSubtitle: role(12, '400', { color: tokens.text.tertiary }),
   /** Подпись над суммой блока или плитки. */
