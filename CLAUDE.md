@@ -138,8 +138,7 @@ Metro регулярно отваливался и терял времени б�
   сверху/снизу тоже минимум 16 (можно больше, нельзя меньше). Частый косяк: обёртка задаёт
   только `paddingHorizontal`, а верт. отступ — это `paddingVertical` первой/последней строки
   списка (обычно `tokens.spacing.md` = 12) — тогда край получается уже боков. Компенсировать
-  добавлением `paddingVertical` на самой обёртке (см. `app/(tabs)/settings.tsx` → `Group`,
-  `app/(tabs)/index.tsx` → `styles.listInner`).
+  добавлением `paddingVertical` на самой обёртке (см. `app/(tabs)/settings.tsx` → `Group`).
 - **Заголовок секции (не экрана — `<ScreenTitle>` отдельно)**: `fontSize: tokens.typography.title`
   (20), semibold, `marginTop: 40`, `marginBottom: 14`, `paddingLeft: 8`. Устоялось итеративно
   в аналитике (`app/(tabs)/analytics.tsx` → `styles.section`), теперь то же самое в
@@ -159,9 +158,13 @@ Metro регулярно отваливался и терял времени б�
   (`types.ts`, `banks.ts`, `goalIcons.ts`, `keyRateHistory.ts`, `keyRateMeetings.ts`,
   `bankTiming.ts`). `src/storage/` — схема `AppData` и репозиторий + миграции.
   `src/format/`, `src/i18n/`, `src/theme/` — правила представления.
-- **Типографика строки актива — `src/theme/rowText.ts`**, одна на главную, календарь
-  и аналитику: заголовок 15/lh17/−0.15/500, подзаголовок 13/lh15 с `marginTop: 4`.
-  Не заводить копии в StyleSheet экрана — копии уже расходились тихо.
+- **Типографика — роли текста `src/theme/textRoles.ts` (`textRole.*`)**: размер,
+  lineHeight (= размер + 2), вес (400/500/600) и трекинг задаются ТОЛЬКО там; экран берёт
+  роль (`sectionTitle`, `blockValue`, `rowTitle`, `rowSubtitle`, `pill`, `chip`, `link`…),
+  а не число. Цвет числа роль не задаёт — он по смыслу через `tokens.value`. Размеры
+  сдвинуты на шаг меньше прежних (кроме заголовков). `rowText` (строка актива) и
+  `blockText` (сумма блока + подпись) — обёртки над ролями. На роли переведены главная,
+  `AssetRow` и `GoalCard`; остальные экраны ещё на числах — переводить при правке.
 - **Типы данных читать в `src/domain/types.ts`**, а не по памяти: там самая плотная
   семантика проекта, которой нет ни в одном экране. В частности
   `BalanceAdjustment.amount` — абсолютный баланс (не дельта!), `PayoutRecord`,
