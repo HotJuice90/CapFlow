@@ -1,5 +1,6 @@
 import type { TextStyle } from 'react-native';
-import { font, tokens } from './tokens';
+import { tokens } from './tokens';
+import { textRole } from './textRoles';
 
 /**
  * Главная сумма блока и подпись над ней — ОДНА роль на всех карточках-блоках
@@ -14,18 +15,6 @@ import { font, tokens } from './tokens';
  * lineHeight = fontSize + 2 — правило Onest из CLAUDE.md.
  */
 export const blockText: { label: TextStyle; value: TextStyle } = {
-  label: {
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 2,
-    fontFamily: font.medium,
-    color: tokens.text.tertiary,
-  },
-  value: {
-    fontSize: tokens.typography.header,
-    lineHeight: tokens.typography.header + 2,
-    fontFamily: font.semibold,
-    letterSpacing: -0.24, // −1%
-    color: tokens.text.primary,
-    marginTop: 6,
-  },
+  label: textRole.blockLabel,
+  value: { ...textRole.blockValue, color: tokens.text.primary, marginTop: 6 },
 };

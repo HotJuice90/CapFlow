@@ -210,7 +210,7 @@ export function MetricCard({
 const styles = StyleSheet.create({
   // Card применяет `style` к внешнему теневому слою, а не к контенту — поэтому
   // gap для внутренних отступов вешаем на собственную обёртку внутри Card.
-  cardInner: { gap: tokens.spacing.md },
+  cardInner: { gap: tokens.spacing.tight },
 
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.sm },
   iconTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, minWidth: 0 },

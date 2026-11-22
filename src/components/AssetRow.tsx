@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { AssetView } from '@/domain/types';
 import { TYPE_LABEL, PAYOUT_LABEL } from '@/domain/labels';
-import { tokens, font, hexToRgba, rowText } from '@/theme';
+import { tokens, hexToRgba, rowText, textRole } from '@/theme';
 import { formatMoney, formatPercent } from '@/format';
 import { pluralDays } from '@/format/date';
 import { OrgLogo } from '@/components/BankLogo';
@@ -17,7 +17,7 @@ const ICON_BY_TYPE = {
 
 /**
  * Строка списка активов: слева название и банк, справа сумма и доход в день,
- * под ними пилюли с деталями (ставка, тип, период выплат, остаток срока).
+ * под ними строка деталей (ставка · тип · выплаты) и пилюля срока.
  *
  * Композиция выстрадана итерациями, поэтому кратко о том, что НЕ работает:
  *
@@ -33,11 +33,9 @@ const ICON_BY_TYPE = {
  * тут — вложено + заработано с открытия, в календаре — доход за день,
  * в аналитике — сумма вместе с процентами (она же = вложено + заработано).
  *
- * Пилюли — та же идиома, что в календаре (`app/(tabs)/calendar.tsx` → pillRow):
- * детали, которые полезно видеть, но которые не должны спорить за внимание с
- * суммой. Обёрнуты во flexWrap, а НЕ в горизонтальный ScrollView как в
- * календаре: вложенный горизонтальный скролл внутри вертикального списка
- * отбирает жест и мешает скроллить экран.
+ * 4. Детали пилюлями (ставка, тип, выплаты, срок): 3–4 одинаковых серых чипа на
+ *    каждой карточке давали визуальный шум. Теперь детали — одной мета-строкой
+ *    через точку, пилюлей только срок (22.11.2026, ТЗ главного экрана).
  */
 export function AssetRow({ view }: { view: AssetView }) {
   const router = useRouter();
@@ -54,6 +52,8 @@ export function AssetRow({ view }: { view: AssetView }) {
   // точное: базовая + заработано = currentValue, то есть ровно та сумма,
   // которую показывает аналитика.
   const invested = derived.invested;
+  // Срок близко — пилюля заметнее: через две недели деньги потребуют решения.
+  const soon = derived.daysRemaining !== undefined && derived.daysRemaining <= 14;
 
   return (
     <Pressable
@@ -88,28 +88,23 @@ export function AssetRow({ view }: { view: AssetView }) {
         </View>
       </View>
 
-      <View style={styles.pillRow}>
-        <View style={[styles.pill, styles.pillRate]}>
-          <Text style={[styles.pillText, styles.pillRateText]}>{formatPercent(derived.currentRate)}</Text>
-        </View>
-        <View style={styles.pill}>
-          <Text style={styles.pillText}>{TYPE_LABEL[instrument.typeId] ?? instrument.typeId}</Text>
-        </View>
-        {payout ? (
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>{PAYOUT_LABEL[payout] ?? payout}</Text>
-          </View>
-        ) : null}
-        {/* Срок — не такая же характеристика, как тип или период выплат: он
-            тикает и требует решения, когда кончится. Поэтому свой цвет и правый
-            край, чтобы не терялся в ряду однотипных серых пилюль. */}
+      {/* Детали — одной спокойной строкой через точку, а не 3–4 одинаковыми
+          серыми пилюлями: пилюли читались шумом и спорили с суммой. Ставка
+          чуть темнее — это единственная деталь, которую сравнивают глазами.
+          Пилюлей остался только срок: он тикает и требует решения. */}
+      <View style={styles.metaRow}>
+        <Text style={styles.meta} numberOfLines={1}>
+          <Text style={styles.metaRate}>{formatPercent(derived.currentRate)}</Text>
+          {' · '}{TYPE_LABEL[instrument.typeId] ?? instrument.typeId}
+          {payout ? ` · ${PAYOUT_LABEL[payout] ?? payout}` : ''}
+        </Text>
         {isMatured ? (
-          <View style={[styles.pill, styles.pillWarn, styles.pillEnd]}>
+          <View style={[styles.pill, styles.pillWarn]}>
             <Text style={[styles.pillText, styles.pillWarnText]}>Истёк срок</Text>
           </View>
         ) : derived.daysRemaining !== undefined ? (
-          <View style={[styles.pill, styles.pillTerm, styles.pillEnd]}>
-            <Text style={[styles.pillText, styles.pillTermText]}>
+          <View style={[styles.pill, soon ? styles.pillSoon : styles.pillTerm]}>
+            <Text style={[styles.pillText, soon ? styles.pillSoonText : styles.pillTermText]}>
               {derived.daysRemaining} {pluralDays(derived.daysRemaining)}
             </Text>
           </View>
@@ -137,39 +132,26 @@ const styles = StyleSheet.create({
 
   right: { alignItems: 'flex-end' },
   // Единственный тяжёлый элемент строки — он и есть якорь для взгляда.
-  amount: {
-    fontFamily: font.semibold,
-    fontSize: 19,
-    lineHeight: 21,
-    letterSpacing: -0.3,
-    color: tokens.text.primary,
-  },
-  income: {
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 2,
-    color: tokens.semantic.positive,
-    marginTop: 2,
-  },
+  amount: { ...textRole.rowAmount, color: tokens.text.primary },
+  // Заработано — факт, единственное зелёное (tokens.value.earned).
+  income: { ...textRole.rowSubtitle, color: tokens.value.earned, marginTop: 2 },
 
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 14 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: 12 },
+  meta: { ...textRole.rowSubtitle, flex: 1, minWidth: 0 },
+  metaRate: { fontFamily: textRole.rowTitle.fontFamily, color: tokens.text.secondary },
   pill: {
-    backgroundColor: '#F9FAFF',
     borderRadius: tokens.radius.pill,
     paddingHorizontal: tokens.spacing.tight,
     paddingVertical: 5,
   },
-  // Светло-серый, а не почти-чёрный: пилюли — это детали, они не должны
-  // конкурировать по контрасту ни с названием, ни с суммой.
-  pillText: { fontSize: 11, lineHeight: 13, fontWeight: '500', color: tokens.text.tertiary },
-  pillRate: { backgroundColor: hexToRgba(tokens.accent.base, 0.1), paddingHorizontal: 8 },
-  pillRateText: { color: tokens.accent.base },
-  // marginLeft:auto прижимает к правому краю ряда; при переносе строки уедет
-  // вправо на своей строке — тоже корректно.
-  pillEnd: { marginLeft: 'auto' },
+  pillText: textRole.pill,
   // Фиолетовый tokens.category.dfa — он уже живёт в приложении (аналитика,
   // «исправление» в шите баланса), так что палитра не расширяется.
   pillTerm: { backgroundColor: hexToRgba(tokens.category.dfa, 0.12) },
   pillTermText: { color: tokens.category.dfa },
+  // Две недели и меньше — тот же цвет, но насыщеннее: срок рядом.
+  pillSoon: { backgroundColor: tokens.category.dfa },
+  pillSoonText: { color: tokens.text.inverse },
   pillWarn: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.14) },
   pillWarnText: { color: tokens.semantic.warning },
 });

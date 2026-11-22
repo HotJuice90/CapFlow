@@ -47,11 +47,9 @@ import {
   standaloneGoalsProgress,
   type GoalProgress,
   type GoalMetric,
-  type NearestEvent,
 } from '@/state/selectors';
 import type { AssetView, Goal } from '@/domain/types';
-import { tokens, font, hexToRgba } from '@/theme';
-import { rowText } from '@/theme/rowText';
+import { tokens, font, hexToRgba, textRole } from '@/theme';
 import { blockText } from '@/theme/blockText';
 import { formatMoney, formatPercent } from '@/format';
 import { formatDateShort, pluralDays } from '@/format/date';
@@ -70,11 +68,12 @@ import { t } from '@/i18n';
  * «+1 718», хотя по невидимому ключу (349 против 158 в день) всё верно.
  * Доход за день теперь живёт в календаре, поэтому и сортировки по нему тут нет.
  */
-type SortKey = 'earned' | 'amount' | 'rate' | 'added';
+type SortKey = 'earned' | 'amount' | 'rate' | 'end' | 'added';
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'earned', label: 'по заработанному' },
   { key: 'amount', label: 'по сумме' },
   { key: 'rate', label: 'по ставке' },
+  { key: 'end', label: 'по сроку' },
   { key: 'added', label: 'по добавлению' },
 ];
 
@@ -91,6 +90,7 @@ function sortViews(views: AssetView[], key: SortKey): AssetView[] {
     // разные числа, а сортировать надо по показанному.
     case 'amount': return v.sort((a, b) => investedOf(b) - investedOf(a));
     case 'rate': return v.sort((a, b) => b.derived.currentRate - a.derived.currentRate);
+    case 'end': return v.sort((a, b) => (a.derived.daysRemaining ?? Infinity) - (b.derived.daysRemaining ?? Infinity));
     default: return v;
   }
 }
@@ -109,12 +109,15 @@ function HeroTile({
   label,
   value,
   sub,
+  share,
   onPress,
 }: {
   icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   label: string[];
   value: string;
   sub?: string;
+  /** 0..1 — тонкая зелёная полоса доли под суммой с процентом справа. */
+  share?: number;
   onPress: () => void;
 }) {
   return (
@@ -140,6 +143,14 @@ function HeroTile({
           <MaterialIcons name="chevron-right" size={22} color={hexToRgba(tokens.accent.base, 0.75)} />
         </View>
       </View>
+      {share !== undefined ? (
+        <View style={styles.heroTileShareRow}>
+          <View style={styles.heroTileTrack}>
+            <View style={[styles.heroTileFill, { width: `${Math.min(Math.max(share * 100, 0), 100)}%` }]} />
+          </View>
+          <Text style={styles.heroTileShareText}>{Math.round(share * 100)}%</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -202,6 +213,7 @@ export default function HomeScreen() {
   const goalPos = useSharedValue(0);
   const goalStartPos = useSharedValue(0);
   const scrollRef = useRef<ScrollView>(null);
+  const assetsSectionRef = useRef<View>(null);
   // Маска статус-бара опускается, пока экран не прокручен: иначе она срезает
   // верх живого поля серой полосой. На расфокусе обязаны вернуть её —
   // остальные экраны про эту механику не знают и рассчитывают на маску.
@@ -221,10 +233,9 @@ export default function HomeScreen() {
   const summary = useMemo(() => portfolioSummary(data), [data]);
   const runRate = useMemo(() => incomeRunRateSeries(data, 30), [data]);
   const taxSummary = useMemo(() => analyticsSummary(data), [data]);
-  // «Дальше» — несколько ближайших событий одним списком (раньше было
-  // ближайшее событие плашкой под hero и отдельно «Ближайшие события»,
-  // и один вклад показывался в обоих).
-  const nextEvents = useMemo(() => upcomingEvents(data), [data]);
+  // Ближайшее событие — одной фокус-карточкой; остальные не списком (это
+  // работа календаря), а счётчиком «Ещё N» на той же карточке.
+  const nextEvents = useMemo(() => upcomingEvents(data, new Date(), 20), [data]);
   // Свёрнут по умолчанию: на главной нужен ответ «сколько без налога / сколько
   // доплатить», полоса и разбивка — по запросу.
   const [taxOpen, setTaxOpen] = useState(false);
@@ -295,14 +306,11 @@ export default function HomeScreen() {
   const sort = SORTS[sortIdx];
   // Активы делятся по ликвидности: «можно снять сейчас» (бессрочные и срочные с
   // вышедшим сроком — тот же признак, что в liquidity()) и «освободятся по
-  // сроку». Вторая группа всегда по дате разморозки — в этом её смысл; выбранная
-  // сортировка действует на первую.
+  // сроку». Выбранная сортировка действует на ОБЕ группы: раньше вторая шла по
+  // дате при подписи «по заработанному», и порядок выглядел сломанным.
   const isFrozen = (v: AssetView) => v.instrument.behavior === 'term' && (v.derived.daysRemaining ?? 0) > 0;
   const availableViews = useMemo(() => sortViews(views.filter((v) => !isFrozen(v)), sort.key), [views, sort.key]);
-  const frozenViews = useMemo(
-    () => views.filter(isFrozen).sort((a, b) => (a.derived.daysRemaining ?? 0) - (b.derived.daysRemaining ?? 0)),
-    [views],
-  );
+  const frozenViews = useMemo(() => sortViews(views.filter(isFrozen), sort.key), [views, sort.key]);
 
   // Цели — водопад по всем активным, но на Главной показываем только «голову
   // очереди» (первую незаполненную) — остальные ждут своей очереди, отдельно
@@ -393,7 +401,17 @@ export default function HomeScreen() {
   const shownEvents = heroEvent
     ? nextEvents.filter((e) => !(e.kind !== 'overdue' && e.daysRemaining === 0))
     : nextEvents;
-  const orgOf = (assetId: string) => views.find((v) => v.asset.id === assetId)?.organization.name;
+  const focusEvent = shownEvents[0] ?? null;
+  const moreEvents = Math.max(0, shownEvents.length - 1);
+  const eventTone = focusEvent?.kind === 'overdue' ? tokens.semantic.warning : tokens.accent.base;
+  // Тап по «Доступно сейчас» — якорь вниз, к списку активов на этом же экране.
+  // measureLayout — координаты цели относительно ScrollView, а не окна.
+  const scrollToAssets = () => {
+    assetsSectionRef.current?.measureLayout(
+      scrollRef.current as unknown as React.ComponentRef<typeof View>,
+      (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true }),
+    );
+  };
   // Прогресс по лимиту считаем от УЖЕ накопленного дохода (на сегодня), а не от
   // прогноза за год. Лимит — льгота только для активов «доплатить самому»:
   // те, где банк удерживает налог сам, в этом дележе не участвуют вообще.
@@ -401,6 +419,7 @@ export default function HomeScreen() {
   const taxRemain = Math.max(0, taxLimit - taxSummary.selfAccrued);
   const taxYear = new Date().getFullYear();
   const taxOver = taxSummary.selfAccrued > taxLimit;
+  const taxExcess = Math.max(0, taxSummary.selfAccrued - taxLimit);
   // Бар — обратный отсчёт: пока лимит не выбран, заполнена ОСТАВШАЯСЯ доля и
   // она утекает; лимит пробит — бар заполняется заново другим цветом, уже
   // превышением (в масштабе того же лимита).
@@ -528,9 +547,9 @@ export default function HomeScreen() {
 
         {hasAssets ? (
           <>
-            {/* Одна плитка вместо двух: «6 активов» повторяла заголовок списка
-                ниже, а «Капитал в работе» — единственное число, которого больше
-                нигде на экране нет. */}
+            {/* Бенто-пара: капитал и сколько из него можно снять сейчас.
+                Ликвидность раньше была громоздкой карточкой над активами —
+                здесь она ответ на первый вопрос дня, рядом с капиталом. */}
             <View style={styles.heroStatsRow}>
               <HeroTile
                 icon="wallet-outline"
@@ -538,35 +557,246 @@ export default function HomeScreen() {
                 value={formatMoney(summary.workingCapital, { currency: cur, kopecks: 'hide' })}
                 onPress={() => router.push('/analytics')}
               />
+              <HeroTile
+                icon="lock-open-variant-outline"
+                label={['Доступно', 'сейчас']}
+                value={formatMoney(liq.liquid, { currency: cur, kopecks: 'hide' })}
+                share={liqLiquidShare}
+                onPress={scrollToAssets}
+              />
             </View>
-            {shownEvents.length > 0 ? (
-              <>
-                <View style={styles.sectionRow}>
-                  <Text style={styles.sectionTitleInline}>Дальше</Text>
-                  <Pressable onPress={() => router.push('/calendar')} hitSlop={8}>
-                    <Text style={styles.link}>Календарь</Text>
-                  </Pressable>
-                </View>
-                <Card padded={false}>
-                  <View style={styles.listInner}>
-                    {shownEvents.map((e, i) => (
-                      <NextEventRow
-                        key={`${e.kind}-${e.assetId}-${e.date}`}
-                        e={e}
-                        org={orgOf(e.assetId)}
-                        divider={i > 0}
-                        idleText={
-                          e.kind === 'overdue' && idle.total > 0
-                            ? `${idle.count > 1 ? `${idle.count} ${pluralAssets(idle.count)}: ` : ''}${formatMoney(idle.total, { currency: cur, kopecks: 'hide' })} без ставки · теряете ~${formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })}${t.common.perDay}`
-                            : undefined
+            {/* Ближайшее событие — одна фокус-карточка; весь тап — в календарь,
+                где разложены остальные. */}
+            {focusEvent ? (
+              <Pressable
+                style={[styles.heroEventPill, focusEvent.kind === 'overdue' && styles.heroEventPillAlert]}
+                onPress={() => { tapBuzz(); router.push('/calendar'); }}
+              >
+                <View style={styles.heroEventRow}>
+                  <View style={styles.heroEventRing}>
+                    <Donut
+                      segments={[
+                        { value: focusEvent.progress, color: eventTone },
+                        { value: 1 - focusEvent.progress, color: tokens.surface.neutral },
+                      ]}
+                      size={40}
+                      strokeWidth={4.5}
+                    />
+                    <View style={styles.heroEventRingIcon} pointerEvents="none">
+                      <MaterialCommunityIcons
+                        name={
+                          focusEvent.kind === 'overdue'
+                            ? 'alert-circle-outline'
+                            : focusEvent.kind === 'maturity'
+                              ? 'flag-outline'
+                              : 'cash'
                         }
-                        onPress={() => router.push(`/asset/${e.assetId}`)}
+                        size={15}
+                        color={eventTone}
                       />
-                    ))}
+                    </View>
                   </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.heroEventLabel, focusEvent.kind === 'overdue' && { color: eventTone }]}>
+                      {focusEvent.kind === 'overdue'
+                        ? 'Срок истёк — деньги не работают'
+                        : focusEvent.kind === 'maturity'
+                          ? 'Окончание срока'
+                          : '~ выплата процентов'}
+                    </Text>
+                    <Text style={styles.heroEventName} numberOfLines={1}>{focusEvent.name}</Text>
+                    {focusEvent.amount > 0.5 ? (
+                      <Text
+                        style={[styles.heroEventAmount, focusEvent.kind === 'payout' && { color: tokens.value.forecast }]}
+                        numberOfLines={1}
+                      >
+                        {focusEvent.kind === 'payout' ? '+' : ''}
+                        {formatMoney(focusEvent.amount, { currency: focusEvent.currency, kopecks: 'hide' })}
+                        {focusEvent.kind === 'payout' ? '' : ' освободится'}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.heroEventWhen}>
+                    <Text style={[styles.heroEventDate, { color: eventTone }]}>
+                      {formatDateShort(focusEvent.date)}
+                    </Text>
+                    <Text style={styles.heroEventDays}>
+                      {focusEvent.daysRemaining === 0
+                        ? 'сегодня'
+                        : focusEvent.daysRemaining < 0
+                          ? `${-focusEvent.daysRemaining} ${pluralDays(focusEvent.daysRemaining)} назад`
+                          : `${focusEvent.daysRemaining} ${pluralDays(focusEvent.daysRemaining)}`}
+                    </Text>
+                    {moreEvents > 0 ? (
+                      <Text style={styles.heroEventMore}>Ещё {moreEvents} ›</Text>
+                    ) : null}
+                  </View>
+                </View>
+                {focusEvent.kind === 'overdue' && idle.total > 0 ? (
+                  <View style={styles.heroEventFoot}>
+                    <Text style={styles.heroEventFootText}>
+                      {idle.count > 1 ? `${idle.count} ${pluralAssets(idle.count)}: ` : ''}
+                      {formatMoney(idle.total, { currency: cur, kopecks: 'hide' })} без ставки
+                      {' · '}теряете ~{formatMoney(idle.lostPerDay, { currency: cur, kopecks: 'hide' })}{t.common.perDay}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            ) : null}
+            <View style={styles.sectionRow} ref={assetsSectionRef}>
+              <View style={styles.sectionTitleWrap}>
+                <Text style={styles.sectionTitleInline}>{t.home.assets}</Text>
+                {/* Счётчик только от двух: при одном активе цифра «1» ничего не
+                    сообщает, её и так видно. */}
+                {views.length > 1 ? (
+                  <Text style={styles.sectionCount}>{views.length}</Text>
+                ) : null}
+              </View>
+              <Pressable
+                style={styles.sortBtn}
+                onPress={() => setSortIdx((i) => (i + 1) % SORTS.length)}
+                hitSlop={8}
+              >
+                <MaterialIcons name="swap-vert" size={16} color={tokens.text.secondary} />
+                <Text style={styles.sortText}>{sort.label}</Text>
+              </Pressable>
+            </View>
+            {/* Каждый актив — независимая карточка, а не строка в общей: так у
+                него есть свои границы и воздух вокруг, и список перестаёт
+                читаться однородной плитой. */}
+            {frozenViews.length > 0 && availableViews.length > 0 ? (
+              <Text style={styles.groupTitle}>Можно снять сейчас · {availableViews.length}</Text>
+            ) : null}
+            <View style={styles.assetCards}>
+              {availableViews.map((v) => (
+                <Card key={v.asset.id}>
+                  <AssetRow view={v} />
                 </Card>
+              ))}
+            </View>
+            {frozenViews.length > 0 ? (
+              <>
+                <View style={styles.groupTitleRow}>
+                  <MaterialIcons name="lock" size={13} color={tokens.text.tertiary} />
+                  <Text style={[styles.groupTitle, styles.groupTitleInRow]}>
+                    Освободятся по сроку · {frozenViews.length}
+                  </Text>
+                </View>
+                <View style={styles.assetCards}>
+                  {frozenViews.map((v) => (
+                    <Card key={v.asset.id}>
+                      <AssetRow view={v} />
+                    </Card>
+                  ))}
+                </View>
               </>
             ) : null}
+            {hasArchived ? (
+              <Pressable style={styles.archiveLink} onPress={() => router.push('/archive')} hitSlop={8}>
+                <MaterialCommunityIcons name="archive-outline" size={15} color={tokens.text.tertiary} />
+                <Text style={styles.archiveLinkText}>Архив</Text>
+              </Pressable>
+            ) : null}
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitleInline}>Необлагаемый лимит</Text>
+            </View>
+            {/* Живая шкала: пока лимит не выбран — крупно остаток, полоса тает к
+                нулю; лимит пробит — крупно налог на сегодня, полоса растёт.
+                Полоса видна и в свёрнутом виде: это и есть смысл блока. Тап по
+                карточке раскрывает пояснение и налог площадок. */}
+            <Pressable onPress={() => { tapBuzz(); setTaxOpen((v) => !v); }}>
+              <Card>
+                <View style={styles.txHead}>
+                  <Text style={styles.txHeroLabel} numberOfLines={1}>
+                    {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Осталось без налога'}
+                  </Text>
+                  <View style={styles.txHeadRight}>
+                    <Pressable style={styles.txRatePill} onPress={() => router.push('/settings/tax')} hitSlop={8}>
+                      <Text style={styles.txRateText}>{formatPercent(data.params.taxRate)}</Text>
+                    </Pressable>
+                    <MaterialIcons name={taxOpen ? 'expand-less' : 'expand-more'} size={20} color={tokens.text.tertiary} />
+                  </View>
+                </View>
+
+                <Text style={[styles.txBig, taxOver && { color: tokens.value.tax }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
+                </Text>
+                {taxLimitEta ? <Text style={styles.txEta}>{taxLimitEta}</Text> : null}
+                <View style={styles.txTrack}>
+                  {taxBarPct > 0 ? (
+                    <LinearGradient
+                      colors={[hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.txFill, { width: `${Math.max(taxBarPct, taxOver ? 2 : 0)}%` }]}
+                    />
+                  ) : null}
+                </View>
+                <View style={styles.txEnds}>
+                  {taxOver ? (
+                    <>
+                      <Text style={styles.txEndText} numberOfLines={1}>
+                        <Text style={styles.txEndStrong}>{formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}</Text>
+                        {' / '}{formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}
+                      </Text>
+                      <Text style={[styles.txEndText, { color: tokens.value.tax }]} numberOfLines={1}>
+                        +{formatMoney(taxExcess, { currency: cur, kopecks: 'hide' })} сверх лимита
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.txEndText} numberOfLines={1}>
+                        Накоплено <Text style={styles.txEndStrong}>{formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}</Text>
+                      </Text>
+                      <Text style={styles.txEndText} numberOfLines={1}>
+                        Лимит <Text style={styles.txEndStrong}>{formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}</Text>
+                      </Text>
+                    </>
+                  )}
+                </View>
+
+                {taxOpen ? (
+                  <>
+                    <Pressable
+                      style={styles.txInfoRow}
+                      onPress={() => { tapBuzz(); router.push('/tax-breakdown' as never); }}
+                      hitSlop={6}
+                    >
+                      <MaterialCommunityIcons name="information-outline" size={16} color={tokens.accent.base} />
+                      <Text style={styles.txInfoText}>Как считается налог за {taxYear} год</Text>
+                      <MaterialIcons name="chevron-right" size={18} color={tokens.accent.base} />
+                    </Pressable>
+                    {taxCells.length > 0 ? (
+                      /* Доход, который в лимит не входит: налог с него удерживают
+                         за тебя. Своя плашка, чтобы не читалось продолжением лимита. */
+                      <View style={styles.txPanel}>
+                        <View style={styles.txPanelHead}>
+                          <View style={styles.txPanelIcon}>
+                            <MaterialCommunityIcons name="bank-outline" size={16} color={tokens.value.tax} />
+                          </View>
+                          <Text style={styles.txPanelTitle} numberOfLines={2}>
+                            Налог удержит банк (не входит в лимит)
+                          </Text>
+                        </View>
+                        <View style={styles.txCells}>
+                          {taxCells.map((c, i) => (
+                            <React.Fragment key={c.key}>
+                              {i > 0 ? <View style={styles.txCellSep} /> : null}
+                              <View style={styles.txCell}>
+                                <Text style={styles.txCellLabel} numberOfLines={1}>{c.label}</Text>
+                                <Text style={[styles.txCellValue, { color: c.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                                  {formatMoney(c.value, { currency: cur, kopecks: 'hide' })}
+                                </Text>
+                              </View>
+                            </React.Fragment>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+              </Card>
+            </Pressable>
             {/* marginBottom:0, когда есть слайдер — его карточка сама даёт 14px
                 сверху через paddingVertical у goalSlidePage (нужен и для отступа
                 снизу тоже), обычные 14 от sectionRow добавились бы поверх этого,
@@ -640,273 +870,12 @@ export default function HomeScreen() {
               </Pressable>
             )}
 
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitleInline}>Необлагаемый лимит</Text>
-              <Pressable
-                style={styles.sortBtn}
-                onPress={() => { tapBuzz(); setTaxOpen((v) => !v); }}
-                hitSlop={8}
-              >
-                <Text style={styles.link}>{taxOpen ? 'Свернуть' : 'Подробнее'}</Text>
-                <MaterialIcons name={taxOpen ? 'expand-less' : 'expand-more'} size={18} color={tokens.accent.base} />
-              </Pressable>
-            </View>
-            {/* Герой меняет смысл вместе с состоянием: пока доход по вкладам в
-                лимите — крупно, сколько ещё можно заработать без налога; лимит
-                пробит — на его место встаёт сумма к доплате. Колонки внизу — для
-                быстрого считывания: ~ налог за год (прогноз) и налог площадок.
-                Полная разбивка — в шите по тапу на карточку. */}
-            <Pressable onPress={() => { tapBuzz(); router.push('/tax-breakdown' as never); }}>
-              <Card>
-                <View style={styles.txHead}>
-                  <View style={styles.infoLabel}>
-                    <Text style={styles.txHeroLabel} numberOfLines={1}>
-                      {taxOver ? `Доплатить к 1 декабря ${taxYear + 1}` : 'Осталось без налога'}
-                    </Text>
-                    <MaterialCommunityIcons name="information-outline" size={16} color={tokens.text.tertiary} />
-                  </View>
-                  <Pressable style={styles.txRatePill} onPress={() => router.push('/settings/tax')} hitSlop={8}>
-                    <Text style={styles.txRateText}>{formatPercent(data.params.taxRate)}</Text>
-                    <MaterialIcons name="chevron-right" size={14} color={tokens.value.tax} />
-                  </Pressable>
-                </View>
-
-                <Text style={[styles.txBig, taxOver && { color: tokens.value.tax }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {formatMoney(taxOver ? taxSummary.taxAccruedSelf : taxRemain, { currency: cur, kopecks: 'hide' })}
-                </Text>
-                {taxLimitEta ? <Text style={styles.txEta}>{taxLimitEta}</Text> : null}
-                {taxOpen ? (
-                <>
-                <View style={styles.txTrack}>
-                  {taxBarPct > 0 ? (
-                    <LinearGradient
-                      colors={
-                        taxOver
-                          ? [hexToRgba(tokens.value.outflow, 0.55), tokens.value.outflow]
-                          : [hexToRgba(tokens.value.tax, 0.55), tokens.value.tax]
-                      }
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[styles.txFill, { width: `${taxBarPct}%` }]}
-                    />
-                  ) : null}
-                </View>
-                <View style={styles.txEnds}>
-                  <View style={styles.txEnd}>
-                    <Text style={styles.txEndLabel} numberOfLines={1}>Использовано</Text>
-                    <Text style={styles.txEndValue} numberOfLines={1}>
-                      {formatMoney(taxSummary.selfAccrued, { currency: cur, kopecks: 'hide' })}
-                    </Text>
-                  </View>
-                  <View style={[styles.txEnd, styles.txEndRight]}>
-                    <Text style={styles.txEndLabel} numberOfLines={1}>Лимит на {taxYear} год</Text>
-                    <Text style={styles.txEndValue} numberOfLines={1}>
-                      {formatMoney(taxLimit, { currency: cur, kopecks: 'hide' })}
-                    </Text>
-                  </View>
-                </View>
-
-                {taxCells.length > 0 ? (
-                  /* Нижняя часть — отдельный мир: доход, который в лимит не
-                     входит, налог с него удерживают за тебя. Своя плашка с
-                     иконкой, чтобы это не читалось продолжением лимита. */
-                  <View style={styles.txPanel}>
-                    <View style={styles.txPanelHead}>
-                      <View style={styles.txPanelIcon}>
-                        <MaterialCommunityIcons name="bank-outline" size={16} color={tokens.value.tax} />
-                      </View>
-                      <Text style={styles.txPanelTitle} numberOfLines={2}>
-                        Налог удержит банк (не входит в лимит)
-                      </Text>
-                    </View>
-                    <View style={styles.txCells}>
-                      {taxCells.map((c, i) => (
-                        <React.Fragment key={c.key}>
-                          {i > 0 ? <View style={styles.txCellSep} /> : null}
-                          <View style={styles.txCell}>
-                            <Text style={styles.txCellLabel} numberOfLines={1}>{c.label}</Text>
-                            <Text style={[styles.txCellValue, { color: c.color }]} numberOfLines={1} adjustsFontSizeToFit>
-                              {formatMoney(c.value, { currency: cur, kopecks: 'hide' })}
-                            </Text>
-                          </View>
-                        </React.Fragment>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
-                </>
-                ) : null}
-              </Card>
-            </Pressable>
-
-            <View style={styles.sectionRow}>
-              <View style={styles.sectionTitleWrap}>
-                <Text style={styles.sectionTitleInline}>{t.home.assets}</Text>
-                {/* Счётчик только от двух: при одном активе цифра «1» ничего не
-                    сообщает, её и так видно. */}
-                {views.length > 1 ? (
-                  <Text style={styles.sectionCount}>{views.length}</Text>
-                ) : null}
-              </View>
-              <Pressable
-                style={styles.sortBtn}
-                onPress={() => setSortIdx((i) => (i + 1) % SORTS.length)}
-                hitSlop={8}
-              >
-                <MaterialIcons name="swap-vert" size={16} color={tokens.text.secondary} />
-                <Text style={styles.sortText}>{sort.label}</Text>
-              </Pressable>
-            </View>
-            {/* Каждый актив — независимая карточка, а не строка в общей: так у
-                него есть свои границы и воздух вокруг, и список перестаёт
-                читаться однородной плитой. */}
-            {/* Ликвидность — шапка списка, а не отдельный блок: раньше замороженные
-                вклады шли её строками, потом ещё раз в событиях и в третий раз
-                здесь. Теперь её строки — это сами карточки активов в группах. */}
-            {liq.frozen > 0 ? (
-              <Card style={styles.liqCard}>
-                <Text style={styles.liqLabel}>Доступно сейчас</Text>
-                <Text style={styles.liqValue}>
-                  {formatMoney(liq.liquid, { currency: cur, kopecks: 'hide' })}
-                </Text>
-                <View style={styles.liqBarWrap}>
-                  <View style={styles.liqTrack}>
-                    <LinearGradient
-                      colors={[hexToRgba(tokens.semantic.positive, 0.5), tokens.semantic.positive]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[styles.liqFill, { width: `${Math.min(Math.max(liqLiquidShare * 100, 0), 100)}%` }]}
-                    />
-                  </View>
-                </View>
-                <View style={styles.liqMeta}>
-                  <Text style={styles.liqMetaBigValue}>{Math.round(liqLiquidShare * 100)}%</Text>
-                  <View style={styles.liqMetaInlineRow}>
-                    <MaterialIcons name="lock" size={14} color={tokens.text.tertiary} />
-                    <Text style={[styles.liqMetaBigValue, { color: tokens.text.tertiary }]}>
-                      {formatMoney(liq.frozen, { currency: cur, kopecks: 'hide' })}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-            ) : null}
-            {frozenViews.length > 0 && availableViews.length > 0 ? (
-              <Text style={styles.groupTitle}>Можно снять сейчас · {availableViews.length}</Text>
-            ) : null}
-            <View style={styles.assetCards}>
-              {availableViews.map((v) => (
-                <Card key={v.asset.id}>
-                  <AssetRow view={v} />
-                </Card>
-              ))}
-            </View>
-            {frozenViews.length > 0 ? (
-              <>
-                <View style={styles.groupTitleRow}>
-                  <MaterialIcons name="lock" size={13} color={tokens.text.tertiary} />
-                  <Text style={[styles.groupTitle, styles.groupTitleInRow]}>
-                    Освободятся по сроку · {frozenViews.length}
-                  </Text>
-                </View>
-                <View style={styles.assetCards}>
-                  {frozenViews.map((v) => (
-                    <Card key={v.asset.id}>
-                      <AssetRow view={v} />
-                    </Card>
-                  ))}
-                </View>
-              </>
-            ) : null}
-            {hasArchived ? (
-              <Pressable style={styles.archiveLink} onPress={() => router.push('/archive')} hitSlop={8}>
-                <MaterialCommunityIcons name="archive-outline" size={15} color={tokens.text.tertiary} />
-                <Text style={styles.archiveLinkText}>Архив</Text>
-              </Pressable>
-            ) : null}
           </>
         ) : (
           <EmptyAssets />
         )}
       </Animated.ScrollView>
     </ScreenBackground>
-  );
-}
-
-/**
- * Строка блока «Дальше»: окончание срока, выплата или просрочка. Кольцо —
- * обратный отсчёт (доля срока или периода начисления), иконка типа внутри.
- * Сумма выплаты — прогноз дохода: «+» у числа, тон прогноза, «~» в подписи.
- * Сумма к окончанию — то, что придёт, без «+».
- */
-function NextEventRow({
-  e,
-  org,
-  divider,
-  idleText,
-  onPress,
-}: {
-  e: NearestEvent;
-  org?: string;
-  divider: boolean;
-  idleText?: string;
-  onPress: () => void;
-}) {
-  // Просроченное — единственное, что требует действия, поэтому и цветом
-  // отличается от спокойных «скоро выплата» / «скоро конец срока».
-  const tone = e.kind === 'overdue' ? tokens.semantic.warning : tokens.accent.base;
-  const label = e.kind === 'overdue'
-    ? 'Срок истёк — деньги не работают'
-    : e.kind === 'maturity' ? 'Окончание срока' : '~ выплата процентов';
-  const when = e.daysRemaining === 0
-    ? 'сегодня'
-    : e.daysRemaining < 0
-      ? `${-e.daysRemaining} ${pluralDays(e.daysRemaining)} назад`
-      : `${e.daysRemaining} ${pluralDays(e.daysRemaining)}`;
-  return (
-    <View>
-      {divider ? <View style={styles.divider} /> : null}
-      <Pressable style={({ pressed }) => [styles.eventRow, pressed && styles.rowPressed]} onPress={onPress}>
-        <View style={styles.heroEventRing}>
-          <Donut
-            segments={[
-              { value: e.progress, color: tone },
-              { value: 1 - e.progress, color: tokens.surface.neutral },
-            ]}
-            size={38}
-            strokeWidth={4.5}
-          />
-          <View style={styles.heroEventRingIcon} pointerEvents="none">
-            <MaterialCommunityIcons
-              name={e.kind === 'overdue' ? 'alert-circle-outline' : e.kind === 'maturity' ? 'flag-outline' : 'cash'}
-              size={15}
-              color={tone}
-            />
-          </View>
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={rowText.title} numberOfLines={1}>{e.name}</Text>
-          <Text style={[rowText.subtitle, e.kind === 'overdue' && { color: tone }]} numberOfLines={1}>
-            {org ? `${label} · ${org}` : label}
-          </Text>
-        </View>
-        <View style={styles.nextRight}>
-          {e.amount > 0.5 ? (
-            <Text style={[styles.nextAmount, e.kind === 'payout' && { color: tokens.value.forecast }]} numberOfLines={1}>
-              {e.kind === 'payout' ? '+' : ''}
-              {formatMoney(e.amount, { currency: e.currency, kopecks: 'hide' })}
-            </Text>
-          ) : null}
-          <Text style={[rowText.subtitle, { color: tone }]} numberOfLines={1}>
-            {formatDateShort(e.date)} · {when}
-          </Text>
-        </View>
-      </Pressable>
-      {idleText ? (
-        <View style={styles.heroEventFoot}>
-          <Text style={styles.heroEventFootText}>{idleText}</Text>
-        </View>
-      ) : null}
-    </View>
   );
 }
 
@@ -954,42 +923,31 @@ const styles = StyleSheet.create({
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 40, marginBottom: 14 },
   // Отступы/паддинг — канон заголовков секций, устоявшийся в аналитике
   // (см. CLAUDE.md → «Канон экранов»): 40 сверху, 14 снизу, 8 слева.
-  sectionTitleInline: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, paddingLeft: 8 },
+  sectionTitleInline: { ...textRole.sectionTitle, paddingLeft: 8 },
   // baseline, а не center: мелкая цифра рядом с 20-пунктовым заголовком должна
   // стоять на его строке, иначе висит в воздухе по центру высоты.
   sectionTitleWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   // Счётчик — приглушённая цифра рядом с заголовком, без рамок и подписи:
   // это справочная деталь, а не второй заголовок.
-  sectionCount: { fontSize: tokens.typography.label, fontWeight: '500', color: tokens.text.tertiary },
-  link: { fontSize: tokens.typography.label, color: tokens.accent.base, fontWeight: '600' },
+  sectionCount: { ...textRole.chip, color: tokens.text.tertiary },
+  link: textRole.link,
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sortText: { fontSize: tokens.typography.caption, color: tokens.text.secondary, fontWeight: '500' },
-  listInner: { paddingHorizontal: tokens.spacing.lg, paddingVertical: tokens.spacing.xs },
+  sortText: { ...textRole.chip, color: tokens.text.secondary },
   // gap 4, как у списка инструментов внутри группы (`app/catalog/instruments.tsx`
   // → styles.list): карточки отдельные, но раздел читается цельным, а не
   // рассыпается на пять независимых блоков.
   assetCards: { gap: 4 },
-  liqCard: { marginBottom: tokens.spacing.sm },
   // Подзаголовок группы внутри раздела «Активы» — мельче заголовка секции.
   groupTitle: {
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 2,
-    fontFamily: font.medium,
-    color: tokens.text.tertiary,
+    ...textRole.blockLabel,
     paddingLeft: 8,
     marginTop: tokens.spacing.lg,
     marginBottom: tokens.spacing.sm,
   },
   groupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8, marginTop: tokens.spacing.lg, marginBottom: tokens.spacing.sm },
   groupTitleInRow: { paddingLeft: 0, marginTop: 0, marginBottom: 0 },
-  nextRight: { alignItems: 'flex-end', maxWidth: '45%' },
-  nextAmount: { fontSize: tokens.typography.body, lineHeight: tokens.typography.body + 2, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.16 },
-  rowPressed: { opacity: 0.6 },
-  divider: { height: 1, backgroundColor: tokens.surface.hairline },
   archiveLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: tokens.spacing.chip, paddingVertical: tokens.spacing.md },
-  archiveLinkText: { fontSize: tokens.typography.caption, color: tokens.text.tertiary, fontWeight: '500' },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md, paddingVertical: tokens.spacing.md },
-  infoLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  archiveLinkText: { ...textRole.chip, color: tokens.text.tertiary },
   txHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacing.md },
   txHeroLabel: { ...blockText.label, flexShrink: 1 },
   txRatePill: {
@@ -998,16 +956,17 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radius.pill,
     paddingLeft: tokens.spacing.tight, paddingRight: tokens.spacing.chip, paddingVertical: 6,
   },
-  txRateText: { fontSize: tokens.typography.caption, lineHeight: 15, fontWeight: '600', color: tokens.value.tax },
+  txRateText: { ...textRole.pill, color: tokens.value.tax },
+  txHeadRight: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.xs },
   txBig: blockText.value,
-  txEta: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.value.forecast, marginTop: 2 },
+  txEta: { ...textRole.rowSubtitle, color: tokens.value.forecast, marginTop: 2 },
   txTrack: { height: 8, borderRadius: 4, backgroundColor: hexToRgba(tokens.value.tax, 0.12), overflow: 'hidden', marginTop: tokens.spacing.md },
   txFill: { height: 8, borderRadius: 4 },
   txEnds: { flexDirection: 'row', justifyContent: 'space-between', gap: tokens.spacing.md, marginTop: 10 },
-  txEnd: { flexShrink: 1, minWidth: 0 },
-  txEndRight: { alignItems: 'flex-end' },
-  txEndLabel: { fontSize: tokens.typography.hint, lineHeight: 15, color: tokens.text.tertiary },
-  txEndValue: { fontSize: 16, lineHeight: 20, fontWeight: '600', color: tokens.text.primary, marginTop: 2 },
+  txEndText: { ...textRole.rowSubtitle, flexShrink: 1 },
+  txEndStrong: { fontFamily: font.semibold, color: tokens.text.primary },
+  txInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: tokens.spacing.lg },
+  txInfoText: { ...textRole.chip, color: tokens.accent.base, flex: 1 },
   txPanel: {
     backgroundColor: hexToRgba(tokens.value.tax, 0.06),
     borderRadius: tokens.radius.md,
@@ -1021,20 +980,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: hexToRgba(tokens.value.tax, 0.12),
   },
-  txPanelTitle: { flexShrink: 1, fontSize: tokens.typography.label, lineHeight: 17, fontWeight: '600', color: tokens.text.primary },
+  txPanelTitle: { ...textRole.rowTitle, fontFamily: font.semibold, flexShrink: 1 },
   txCells: { flexDirection: 'row', alignItems: 'stretch' },
   txCell: { flex: 1, minWidth: 0 },
   txCellSep: { width: 1, backgroundColor: hexToRgba(tokens.value.tax, 0.15), marginHorizontal: tokens.spacing.md },
-  txCellLabel: { fontSize: tokens.typography.caption, lineHeight: 16, color: tokens.text.secondary },
-  txCellValue: { fontSize: 18, lineHeight: 22, fontWeight: '600', marginTop: 4 },
-  liqLabel: blockText.label,
-  liqValue: blockText.value,
-  liqBarWrap: { marginTop: tokens.spacing.lg },
-  liqTrack: { height: 10, borderRadius: tokens.radius.pill, overflow: 'hidden', backgroundColor: hexToRgba('#909497', 0.18) },
-  liqFill: { height: '100%', borderRadius: tokens.radius.pill },
-  liqMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
-  liqMetaInlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  liqMetaBigValue: { fontSize: 18, lineHeight: 20, fontFamily: font.semibold, color: tokens.text.primary, letterSpacing: -0.18 },
+  txCellLabel: { ...textRole.rowSubtitle, color: tokens.text.secondary },
+  txCellValue: { ...textRole.statValue, marginTop: 4 },
   empty: { alignItems: 'center', paddingVertical: tokens.spacing.xxl },
   emptyTitle: { fontSize: tokens.typography.title, fontWeight: '600', color: tokens.text.primary, marginTop: tokens.spacing.md },
   emptyHint: { fontSize: tokens.typography.label, color: tokens.text.secondary, textAlign: 'center', marginTop: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg },
@@ -1095,20 +1046,13 @@ const styles = StyleSheet.create({
     backgroundColor: hexToRgba(tokens.accent.base, 0.10),
     alignItems: 'center', justifyContent: 'center',
   },
-  heroStatLabel: {
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 3,
-    fontFamily: font.medium,
-    color: tokens.text.secondary,
-  },
+  heroStatLabel: textRole.blockLabel,
   heroTileValueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.xs, marginTop: 14 },
-  heroStatValue: {
-    fontSize: 21,
-    lineHeight: 26,
-    fontFamily: font.bold,
-    color: tokens.text.primary,
-    letterSpacing: -0.3,
-  },
+  heroStatValue: { ...textRole.blockValue, color: tokens.text.primary, fontVariant: ['tabular-nums'] },
+  heroTileShareRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm, marginTop: 10 },
+  heroTileTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: hexToRgba('#909497', 0.18) },
+  heroTileFill: { height: '100%', borderRadius: 3, backgroundColor: tokens.semantic.positive },
+  heroTileShareText: { ...textRole.pill, color: tokens.text.secondary },
   heroTileSub: {
     fontSize: tokens.typography.caption,
     lineHeight: tokens.typography.caption + 3,
@@ -1118,7 +1062,7 @@ const styles = StyleSheet.create({
   },
   // Шеврон центрируем по СТРОКЕ значения (её высота), а не по всему блоку:
   // в плитке с подстрочником центр блока уезжает вниз и шеврон едет с ним.
-  heroTileChevron: { height: 26, alignItems: 'center', justifyContent: 'center' },
+  heroTileChevron: { height: 24, alignItems: 'center', justifyContent: 'center' },
   // Тонирована акцентом, в отличие от белых плиток фактов над ней: плитки
   // сообщают состояние, а эта строка — единственное, что может потребовать
   // действия, и должна отличаться от них не только содержанием.
@@ -1134,6 +1078,21 @@ const styles = StyleSheet.create({
     fontFamily: font.medium,
     color: tokens.semantic.warning,
   },
+  heroEventPill: {
+    backgroundColor: hexToRgba(tokens.accent.base, 0.07),
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: 14, paddingVertical: 14,
+    marginTop: tokens.spacing.sm,
+  },
+  heroEventPillAlert: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.12) },
+  heroEventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
+  heroEventLabel: textRole.hint,
+  heroEventName: { ...textRole.rowTitle, fontFamily: font.semibold, marginTop: 2 },
+  heroEventAmount: { ...textRole.rowSubtitle, fontFamily: font.medium, color: tokens.text.secondary, marginTop: 2 },
+  heroEventWhen: { alignItems: 'flex-end' },
+  heroEventDate: { ...textRole.rowTitle, fontFamily: font.semibold },
+  heroEventDays: { ...textRole.hint, marginTop: 2 },
+  heroEventMore: { ...textRole.pill, color: tokens.accent.base, marginTop: 6 },
   heroEventRing: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   heroEventRingIcon: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH, overflow: 'hidden' },

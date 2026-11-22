@@ -1,5 +1,5 @@
 import type { TextStyle } from 'react-native';
-import { tokens } from './tokens';
+import { textRole } from './textRoles';
 
 /**
  * Типографика строки актива — ОДНА на главную и календарь.
@@ -16,17 +16,6 @@ import { tokens } from './tokens';
  * совпадать с Figma.
  */
 export const rowText: { title: TextStyle; subtitle: TextStyle } = {
-  title: {
-    fontSize: 15,
-    lineHeight: 17,
-    letterSpacing: -0.15, // −1%, как у ScreenTitle (34 → −0.34)
-    fontWeight: '500',
-    color: tokens.text.primary,
-  },
-  subtitle: {
-    fontSize: tokens.typography.caption,
-    lineHeight: tokens.typography.caption + 2,
-    color: tokens.text.tertiary,
-    marginTop: 4,
-  },
+  title: textRole.rowTitle,
+  subtitle: { ...textRole.rowSubtitle, marginTop: 4 },
 };
