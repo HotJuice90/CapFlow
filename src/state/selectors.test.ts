@@ -1,7 +1,7 @@
 import type { Asset, FinancialInstrument, Organization } from '@/domain/types';
 import { emptyAppData } from '@/storage/types';
 import { assetOutcome, findAssetView, idleCapital, computeTaxYearRecord, buildAssetViews, isPastYearMatured, analyticsSummary, assetTimeline, incomeRunRateSeries, capitalHistorySeries, monthlyIncomeHistory, earnedInPeriod, assetYearIncomes, taxByInstrument, nearestEvent, monthlyTaxForecast } from './selectors';
-import { calculate, diffDays } from '@/calc';
+import { accrualSeries, calculate, diffDays } from '@/calc';
 
 const depositInstrument: FinancialInstrument = {
   id: 'i0',
@@ -1002,5 +1002,51 @@ describe('переход через Новый год: налог по дате 
     expect(s26.tax).toBeCloseTo(s26.income * 0.13, 2);
     // Лимит 2027 первый занял на paid2027 (больше 160 000) → у второго налог со всего.
     expect(s27.tax).toBeCloseTo(s27.income * 0.13, 2);
+  });
+});
+
+describe('две операции в один день: вывел всё и положил обратно', () => {
+  const daily: FinancialInstrument = { ...savingsInstrument, payoutPeriod: 'daily' };
+  const base: Asset = {
+    id: 'sd1', instrumentId: 'i1', amount: 2_000_000, currency: 'RUB', rate: 15,
+    openDate: '2026-01-01', status: 'active', payoutPeriod: 'daily',
+  };
+  const day = '2026-11-26';
+  const before = calculate(base, daily, { taxRate: 13, keyRate: 16, taxFreeLimit: 210_000 }, day);
+  const params = { taxRate: 13, keyRate: 16, taxFreeLimit: 210_000 };
+  // Как сохраняет шит: снятие всего — «процентами», остаток тело − снятое;
+  // пополнение — новый остаток тела (после снятия тело 0).
+  const asset: Asset = {
+    ...base,
+    balanceAdjustments: [
+      { id: 'w', date: day, amount: before.balanceNow - before.currentValue, kind: 'interest', taxWithheld: 29_790 },
+      { id: 't', date: day, amount: 3_000_000, kind: 'body' },
+    ],
+  };
+
+  test('после обеих операций: вложено ровно 3 000 000, на счёте 3 000 000', () => {
+    const [p] = accrualSeries(asset, daily, [day]);
+    expect(p.currentValue).toBeCloseTo(3_000_000, 2);
+    const d = calculate(asset, daily, params, day);
+    expect(d.invested).toBeCloseTo(3_000_000, 2);
+  });
+
+  test('на следующий день доход идёт с 3 000 000', () => {
+    const d = calculate(asset, daily, params, '2026-11-27');
+    expect(d.balanceNow).toBeCloseTo(3_000_000, 2);
+    expect(d.incomePerDay).toBeCloseTo((3_000_000 * 0.15) / 365, 2);
+    expect(d.invested).toBeCloseTo(3_000_000, 2);
+  });
+
+  test('заработанное с открытия не теряется', () => {
+    const d = calculate(asset, daily, params, '2026-11-27');
+    expect(d.earnedSoFar).toBeGreaterThan(before.currentValue - before.balanceNow);
+  });
+
+  test('история показывает обе операции своими суммами', () => {
+    const tl = assetTimeline(asset, daily, params).filter((e) => e.type === 'balance');
+    const byId = new Map(tl.map((e) => [e.id, e]));
+    expect(byId.get('w')?.amountDelta).toBeCloseTo(-before.currentValue, 0);
+    expect(byId.get('t')?.amountDelta).toBeCloseTo(3_000_000, 0);
   });
 });

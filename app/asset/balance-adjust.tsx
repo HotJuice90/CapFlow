@@ -134,11 +134,7 @@ export default function BalanceAdjustSheet() {
   // ерунда вроде «снял 30 млрд», и это видно только по странному кошельку.
   const maxWithdraw = Math.round(displayBalance * 100) / 100;
   const overBalance = !isCorrection && direction === 'withdraw' && (delta ?? 0) > maxWithdraw + 0.005;
-  // Две операции на одну дату движок не различает (точка баланса на день одна,
-  // побеждает последняя) — вторая молча терялась. Не даём её сохранить.
-  const sameDateTaken = date === asset.openDate || (asset.balanceAdjustments ?? []).some((a) => a.date === date);
-
-  const canSave = !sameDateTaken && (isCorrection
+  const canSave = (isCorrection
     ? correctedAmount !== undefined && correctedAmount >= 0 && !!date
     : direction === 'withdraw'
       ? delta !== undefined && delta > 0 && !overBalance && !!date
@@ -333,12 +329,6 @@ export default function BalanceAdjustSheet() {
           </>
         )}
         <DateField label="Дата" value={date} onChange={setDate} />
-        {sameDateTaken ? (
-          <Text style={[s.limitText, s.limitTextWarn, s.dateWarn]}>
-            На эту дату уже есть операция — вторая потеряется. Запиши итог дня одной
-            операцией (например, «вывел всё и положил 3 млн» = снятие разницы) или поменяй дату.
-          </Text>
-        ) : null}
         <TextField
           label="Комментарий (необязательно)"
           value={comment}
@@ -541,7 +531,6 @@ const s = StyleSheet.create({
   limitText: { flex: 1, fontSize: tokens.typography.hint, lineHeight: tokens.typography.hint + 4, color: tokens.text.tertiary },
   limitTextWarn: { color: tokens.semantic.negative },
   limitLink: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.semibold, color: tokens.accent.base },
-  dateWarn: { marginTop: -6, marginBottom: tokens.spacing.md },
   historyToggle: { alignSelf: 'center', paddingVertical: tokens.spacing.md, marginBottom: tokens.spacing.sm },
   grabber: { width: 40, height: 4, borderRadius: tokens.radius.grabber, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
   title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 12 },

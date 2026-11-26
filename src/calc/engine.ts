@@ -309,9 +309,16 @@ function walkAccrualAt(
   const bal = balance.map((p) => ({ idx: dayIndex(p.date), amount: p.amount, isCorrection: p.isCorrection, kind: p.kind }));
   const rts = rates.map((p) => ({ idx: dayIndex(p.date), rate: p.rate }));
 
-  const balanceAt = new Map(bal.map((p) => [p.idx, p.amount]));
-  const kindAt = new Map(bal.map((p) => [p.idx, p.kind]));
-  const correctionAt = new Set(bal.filter((p) => p.isCorrection).map((p) => p.idx));
+  // Операций за день может быть несколько: «вывел всё и положил обратно 3 млн»
+  // — нормальный сценарий. Раньше точка баланса на день была одна (Map по дню),
+  // и вторая операция молча затирала первую. Теперь все точки дня проводятся
+  // по порядку ввода (balanceTimeline сортирует стабильно).
+  const pointsAt = new Map<number, typeof bal>();
+  for (const p of bal) {
+    const list = pointsAt.get(p.idx);
+    if (list) list.push(p);
+    else pointsAt.set(p.idx, [p]);
+  }
 
   const boundarySet = new Set<number>();
   if (mode === 'capitalize') {
@@ -388,10 +395,10 @@ function walkAccrualAt(
         }
       }
     }
-    const explicitAmount = balanceAt.get(date);
-    if (explicitAmount !== undefined) {
+    for (const point of pointsAt.get(date) ?? []) {
+      const explicitAmount = point.amount;
       const delta = principal + pending - explicitAmount;
-      if (kindAt.get(date) === 'interest' && delta > 0) {
+      if (point.kind === 'interest' && delta > 0) {
         // Вывод процентов: тело не трогаем. Сначала забираем выплаченное на
         // счёт (оно не в теле), остаток — из процентов, осевших в теле.
         // Тот же допуск, что в guessWithdrawalKind: банк и модель расходятся на
@@ -424,8 +431,11 @@ function walkAccrualAt(
 
     // Отрезок упирается ровно в следующую точку-ИСПРАВЛЕНИЕ (не в «сейчас» раньше
     // срока) — заменяем модельный доход на фактическую разницу тела.
-    const nextAmount = next !== undefined ? balanceAt.get(next) : undefined;
-    if (nextAmount !== undefined && segmentEndsAtNext && correctionAt.has(next)) {
+    // Исправление — только если оно ПЕРВАЯ операция того дня: оно описывает
+    // остаток на начало дня, а следующие операции дня идут уже от него.
+    const nextFirst = next !== undefined ? pointsAt.get(next)?.[0] : undefined;
+    const nextAmount = nextFirst?.amount;
+    if (nextAmount !== undefined && segmentEndsAtNext && nextFirst?.isCorrection) {
       accrued += nextAmount - (principal + pending);
       principal = nextAmount;
       pending = 0;
