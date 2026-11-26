@@ -29,7 +29,7 @@ import { HeroField } from '@/components/hero/HeroField';
 import { heroState } from '@/components/hero/heroState';
 import { Card } from '@/components/Card';
 import { Donut } from '@/components/Donut';
-import { AssetRow } from '@/components/AssetRow';
+import { AssetRow, rowAmount } from '@/components/AssetRow';
 import { OrgLogo } from '@/components/BankLogo';
 import { ActiveGoalCard, MetricCard } from '@/components/goals/GoalCard';
 import { useData } from '@/state/DataContext';
@@ -77,9 +77,9 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'added', label: 'по добавлению' },
 ];
 
-/** Базовая сумма — ровно та, что показана в строке (см. AssetRow → invested). */
+/** Сумма — ровно та, что показана в строке (см. AssetRow → rowAmount). */
 function investedOf(v: AssetView): number {
-  return v.derived.invested;
+  return rowAmount(v);
 }
 
 function sortViews(views: AssetView[], key: SortKey): AssetView[] {

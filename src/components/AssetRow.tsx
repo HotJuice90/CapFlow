@@ -30,12 +30,24 @@ const ICON_BY_TYPE = {
  *    высотой платят только длинные названия, короткие остаются компактными.
  *
  * Числа разведены по экранам, чтобы одно и то же не показывалось трижды:
- * тут — вложено + заработано с открытия, в календаре — доход за день,
- * в аналитике — сумма вместе с процентами (она же = вложено + заработано).
+ * тут — сумма (как в шапке карточки актива) + заработано с открытия, в
+ * календаре — доход за день.
  *
  * 4. Детали одной мета-строкой через точку вместо пилюль («15,07% · Накопительный
  *    счёт · Ежедневно»): пробовали в 0.9.93 — читалось хуже, пилюли вернули.
  */
+/**
+ * Сумма в строке — ТА ЖЕ, что крупно в шапке карточки актива (`app/asset/[id].tsx`):
+ * у срочного «Сумма вклада» (тело), у бессрочного «На счёте» (тело + проценты,
+ * уже выплаченные на этот же счёт). Раньше строка показывала «вложено» и у
+ * накопительного расходилась с карточкой: после вывода процентов и пополнения
+ * до ровных 3 000 000 главная рисовала 2 939 253. Сортировка «по сумме» на
+ * главной берёт это же число.
+ */
+export function rowAmount(view: AssetView): number {
+  return view.instrument.behavior === 'term' ? view.derived.invested : view.derived.currentValue;
+}
+
 export function AssetRow({ view }: { view: AssetView }) {
   const router = useRouter();
   const { asset, instrument, organization, derived } = view;
@@ -45,12 +57,7 @@ export function AssetRow({ view }: { view: AssetView }) {
   const isMatured = instrument.behavior === 'term' && (derived.termProgress ?? 0) >= 1;
   const cur = asset.currency;
   const payout = asset.payoutPeriod ?? instrument.payoutPeriod;
-  // Базовая сумма — свои деньги, без набежавших процентов. Работает одинаково
-  // для обоих режимов: при капитализации balanceNow уже включает начисленное,
-  // при простом проценте currentValue = balanceNow + earnedSoFar. Разложение
-  // точное: базовая + заработано = currentValue, то есть ровно та сумма,
-  // которую показывает аналитика.
-  const invested = derived.invested;
+  const invested = rowAmount(view);
   // Срок близко — пилюля заметнее: через две недели деньги потребуют решения.
   const soon = derived.daysRemaining !== undefined && derived.daysRemaining <= 14;
 
