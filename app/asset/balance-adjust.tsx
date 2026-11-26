@@ -467,8 +467,14 @@ function HistoryRow({
         <Text style={s.histDate}>{formatDateShort(point.date)}</Text>
         <Text style={s.histSub} numberOfLines={1}>
           {isFirst ? 'Открытие' : point.isCorrection ? (point.comment || 'Исправление под факт банка') : point.comment || (isUp ? 'Пополнение' : point.kind === 'interest' ? 'Вывод процентов' : 'Снятие')}
-          {point.taxWithheld ? ` · налог ${formatMoney(point.taxWithheld, { currency, kopecks: 'hide' })}` : ''}
         </Text>
+        {/* Налог — своей строкой: в одной с типом операции он не влезал рядом
+            с крупной суммой справа и обрезался многоточием. */}
+        {point.taxWithheld ? (
+          <Text style={s.histSub} numberOfLines={1}>
+            налог {formatMoney(point.taxWithheld, { currency, kopecks: 'hide' })}
+          </Text>
+        ) : null}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         {delta !== undefined ? (
