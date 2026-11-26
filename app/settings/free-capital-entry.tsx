@@ -62,7 +62,7 @@ export default function FreeCapitalEntrySheet() {
       <View style={s.grabber} />
       <Text style={s.title}>Изменить запись</Text>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView style={s.scroll} nestedScrollEnabled showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Segmented
           label="Операция"
           value={direction}

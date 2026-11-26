@@ -56,6 +56,12 @@ export default function BalanceAdjustSheet() {
   const [date, setDate] = useState<string>(todayIso());
   const [comment, setComment] = useState('');
   const [fundFromFree, setFundFromFree] = useState(false);
+  // NumberField держит свой текст; чтобы подставить сумму кнопкой «Снять всё»,
+  // пересоздаём поле с новым начальным значением.
+  const [deltaKey, setDeltaKey] = useState(0);
+  // История сворачивается до последних записей: длинная лента под формой
+  // превращала шит в простыню, и до кнопки приходилось долго листать.
+  const [historyOpen, setHistoryOpen] = useState(false);
   // null — выбор не трогали, тип угадывается по сумме (см. withdrawKind ниже).
   const [kindPicked, setKindPicked] = useState<'body' | 'interest' | null>(null);
 
@@ -114,15 +120,32 @@ export default function BalanceAdjustSheet() {
   // счёте — разница «на счёте» и «вложено»: у счёта без капитализации туда
   // попадает и ещё не выплаченное за текущий месяц, но для догадки это честная
   // верхняя граница, а ошибку человек видит и переключает сам.
-  const withdrawKind = kindPicked ?? guessWithdrawalKind(delta ?? 0, Math.max(0, displayBalance - derived.invested));
+  // Снимают больше тела — значит забирают и проценты, лежащие на счёте рядом с
+  // ним (вывести всё целиком). Тело само это не покрывает, поэтому такое снятие
+  // проводим «процентами»: движок сначала забирает проценты на счёте, остаток —
+  // из тела (см. walkAccrualAt → kind 'interest'). Раньше кнопка гасла: снятие
+  // сверялось с телом, а не с суммой «Сейчас на счёте», которую видит человек.
+  const exceedsBody = direction === 'withdraw' && (delta ?? 0) > currentBalance + 0.005;
+  const withdrawKind = exceedsBody
+    ? 'interest'
+    : kindPicked ?? guessWithdrawalKind(delta ?? 0, Math.max(0, displayBalance - derived.invested));
 
-  const canSave = isCorrection
+  // Больше, чем есть на счёте сегодня, снять нельзя — иначе в учёт попадает
+  // ерунда вроде «снял 30 млрд», и это видно только по странному кошельку.
+  const maxWithdraw = Math.round(displayBalance * 100) / 100;
+  const overBalance = !isCorrection && direction === 'withdraw' && (delta ?? 0) > maxWithdraw + 0.005;
+  // Две операции на одну дату движок не различает (точка баланса на день одна,
+  // побеждает последняя) — вторая молча терялась. Не даём её сохранить.
+  const sameDateTaken = date === asset.openDate || (asset.balanceAdjustments ?? []).some((a) => a.date === date);
+
+  const canSave = !sameDateTaken && (isCorrection
     ? correctedAmount !== undefined && correctedAmount >= 0 && !!date
-    : delta !== undefined && delta > 0 && newBalance >= 0 && !!date;
+    : direction === 'withdraw'
+      ? delta !== undefined && delta > 0 && !overBalance && !!date
+      : delta !== undefined && delta > 0 && !!date);
 
   const onSave = async () => {
     if (!canSave) return;
-    if (newBalance < 0) { warnBuzz(); return; }
     const adjustment: BalanceAdjustment = {
       id: uid('badj-'),
       date,
@@ -188,7 +211,10 @@ export default function BalanceAdjustSheet() {
       <View style={s.grabber} />
       <Text style={s.title}>Изменить баланс</Text>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      {/* nestedScrollEnabled обязателен в formSheet на Android: без него жест
+          вверх по прокрученному списку забирает сам шит и закрывает его вместе с
+          введёнными данными (та же правка в currency-picker / option-picker). */}
+      <ScrollView style={s.scroll} nestedScrollEnabled showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.balanceBox}>
           <Text style={s.balanceLabel}>Сейчас на счёте</Text>
           <Text style={s.balanceValue}>{formatMoney(displayBalance, { currency: cur })}</Text>
@@ -208,6 +234,7 @@ export default function BalanceAdjustSheet() {
             value={correctedAmount}
             onChange={setCorrectedAmount}
             suffix={cur}
+            grouped
             placeholder={String(Math.round(displayBalance))}
           />
         ) : (
@@ -222,11 +249,28 @@ export default function BalanceAdjustSheet() {
               onChange={(v) => { tapBuzz(); setDirection(v); }}
             />
             <NumberField
+              key={`delta-${deltaKey}`}
               label={direction === 'topup' ? 'Сумма пополнения' : 'Сумма снятия'}
               value={delta}
               onChange={setDelta}
               placeholder="0"
+              grouped
             />
+            {direction === 'withdraw' ? (
+              <View style={s.limitRow}>
+                <Text style={[s.limitText, overBalance && s.limitTextWarn]} numberOfLines={2}>
+                  {overBalance
+                    ? `Больше, чем на счёте. Максимум ${formatMoney(maxWithdraw, { currency: cur })}`
+                    : `Можно снять до ${formatMoney(maxWithdraw, { currency: cur })}`}
+                </Text>
+                <Pressable
+                  onPress={() => { tapBuzz(); setDelta(maxWithdraw); setDeltaKey((k) => k + 1); }}
+                  hitSlop={8}
+                >
+                  <Text style={s.limitLink}>Снять всё</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {direction === 'withdraw' ? (
               <>
                 <Segmented
@@ -239,9 +283,11 @@ export default function BalanceAdjustSheet() {
                   onChange={(v) => { tapBuzz(); setKindPicked(v); }}
                 />
                 <Text style={s.freeHint}>
-                  {withdrawKind === 'interest'
-                    ? 'Тело не изменится — уходят проценты, которые уже на счёте'
-                    : 'Тело уменьшится на эту сумму'}
+                  {exceedsBody
+                    ? 'Больше тела — сначала уйдут проценты на счёте, остаток из тела'
+                    : withdrawKind === 'interest'
+                      ? 'Тело не изменится — уходят проценты, которые уже на счёте'
+                      : 'Тело уменьшится на эту сумму'}
                 </Text>
               </>
             ) : null}
@@ -250,6 +296,7 @@ export default function BalanceAdjustSheet() {
                 label="Из них налог (если банк удержал сам)"
                 value={taxWithheld}
                 onChange={setTaxWithheld}
+                grouped
                 placeholder={suggestedTax !== undefined ? String(Math.round(suggestedTax)) : '0'}
               />
             ) : null}
@@ -274,7 +321,7 @@ export default function BalanceAdjustSheet() {
               </View>
               <Toggle value={fundFromFree} onChange={(v) => { tapBuzz(); setFundFromFree(v); }} />
             </View>
-            {fundFromFree ? (
+            {fundFromFree && !overBalance ? (
               <Text style={s.freeHint}>
                 {direction === 'topup'
                   ? freeBalanceInCurrency > 0
@@ -286,6 +333,12 @@ export default function BalanceAdjustSheet() {
           </>
         )}
         <DateField label="Дата" value={date} onChange={setDate} />
+        {sameDateTaken ? (
+          <Text style={[s.limitText, s.limitTextWarn, s.dateWarn]}>
+            На эту дату уже есть операция — вторая потеряется. Запиши итог дня одной
+            операцией (например, «вывел всё и положил 3 млн» = снятие разницы) или поменяй дату.
+          </Text>
+        ) : null}
         <TextField
           label="Комментарий (необязательно)"
           value={comment}
@@ -295,22 +348,36 @@ export default function BalanceAdjustSheet() {
 
         <Text style={s.section}>История</Text>
         <Text style={s.hint}>Смахните запись влево — удалить, вправо — изменить сумму</Text>
-        {timeline.map((point, i) => (
+        {(historyOpen ? timeline : timeline.slice(-3)).map((point, i, shownList) => (
           <HistoryRow
             key={point.id ?? point.date}
             point={point}
-            prevAmount={i > 0 ? timeline[i - 1].amount : undefined}
-            isLast={i === timeline.length - 1}
+            prevAmount={(() => {
+              const at = timeline.indexOf(point);
+              return at > 0 ? timeline[at - 1].amount : undefined;
+            })()}
+            isLast={i === shownList.length - 1}
             currency={cur}
             onEdit={onEditAdjustment}
             onDelete={onDeleteAdjustment}
           />
         ))}
+        {timeline.length > 3 ? (
+          <Pressable style={s.historyToggle} onPress={() => { tapBuzz(); setHistoryOpen((v) => !v); }} hitSlop={6}>
+            <Text style={s.limitLink}>
+              {historyOpen ? 'Свернуть историю' : `Показать всю историю · ${timeline.length}`}
+            </Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
+      {/* Кнопка — отдельным подвалом под скроллом: всегда на месте, листать к
+          ней не нужно. */}
+      <View style={s.footer}>
       <Pressable style={[s.saveBtn, !canSave && s.disabled]} disabled={!canSave} onPress={onSave}>
         <Text style={s.saveText}>Сохранить</Text>
       </Pressable>
+      </View>
     </View>
   );
 }
@@ -464,6 +531,18 @@ const s = StyleSheet.create({
   // fitToContents), поэтому контент должен СКРОЛЛИТЬСЯ, а не просто помещаться.
   sheet: { flex: 1, backgroundColor: tokens.surface.white, paddingHorizontal: tokens.spacing.sheet, paddingTop: 8, paddingBottom: 20 },
   scroll: { flex: 1 },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: tokens.surface.hairline,
+    marginHorizontal: -tokens.spacing.sheet,
+    paddingHorizontal: tokens.spacing.sheet,
+  },
+  limitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: tokens.spacing.md, marginTop: -6, marginBottom: tokens.spacing.md },
+  limitText: { flex: 1, fontSize: tokens.typography.hint, lineHeight: tokens.typography.hint + 4, color: tokens.text.tertiary },
+  limitTextWarn: { color: tokens.semantic.negative },
+  limitLink: { fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, fontFamily: font.semibold, color: tokens.accent.base },
+  dateWarn: { marginTop: -6, marginBottom: tokens.spacing.md },
+  historyToggle: { alignSelf: 'center', paddingVertical: tokens.spacing.md, marginBottom: tokens.spacing.sm },
   grabber: { width: 40, height: 4, borderRadius: tokens.radius.grabber, backgroundColor: '#E5E8EE', alignSelf: 'center', marginBottom: 14 },
   title: { fontFamily: font.semibold, fontSize: 20, letterSpacing: -0.2, color: tokens.text.primary, marginBottom: 12 },
 

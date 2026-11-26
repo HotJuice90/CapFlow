@@ -102,7 +102,7 @@ export default function RateAdjustSheet() {
       <View style={s.grabber} />
       <Text style={s.title}>Изменить ставку</Text>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView style={s.scroll} nestedScrollEnabled showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.balanceBox}>
           <Text style={s.balanceLabel}>Текущая ставка</Text>
           <Text style={s.balanceValue}>{formatPercent(currentRate)}</Text>

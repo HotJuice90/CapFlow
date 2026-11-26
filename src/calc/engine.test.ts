@@ -678,3 +678,43 @@ describe('годовые сегменты: доход года по дате В�
     expect(afterClose).toBeCloseTo(atClose.accrued, 6);
   });
 });
+
+describe('вывод всего со счёта: тело + проценты на счёте', () => {
+  // НС с ежедневной выплатой без капитализации: проценты ложатся на счёт рядом
+  // с телом. «Сейчас на счёте» = тело + эти проценты.
+  const daily: FinancialInstrument = { ...savingsInstrument, payoutPeriod: 'daily' };
+  const base: Asset = {
+    id: 'wa1', instrumentId: 'i2', amount: 2_000_000, currency: 'RUB', rate: 15,
+    openDate: '2026-01-01', status: 'active', payoutPeriod: 'daily',
+  };
+  const day = '2026-07-01';
+  const before = calculate(base, daily, params, day);
+
+  test('проценты на счёте есть: «на счёте» больше тела', () => {
+    expect(before.currentValue).toBeGreaterThan(before.balanceNow + 1);
+  });
+
+  test('снятие всей суммы «на счёте» (больше тела) обнуляет актив', () => {
+    const all = before.currentValue;
+    const withdrawn: Asset = {
+      ...base,
+      // Как сохраняет шит: amount = тело − снятое (уходит в минус), kind 'interest'.
+      balanceAdjustments: [{ id: 'w', date: day, amount: before.balanceNow - all, kind: 'interest' }],
+    };
+    const after = calculate(withdrawn, daily, params, '2026-07-02');
+    expect(after.currentValue).toBeCloseTo(0, 2);
+    expect(after.balanceNow).toBeCloseTo(0, 2);
+  });
+
+  test('вывел всё и в тот же день положил ровно X — одна нетто-операция оставляет на счёте X', () => {
+    const target = 2_000_000 + 10_000; // положил обратно ровную сумму
+    const net = before.currentValue - target;
+    const adjusted: Asset = {
+      ...base,
+      balanceAdjustments: [{ id: 'n', date: day, amount: before.balanceNow - net, kind: 'interest' }],
+    };
+    const [p] = accrualSeries(adjusted, daily, [day]);
+    // Снимок на сам день операции — до начисления за этот день.
+    expect(p.currentValue).toBeCloseTo(target, 2);
+  });
+});
