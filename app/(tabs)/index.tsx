@@ -404,6 +404,10 @@ export default function HomeScreen() {
   const focusEvent = shownEvents[0] ?? null;
   const moreEvents = Math.max(0, shownEvents.length - 1);
   const eventTone = focusEvent?.kind === 'overdue' ? tokens.semantic.warning : tokens.accent.base;
+  // Площадка события: её лого в центре кольца и её цвет в заливке — по лицу
+  // банка актив опознаётся быстрее, чем по названию.
+  const focusOrg = focusEvent ? views.find((v) => v.asset.id === focusEvent.assetId)?.organization : undefined;
+  const focusHue = focusEvent?.kind === 'overdue' ? tokens.semantic.warning : focusOrg?.color ?? tokens.accent.base;
   // Тап по «Доступно сейчас» — якорь вниз, к списку активов на этом же экране.
   // measureLayout — координаты цели относительно ScrollView, а не окна.
   const scrollToAssets = () => {
@@ -572,65 +576,81 @@ export default function HomeScreen() {
                 style={[styles.heroEventPill, focusEvent.kind === 'overdue' && styles.heroEventPillAlert]}
                 onPress={() => { tapBuzz(); router.push('/calendar'); }}
               >
+                {/* Порядок: КТО (лого в кольце, название, банк) и СКОЛЬКО справа —
+                    сверху; КОГДА и «ещё N» — нижней строкой под разделителем.
+                    Раньше тип события, название, сумма и дата шли вперемешку. */}
                 <View style={styles.heroEventRow}>
                   <View style={styles.heroEventRing}>
+                    {/* Трек — белый полупрозрачный, заливка — цвет банка: кольцо
+                        показывает, сколько срока (или периода выплаты) прошло. */}
                     <Donut
                       segments={[
-                        { value: focusEvent.progress, color: eventTone },
-                        { value: 1 - focusEvent.progress, color: tokens.surface.neutral },
+                        { value: focusEvent.progress, color: focusHue },
+                        { value: 1 - focusEvent.progress, color: 'rgba(255,255,255,0.85)' },
                       ]}
-                      size={40}
-                      strokeWidth={4.5}
+                      size={52}
+                      strokeWidth={4}
                     />
                     <View style={styles.heroEventRingIcon} pointerEvents="none">
-                      <MaterialCommunityIcons
-                        name={
-                          focusEvent.kind === 'overdue'
-                            ? 'alert-circle-outline'
-                            : focusEvent.kind === 'maturity'
-                              ? 'flag-outline'
-                              : 'cash'
-                        }
-                        size={15}
-                        color={eventTone}
-                      />
+                      {focusOrg ? (
+                        <OrgLogo
+                          color={focusOrg.color}
+                          logo={focusOrg.logo}
+                          imageUri={focusOrg.customImageUri}
+                          size={36}
+                          variant="solid"
+                          bordered={false}
+                        />
+                      ) : (
+                        <MaterialCommunityIcons name="flag-outline" size={18} color={focusHue} />
+                      )}
                     </View>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.heroEventLabel, focusEvent.kind === 'overdue' && { color: eventTone }]}>
-                      {focusEvent.kind === 'overdue'
-                        ? 'Срок истёк — деньги не работают'
-                        : focusEvent.kind === 'maturity'
-                          ? 'Окончание срока'
-                          : '~ выплата процентов'}
-                    </Text>
                     <Text style={styles.heroEventName} numberOfLines={1}>{focusEvent.name}</Text>
-                    {focusEvent.amount > 0.5 ? (
+                    <Text style={styles.heroEventOrg} numberOfLines={1}>
+                      {focusOrg?.name ?? ''}
+                    </Text>
+                  </View>
+                  {focusEvent.amount > 0.5 ? (
+                    <View style={styles.heroEventWhen}>
                       <Text
-                        style={[styles.heroEventAmount, focusEvent.kind === 'payout' && { color: tokens.value.forecast }]}
+                        style={[
+                          styles.heroEventAmount,
+                          { color: focusEvent.kind === 'payout' ? tokens.value.forecast : tokens.text.primary },
+                        ]}
                         numberOfLines={1}
                       >
                         {focusEvent.kind === 'payout' ? '+' : ''}
                         {formatMoney(focusEvent.amount, { currency: focusEvent.currency, kopecks: 'hide' })}
-                        {focusEvent.kind === 'payout' ? '' : ' освободится'}
+                      </Text>
+                      <Text style={styles.heroEventAmountLabel}>
+                        {focusEvent.kind === 'payout' ? '~ выплата' : focusEvent.kind === 'overdue' ? 'без ставки' : 'освободится'}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.heroEventBottom}>
+                  <MaterialCommunityIcons
+                    name={focusEvent.kind === 'overdue' ? 'alert-circle-outline' : focusEvent.kind === 'maturity' ? 'flag-outline' : 'calendar-blank-outline'}
+                    size={14}
+                    color={eventTone}
+                  />
+                  <Text style={[styles.heroEventWhenText, focusEvent.kind === 'overdue' && { color: eventTone }]} numberOfLines={1}>
+                    {focusEvent.kind === 'overdue'
+                      ? `Срок истёк ${-focusEvent.daysRemaining} ${pluralDays(focusEvent.daysRemaining)} назад`
+                      : `${focusEvent.kind === 'maturity' ? 'Окончание срока' : 'Выплата процентов'} · `}
+                    {focusEvent.kind !== 'overdue' ? (
+                      <Text style={styles.heroEventWhenStrong}>
+                        {focusEvent.daysRemaining === 0
+                          ? 'сегодня'
+                          : `${formatDateShort(focusEvent.date)}, через ${focusEvent.daysRemaining} ${pluralDays(focusEvent.daysRemaining)}`}
                       </Text>
                     ) : null}
-                  </View>
-                  <View style={styles.heroEventWhen}>
-                    <Text style={[styles.heroEventDate, { color: eventTone }]}>
-                      {formatDateShort(focusEvent.date)}
-                    </Text>
-                    <Text style={styles.heroEventDays}>
-                      {focusEvent.daysRemaining === 0
-                        ? 'сегодня'
-                        : focusEvent.daysRemaining < 0
-                          ? `${-focusEvent.daysRemaining} ${pluralDays(focusEvent.daysRemaining)} назад`
-                          : `${focusEvent.daysRemaining} ${pluralDays(focusEvent.daysRemaining)}`}
-                    </Text>
-                    {moreEvents > 0 ? (
-                      <Text style={styles.heroEventMore}>Ещё {moreEvents} ›</Text>
-                    ) : null}
-                  </View>
+                  </Text>
+                  {moreEvents > 0 ? (
+                    <Text style={styles.heroEventMore}>Ещё {moreEvents} ›</Text>
+                  ) : null}
                 </View>
                 {focusEvent.kind === 'overdue' && idle.total > 0 ? (
                   <View style={styles.heroEventFoot}>
@@ -1082,20 +1102,30 @@ const styles = StyleSheet.create({
   },
   heroEventPill: {
     backgroundColor: hexToRgba(tokens.accent.base, 0.07),
-    borderRadius: tokens.radius.md,
-    paddingHorizontal: 14, paddingVertical: 14,
+    borderRadius: tokens.radius.lg,
+    paddingHorizontal: 16, paddingVertical: 16,
     marginTop: tokens.spacing.sm,
   },
   heroEventPillAlert: { backgroundColor: hexToRgba(tokens.semantic.warning, 0.12) },
   heroEventRow: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.md },
-  heroEventLabel: textRole.hint,
-  heroEventName: { ...textRole.rowTitle, fontFamily: font.semibold, marginTop: 2 },
-  heroEventAmount: { ...textRole.rowSubtitle, fontFamily: font.medium, color: tokens.text.secondary, marginTop: 2 },
+  heroEventName: { ...textRole.rowTitle, fontFamily: font.semibold },
+  heroEventOrg: { ...textRole.rowSubtitle, marginTop: 4 },
+  heroEventAmount: textRole.rowAmount,
+  heroEventAmountLabel: { ...textRole.rowSubtitle, marginTop: 4 },
   heroEventWhen: { alignItems: 'flex-end' },
-  heroEventDate: { ...textRole.rowTitle, fontFamily: font.semibold },
-  heroEventDays: { ...textRole.hint, marginTop: 2 },
-  heroEventMore: { ...textRole.pill, color: tokens.accent.base, marginTop: 6 },
-  heroEventRing: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  heroEventBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.9)',
+  },
+  heroEventWhenText: { ...textRole.rowSubtitle, flex: 1, color: tokens.text.secondary },
+  heroEventWhenStrong: { fontFamily: font.semibold, color: tokens.text.primary },
+  heroEventMore: { ...textRole.chip, color: tokens.accent.base },
+  heroEventRing: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
   heroEventRingIcon: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   goalSliderClip: { marginHorizontal: -tokens.spacing.screenH, overflow: 'hidden' },
   goalTrack: { flexDirection: 'row' },

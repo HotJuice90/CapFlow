@@ -222,6 +222,10 @@ export default function CalendarScreen() {
         ) : (
           <>
             {/* Компактная сводка месяца — в стиле нижней таблички дня */}
+            {/* Плашка «Освободится» — лоток, выезжающий из-под сводки (как на
+                рефе): верх спрятан под карточкой, видна только нижняя часть
+                со скруглением карточки. Нет погашений — нет и лотка. */}
+            <View style={styles.statsBlock}>
             <Card style={styles.statsCard} padded={false}>
               <View style={styles.statsRow}>
                 {/* Обе цифры месяца — прогноз: «~» в подписи, число чистое,
@@ -249,6 +253,7 @@ export default function CalendarScreen() {
                 </Text>
               </Pressable>
             ) : null}
+            </View>
 
             {/* Сетка — прогресс месяца border-top'ом: полоска НЕ внутри паддинга,
                 чтобы её углы срезались той же маской contentLayer (overflow:hidden),
@@ -519,25 +524,29 @@ const styles = StyleSheet.create({
   monthProgressTrack: { height: MONTH_PROGRESS_HEIGHT },
   monthProgressFill: { height: MONTH_PROGRESS_HEIGHT },
   monthGridInner: { padding: tokens.spacing.lg, paddingTop: tokens.spacing.lg + MONTH_PROGRESS_HEIGHT },
-  statsCard: { marginBottom: tokens.spacing.lg, ...boxShadow(tokens.shadow.subtle) },
+  statsBlock: { marginBottom: tokens.spacing.lg },
+  // zIndex: карточка лежит поверх лотка, который заходит под неё сверху.
+  statsCard: { zIndex: 1, ...boxShadow(tokens.shadow.subtle) },
   statsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 16 },
   stat: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 18, lineHeight: 18, fontWeight: '600', color: tokens.text.primary, letterSpacing: -0.36 },
   statLabel: { fontSize: tokens.typography.hint, lineHeight: 12, color: hexToRgba(tokens.text.primary, 0.3), marginTop: tokens.spacing.chip, letterSpacing: -0.24, textAlign: 'center' },
   statSep: { width: 1, height: 30, backgroundColor: tokens.surface.hairline },
 
-  // Тонкая полоса вместо колонки: ~36px против ~68px, и только в те месяцы,
-  // когда есть погашения — календарь почти не уезжает вниз.
+  // Лоток под сводкой: заходит под карточку на её радиус (marginTop
+  // отрицательный, paddingTop компенсирует), поэтому сверху его углов не видно,
+  // а снизу скругление совпадает с карточкой.
   releaseBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: tokens.spacing.sm,
     backgroundColor: hexToRgba(tokens.accent.base, 0.08),
-    borderRadius: tokens.radius.sm,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 9,
-    marginTop: -tokens.spacing.sm,
-    marginBottom: tokens.spacing.lg,
+    borderBottomLeftRadius: tokens.radius.lg,
+    borderBottomRightRadius: tokens.radius.lg,
+    marginTop: -tokens.radius.lg,
+    paddingTop: tokens.radius.lg + 10,
+    paddingBottom: 12,
+    paddingHorizontal: tokens.spacing.screenH,
   },
   releaseLabel: { flex: 1, fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, color: tokens.accent.base },
   releaseValue: { fontFamily: font.semibold, fontSize: tokens.typography.caption, lineHeight: tokens.typography.caption + 2, color: tokens.accent.base },

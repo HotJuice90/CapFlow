@@ -2,13 +2,13 @@
   "expo": {
     "name": "CapFlow",
     "slug": "capflow",
-    "version": "0.9.98",
+    "version": "0.9.99",
     "scheme": "capflow",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.capflow.app",
-      "versionCode": 219,
+      "versionCode": 220,
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ]
